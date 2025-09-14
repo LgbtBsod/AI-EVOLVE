@@ -350,7 +350,7 @@ class AttributeSystem(BaseComponent):
             
             self.state_manager.set_state(
                 f"{self.component_id}_state",
-                self.state,
+                self._state,
                 StateType.SYSTEM_STATE
             )
     
@@ -361,13 +361,13 @@ class AttributeSystem(BaseComponent):
             
             self._register_system_states()
             
-            self.system_state = LifecycleState.READY
+            self._state = LifecycleState.READY
             logger.info("AttributeSystem инициализирован успешно")
             return True
             
         except Exception as e:
             logger.error(f"Ошибка инициализации AttributeSystem: {e}")
-            self.system_state = LifecycleState.ERROR
+            self._state = LifecycleState.ERROR
             return False
     
     def start(self) -> bool:
@@ -375,22 +375,22 @@ class AttributeSystem(BaseComponent):
         try:
             logger.info("Запуск AttributeSystem...")
             
-            if self.system_state != LifecycleState.READY:
+            if self._state != LifecycleState.READY:
                 logger.error("AttributeSystem не готов к запуску")
                 return False
             
-            self.system_state = LifecycleState.RUNNING
+            self._state = LifecycleState.RUNNING
             logger.info("AttributeSystem запущен успешно")
             return True
             
         except Exception as e:
             logger.error(f"Ошибка запуска AttributeSystem: {e}")
-            self.system_state = LifecycleState.ERROR
+            self._state = LifecycleState.ERROR
             return False
     
     def update(self, delta_time: float):
         """Обновление системы атрибутов"""
-        if self.system_state != LifecycleState.RUNNING:
+        if self._state != LifecycleState.RUNNING:
             return
         
         try:
@@ -417,7 +417,7 @@ class AttributeSystem(BaseComponent):
         try:
             logger.info("Остановка AttributeSystem...")
             
-            self.system_state = LifecycleState.STOPPED
+            self._state = LifecycleState.STOPPED
             logger.info("AttributeSystem остановлен успешно")
             return True
             
@@ -432,7 +432,7 @@ class AttributeSystem(BaseComponent):
             
             self._stat_cache.clear()
             
-            self.system_state = LifecycleState.DESTROYED
+            self._state = LifecycleState.DESTROYED
             logger.info("AttributeSystem уничтожен успешно")
             return True
             
@@ -548,9 +548,9 @@ class AttributeSystem(BaseComponent):
     def get_system_info(self) -> Dict[str, Any]:
         """Получение информации о системе"""
         return {
-            'name': self.system_name,
-            'state': self.system_state.value,
-            'priority': self.system_priority.value,
+            'name': self.component_id,
+            'state': self.state.value,
+            'priority': self.priority.value,
             'total_entities': self.system_stats['total_entities'],
             'active_modifiers': self.system_stats['active_modifiers'],
             'stat_calculations': self.system_stats['stat_calculations'],
@@ -571,4 +571,20 @@ class AttributeSystem(BaseComponent):
             'cache_hits': 0,
             'cache_misses': 0,
             'update_time': 0.0
+        }
+    
+    def get_system_info(self) -> Dict[str, Any]:
+        """Получение информации о системе"""
+        return {
+            'name': self.component_id,
+            'state': self.state.value,
+            'priority': self.priority.value,
+            'total_entities': self.system_stats['total_entities'],
+            'active_modifiers': self.system_stats['active_modifiers'],
+            'stat_calculations': self.system_stats['stat_calculations'],
+            'modifier_applications': self.system_stats['modifier_applications'],
+            'cache_hits': self.system_stats['cache_hits'],
+            'cache_misses': self.system_stats['cache_misses'],
+            'cache_size': len(self._stat_cache),
+            'update_time': self.system_stats['update_time']
         }

@@ -676,6 +676,33 @@ class ConstantsManager:
         """Получение множителя восстановления стойкости"""
         multipliers = self._constants['toughness_constants']['recovery_multipliers']
         return multipliers.get(stance_state.value, 1.0)
+    
+    def reset_stats(self):
+        """Сброс статистики"""
+        self.system_stats = {
+            'total_constants': len(self._constants),
+            'total_enums': len(self._enums),
+            'total_settings': len(self._settings),
+            'access_count': 0,
+            'cache_hits': 0,
+            'cache_misses': 0,
+            'update_time': 0.0
+        }
+    
+    def get_system_info(self) -> Dict[str, Any]:
+        """Получение информации о системе"""
+        return {
+            'name': self.component_id,
+            'state': self.state.value,
+            'priority': self.priority.value,
+            'total_constants': self.system_stats['total_constants'],
+            'total_enums': self.system_stats['total_enums'],
+            'total_settings': self.system_stats['total_settings'],
+            'access_count': self.system_stats['access_count'],
+            'cache_hits': self.system_stats['cache_hits'],
+            'cache_misses': self.system_stats['cache_misses'],
+            'update_time': self.system_stats['update_time']
+        }
 
 # Глобальный экземпляр менеджера констант
 constants_manager = ConstantsManager()

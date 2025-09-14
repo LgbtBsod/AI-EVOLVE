@@ -163,7 +163,7 @@ class TradingSystem(BaseComponent):
     def _on_initialize(self) -> bool:
         """Инициализация системы торговли"""
         try:
-            self.logger.info("Инициализация системы торговли")
+            self._logger.info("Инициализация системы торговли")
             
             # Загрузка торговых предметов
             self._load_trade_items()
@@ -174,11 +174,11 @@ class TradingSystem(BaseComponent):
             # Регистрация callbacks
             self._register_callbacks()
             
-            self.logger.info("Система торговли инициализирована")
+            self._logger.info("Система торговли инициализирована")
             return True
             
         except Exception as e:
-            self.logger.error(f"Ошибка инициализации системы торговли: {e}")
+            self._logger.error(f"Ошибка инициализации системы торговли: {e}")
             return False
 
     def _load_trade_items(self):
@@ -229,10 +229,10 @@ class TradingSystem(BaseComponent):
                 max_stack=100
             ))
             
-            self.logger.info(f"Загружено {len(self.trade_items)} торговых предметов")
+            self._logger.info(f"Загружено {len(self.trade_items)} торговых предметов")
             
         except Exception as e:
-            self.logger.error(f"Ошибка загрузки торговых предметов: {e}")
+            self._logger.error(f"Ошибка загрузки торговых предметов: {e}")
 
     def _initialize_market_data(self):
         """Инициализация рыночных данных"""
@@ -249,10 +249,10 @@ class TradingSystem(BaseComponent):
                 )
                 self.market_data[item_id] = market_data
             
-            self.logger.info(f"Инициализированы рыночные данные для {len(self.market_data)} предметов")
+            self._logger.info(f"Инициализированы рыночные данные для {len(self.market_data)} предметов")
             
         except Exception as e:
-            self.logger.error(f"Ошибка инициализации рыночных данных: {e}")
+            self._logger.error(f"Ошибка инициализации рыночных данных: {e}")
 
     def _register_callbacks(self):
         """Регистрация callbacks"""
@@ -264,7 +264,7 @@ class TradingSystem(BaseComponent):
             self.market_callbacks.append(self._on_market_updated)
             
         except Exception as e:
-            self.logger.error(f"Ошибка регистрации callbacks: {e}")
+            self._logger.error(f"Ошибка регистрации callbacks: {e}")
 
     def create_offer(self, seller_id: str, item_id: str, item_count: int, 
                     price: float, currency: CurrencyType = CurrencyType.GOLD,
@@ -273,29 +273,29 @@ class TradingSystem(BaseComponent):
         try:
             # Проверка лимита предложений
             if len(self.active_offers) >= self.settings["max_active_offers"]:
-                self.logger.warning("Достигнут лимит активных предложений")
+                self._logger.warning("Достигнут лимит активных предложений")
                 return None
             
             # Проверка существования предмета
             if item_id not in self.trade_items:
-                self.logger.warning(f"Предмет {item_id} не найден в торговой системе")
+                self._logger.warning(f"Предмет {item_id} не найден в торговой системе")
                 return None
             
             trade_item = self.trade_items[item_id]
             
             # Проверка возможности торговли
             if not trade_item.tradeable:
-                self.logger.warning(f"Предмет {item_id} не подлежит торговле")
+                self._logger.warning(f"Предмет {item_id} не подлежит торговле")
                 return None
             
             # Проверка количества
             if item_count <= 0 or item_count > trade_item.max_stack:
-                self.logger.warning(f"Недопустимое количество предметов: {item_count}")
+                self._logger.warning(f"Недопустимое количество предметов: {item_count}")
                 return None
             
             # Проверка цены
             if price <= 0:
-                self.logger.warning("Цена должна быть положительной")
+                self._logger.warning("Цена должна быть положительной")
                 return None
             
             # Создание предложения
@@ -322,41 +322,41 @@ class TradingSystem(BaseComponent):
             # Уведомление о создании предложения
             self._notify_offer_created(offer)
             
-            self.logger.info(f"Создано предложение {offer_id} для предмета {item_id}")
+            self._logger.info(f"Создано предложение {offer_id} для предмета {item_id}")
             return offer_id
             
         except Exception as e:
-            self.logger.error(f"Ошибка создания предложения: {e}")
+            self._logger.error(f"Ошибка создания предложения: {e}")
             return None
 
     def accept_offer(self, buyer_id: str, offer_id: str) -> bool:
         """Принятие торгового предложения"""
         try:
             if offer_id not in self.active_offers:
-                self.logger.warning(f"Предложение {offer_id} не найдено")
+                self._logger.warning(f"Предложение {offer_id} не найдено")
                 return False
             
             offer = self.active_offers[offer_id]
             
             # Проверка срока действия
             if offer.expires_at and time.time() > offer.expires_at:
-                self.logger.warning(f"Предложение {offer_id} истекло")
+                self._logger.warning(f"Предложение {offer_id} истекло")
                 offer.status = TradeStatus.EXPIRED
                 return False
             
             # Проверка статуса
             if offer.status != TradeStatus.PENDING:
-                self.logger.warning(f"Предложение {offer_id} недоступно")
+                self._logger.warning(f"Предложение {offer_id} недоступно")
                 return False
             
             # Проверка средств покупателя
             if not self._check_buyer_funds(buyer_id, offer.price, offer.currency):
-                self.logger.warning(f"Недостаточно средств у покупателя {buyer_id}")
+                self._logger.warning(f"Недостаточно средств у покупателя {buyer_id}")
                 return False
             
             # Проверка наличия предметов у продавца
             if not self._check_seller_items(offer.seller_id, offer.item_id, offer.item_count):
-                self.logger.warning(f"Недостаточно предметов у продавца {offer.seller_id}")
+                self._logger.warning(f"Недостаточно предметов у продавца {offer.seller_id}")
                 return False
             
             # Выполнение сделки
@@ -391,13 +391,13 @@ class TradingSystem(BaseComponent):
                 # Уведомление о завершении сделки
                 self._notify_trade_completed(transaction)
                 
-                self.logger.info(f"Сделка {transaction.transaction_id} завершена успешно")
+                self._logger.info(f"Сделка {transaction.transaction_id} завершена успешно")
                 return True
             
             return False
             
         except Exception as e:
-            self.logger.error(f"Ошибка принятия предложения: {e}")
+            self._logger.error(f"Ошибка принятия предложения: {e}")
             return False
 
     def _execute_trade(self, buyer_id: str, offer: TradeOffer) -> bool:
@@ -431,7 +431,7 @@ class TradingSystem(BaseComponent):
             return True
             
         except Exception as e:
-            self.logger.error(f"Ошибка выполнения сделки: {e}")
+            self._logger.error(f"Ошибка выполнения сделки: {e}")
             return False
 
     def _check_buyer_funds(self, buyer_id: str, amount: float, currency: CurrencyType) -> bool:
@@ -443,7 +443,7 @@ class TradingSystem(BaseComponent):
             return True  # Временно всегда True
             
         except Exception as e:
-            self.logger.error(f"Ошибка проверки средств покупателя: {e}")
+            self._logger.error(f"Ошибка проверки средств покупателя: {e}")
             return False
 
     def _check_seller_items(self, seller_id: str, item_id: str, count: int) -> bool:
@@ -455,7 +455,7 @@ class TradingSystem(BaseComponent):
             return True  # Временно всегда True
             
         except Exception as e:
-            self.logger.error(f"Ошибка проверки предметов продавца: {e}")
+            self._logger.error(f"Ошибка проверки предметов продавца: {e}")
             return False
 
     def _deduct_funds(self, entity_id: str, amount: float, currency: CurrencyType) -> bool:
@@ -466,7 +466,7 @@ class TradingSystem(BaseComponent):
             return True
             
         except Exception as e:
-            self.logger.error(f"Ошибка списания средств: {e}")
+            self._logger.error(f"Ошибка списания средств: {e}")
             return False
 
     def _add_funds(self, entity_id: str, amount: float, currency: CurrencyType) -> bool:
@@ -477,7 +477,7 @@ class TradingSystem(BaseComponent):
             return True
             
         except Exception as e:
-            self.logger.error(f"Ошибка зачисления средств: {e}")
+            self._logger.error(f"Ошибка зачисления средств: {e}")
             return False
 
     def _transfer_items(self, from_id: str, to_id: str, item_id: str, count: int) -> bool:
@@ -489,7 +489,7 @@ class TradingSystem(BaseComponent):
             return True
             
         except Exception as e:
-            self.logger.error(f"Ошибка передачи предметов: {e}")
+            self._logger.error(f"Ошибка передачи предметов: {e}")
             return False
 
     def _update_reputation(self, buyer_id: str, seller_id: str, amount: float):
@@ -499,7 +499,7 @@ class TradingSystem(BaseComponent):
             # self._update_player_reputation(buyer_id, seller_id, reputation_change)
             
         except Exception as e:
-            self.logger.error(f"Ошибка обновления репутации: {e}")
+            self._logger.error(f"Ошибка обновления репутации: {e}")
 
     def _update_market_data(self, item_id: str, price: float, quantity: int, type_: str):
         """Обновление рыночных данных"""
@@ -535,7 +535,7 @@ class TradingSystem(BaseComponent):
             self._notify_market_updated(item_id, market_data)
             
         except Exception as e:
-            self.logger.error(f"Ошибка обновления рыночных данных: {e}")
+            self._logger.error(f"Ошибка обновления рыночных данных: {e}")
 
     def get_market_data(self, item_id: str) -> Optional[MarketData]:
         """Получение рыночных данных"""
@@ -567,7 +567,7 @@ class TradingSystem(BaseComponent):
             return offers
             
         except Exception as e:
-            self.logger.error(f"Ошибка получения активных предложений: {e}")
+            self._logger.error(f"Ошибка получения активных предложений: {e}")
             return []
 
     def cancel_offer(self, offer_id: str, seller_id: str) -> bool:
@@ -580,18 +580,18 @@ class TradingSystem(BaseComponent):
             
             # Проверка владельца
             if offer.seller_id != seller_id:
-                self.logger.warning(f"Попытка отмены чужого предложения {offer_id}")
+                self._logger.warning(f"Попытка отмены чужого предложения {offer_id}")
                 return False
             
             # Отмена предложения
             offer.status = TradeStatus.CANCELLED
             del self.active_offers[offer_id]
             
-            self.logger.info(f"Предложение {offer_id} отменено")
+            self._logger.info(f"Предложение {offer_id} отменено")
             return True
             
         except Exception as e:
-            self.logger.error(f"Ошибка отмены предложения: {e}")
+            self._logger.error(f"Ошибка отмены предложения: {e}")
             return False
 
     def _add_trade_item(self, item: TradeItem):
@@ -604,7 +604,7 @@ class TradingSystem(BaseComponent):
             for callback in self.trade_callbacks.get("offer_created", []):
                 callback(offer)
         except Exception as e:
-            self.logger.error(f"Ошибка уведомления о создании предложения: {e}")
+            self._logger.error(f"Ошибка уведомления о создании предложения: {e}")
 
     def _notify_trade_completed(self, transaction: TradeHistory):
         """Уведомление о завершении сделки"""
@@ -612,7 +612,7 @@ class TradingSystem(BaseComponent):
             for callback in self.completion_callbacks:
                 callback(transaction)
         except Exception as e:
-            self.logger.error(f"Ошибка уведомления о завершении сделки: {e}")
+            self._logger.error(f"Ошибка уведомления о завершении сделки: {e}")
 
     def _notify_market_updated(self, item_id: str, market_data: MarketData):
         """Уведомление об обновлении рынка"""
@@ -620,15 +620,15 @@ class TradingSystem(BaseComponent):
             for callback in self.market_callbacks:
                 callback(item_id, market_data)
         except Exception as e:
-            self.logger.error(f"Ошибка уведомления об обновлении рынка: {e}")
+            self._logger.error(f"Ошибка уведомления об обновлении рынка: {e}")
 
     def _on_trade_completed(self, transaction: TradeHistory):
         """Callback при завершении сделки"""
-        self.logger.debug(f"Сделка завершена: {transaction.item_id} x{transaction.item_count} за {transaction.price}")
+        self._logger.debug(f"Сделка завершена: {transaction.item_id} x{transaction.item_count} за {transaction.price}")
 
     def _on_market_updated(self, item_id: str, market_data: MarketData):
         """Callback при обновлении рынка"""
-        self.logger.debug(f"Рынок обновлен: {item_id} - цена: {market_data.current_price}")
+        self._logger.debug(f"Рынок обновлен: {item_id} - цена: {market_data.current_price}")
 
     def get_statistics(self) -> Dict[str, Any]:
         """Получение статистики системы"""
@@ -659,4 +659,4 @@ class TradingSystem(BaseComponent):
             self.stats["market_updates"] += 1
             
         except Exception as e:
-            self.logger.error(f"Ошибка обновления системы торговли: {e}")
+            self._logger.error(f"Ошибка обновления системы торговли: {e}")

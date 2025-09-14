@@ -192,13 +192,13 @@ class MasterIntegrator(BaseComponent):
             if self.integration_config.auto_integrate_attributes:
                 self._integrate_systems_with_attributes()
             
-            self.system_state = LifecycleState.READY
+            self._state = LifecycleState.READY
             logger.info("MasterIntegrator инициализирован успешно")
             return True
             
         except Exception as e:
             logger.error(f"Ошибка инициализации MasterIntegrator: {e}")
-            self.system_state = LifecycleState.ERROR
+            self._state = LifecycleState.ERROR
             return False
     
     def start(self) -> bool:
@@ -206,7 +206,7 @@ class MasterIntegrator(BaseComponent):
         try:
             logger.info("Запуск MasterIntegrator...")
             
-            if self.system_state != LifecycleState.READY:
+            if self._state != LifecycleState.READY:
                 logger.error("MasterIntegrator не готов к запуску")
                 return False
             
@@ -214,18 +214,18 @@ class MasterIntegrator(BaseComponent):
             if not self._start_all_systems():
                 return False
             
-            self.system_state = LifecycleState.RUNNING
+            self._state = LifecycleState.RUNNING
             logger.info("MasterIntegrator запущен успешно")
             return True
             
         except Exception as e:
             logger.error(f"Ошибка запуска MasterIntegrator: {e}")
-            self.system_state = LifecycleState.ERROR
+            self._state = LifecycleState.ERROR
             return False
     
     def update(self, delta_time: float):
         """Обновление Master Integrator"""
-        if self.system_state != LifecycleState.RUNNING:
+        if self._state != LifecycleState.RUNNING:
             return
         
         try:
@@ -266,7 +266,7 @@ class MasterIntegrator(BaseComponent):
             # Остановка всех систем
             self._stop_all_systems()
             
-            self.system_state = LifecycleState.STOPPED
+            self._state = LifecycleState.STOPPED
             logger.info("MasterIntegrator остановлен успешно")
             return True
             
@@ -292,7 +292,7 @@ class MasterIntegrator(BaseComponent):
             self.error_counts.clear()
             self.recovery_attempts.clear()
             
-            self.system_state = LifecycleState.DESTROYED
+            self._state = LifecycleState.DESTROYED
             logger.info("MasterIntegrator уничтожен успешно")
             return True
             
@@ -575,7 +575,7 @@ class MasterIntegrator(BaseComponent):
             
             # Обновляем статистику активных систем
             active_systems = sum(1 for system in self.systems.values() 
-                               if system.system_state == LifecycleState.RUNNING)
+                               if system.state == LifecycleState.RUNNING)
             self.system_stats['active_systems'] = active_systems
             
         except Exception as e:
@@ -695,8 +695,8 @@ class MasterIntegrator(BaseComponent):
         """Получение всех систем"""
         return self.systems.copy()
     
-    def get_system_info(self, system_name: str) -> Optional[Dict[str, Any]]:
-        """Получение информации о системе"""
+    def get_system_info_by_name(self, system_name: str) -> Optional[Dict[str, Any]]:
+        """Получение информации о системе по имени"""
         system = self.systems.get(system_name)
         if system and hasattr(system, 'get_system_info'):
             return system.get_system_info()
@@ -715,6 +715,19 @@ class MasterIntegrator(BaseComponent):
         """Получение метрик производительности"""
         return self.performance_metrics.copy()
     
+    def reset_stats(self):
+        """Сброс статистики"""
+        self.system_stats = {
+            'total_systems': len(self.systems),
+            'active_systems': 0,
+            'integrated_systems': len(self.attribute_integrations),
+            'attribute_integrations': len(self.attribute_integrations),
+            'cross_system_modifiers': len(self.cross_system_modifiers),
+            'integration_errors': 0,
+            'recovery_attempts': 0,
+            'update_time': 0.0
+        }
+    
     def get_system_info(self) -> Dict[str, Any]:
         """Получение информации о системе"""
         return {
@@ -729,19 +742,6 @@ class MasterIntegrator(BaseComponent):
             'integration_errors': self.system_stats['integration_errors'],
             'recovery_attempts': self.system_stats['recovery_attempts'],
             'update_time': self.system_stats['update_time']
-        }
-    
-    def reset_stats(self):
-        """Сброс статистики"""
-        self.system_stats = {
-            'total_systems': len(self.systems),
-            'active_systems': 0,
-            'integrated_systems': len(self.attribute_integrations),
-            'attribute_integrations': len(self.attribute_integrations),
-            'cross_system_modifiers': len(self.cross_system_modifiers),
-            'integration_errors': 0,
-            'recovery_attempts': 0,
-            'update_time': 0.0
         }
 
     def run(self):

@@ -325,96 +325,60 @@ def create_directories():
         print(f"📁 Создана директория: {directory}")
 
 def initialize_game():
-    """Инициализация игры"""
+    """Инициализация улучшенной игры с правильным рендерингом"""
     try:
-        print("\n🔧 ДЕТАЛЬНАЯ ИНИЦИАЛИЗАЦИЯ СИСТЕМ")
+        print("\n🔧 ДЕТАЛЬНАЯ ИНИЦИАЛИЗАЦИЯ УЛУЧШЕННОЙ ИГРЫ")
         print("=" * 50)
         
-        # Импортируем основные компоненты
-        print("📦 Импорт основных компонентов...")
+        # Импортируем улучшенные компоненты
+        print("📦 Импорт улучшенных компонентов...")
         try:
-            from src.core.state_manager import StateManager
-            print("✅ StateManager импортирован")
+            from src.enhanced_main import EnhancedGame
+            print("✅ EnhancedGame импортирован")
         except Exception as e:
-            print(f"❌ Ошибка импорта StateManager: {e}")
+            print(f"❌ Ошибка импорта EnhancedGame: {e}")
             raise
         
+        print("\n🏗️  Создание улучшенной игры...")
+        
+        # Создаем улучшенную игру
         try:
-            from src.systems.attributes.attribute_system import AttributeSystem
-            print("✅ AttributeSystem импортирован")
+            enhanced_game = EnhancedGame()
+            print("✅ EnhancedGame создана")
         except Exception as e:
-            print(f"❌ Ошибка импорта AttributeSystem: {e}")
+            print(f"❌ Ошибка создания EnhancedGame: {e}")
             raise
         
+        print("\n🚀 Инициализация улучшенной игры...")
         try:
-            from src.core.master_integrator import MasterIntegrator
-            print("✅ MasterIntegrator импортирован")
+            # Игра уже инициализирована в конструкторе
+            print("✅ Улучшенная игра инициализирована")
         except Exception as e:
-            print(f"❌ Ошибка импорта MasterIntegrator: {e}")
+            print(f"❌ Ошибка инициализации улучшенной игры: {e}")
             raise
         
-        print("\n🏗️  Создание экземпляров систем...")
-        
-        # Создаем менеджер состояний
+        print("\n📊 Проверка состояния улучшенной игры...")
         try:
-            state_manager = StateManager()
-            print("✅ StateManager создан")
+            # Проверяем основные компоненты
+            if hasattr(enhanced_game, 'showbase'):
+                print("✅ ShowBase инициализирован")
+            else:
+                print("❌ ShowBase не найден")
+                
+            if hasattr(enhanced_game, 'render_system'):
+                print("✅ Система рендеринга инициализирована")
+            else:
+                print("❌ Система рендеринга не найдена")
+                
+            if hasattr(enhanced_game, 'state_manager'):
+                print("✅ Менеджер состояний инициализирован")
+            else:
+                print("❌ Менеджер состояний не найден")
+                
         except Exception as e:
-            print(f"❌ Ошибка создания StateManager: {e}")
-            raise
+            print(f"⚠️  Не удалось проверить состояние улучшенной игры: {e}")
         
-        # Создаем систему атрибутов
-        try:
-            attribute_system = AttributeSystem()
-            print("✅ AttributeSystem создана")
-        except Exception as e:
-            print(f"❌ Ошибка создания AttributeSystem: {e}")
-            raise
-        
-        # Создаем главный интегратор
-        try:
-            master_integrator = MasterIntegrator()
-            print("✅ MasterIntegrator создан")
-        except Exception as e:
-            print(f"❌ Ошибка создания MasterIntegrator: {e}")
-            raise
-        
-        print("\n🔗 Настройка архитектуры...")
-        try:
-            master_integrator.set_architecture_components(state_manager, attribute_system)
-            print("✅ Архитектурные компоненты настроены")
-        except Exception as e:
-            print(f"❌ Ошибка настройки архитектуры: {e}")
-            raise
-        
-        print("\n🚀 Инициализация всех систем...")
-        try:
-            if not master_integrator.initialize():
-                raise Exception("Ошибка инициализации MasterIntegrator")
-            print("✅ Все системы инициализированы")
-        except Exception as e:
-            print(f"❌ Ошибка инициализации систем: {e}")
-            raise
-        
-        print("\n▶️  Запуск всех систем...")
-        try:
-            if not master_integrator.start():
-                raise Exception("Ошибка запуска MasterIntegrator")
-            print("✅ Все системы запущены")
-        except Exception as e:
-            print(f"❌ Ошибка запуска систем: {e}")
-            raise
-        
-        print("\n📊 Проверка состояния систем...")
-        try:
-            system_info = master_integrator.get_system_info()
-            print(f"✅ Получена информация о {len(system_info)} системах")
-            for key, value in system_info.items():
-                print(f"   📋 {key}: {value}")
-        except Exception as e:
-            print(f"⚠️  Не удалось получить информацию о системах: {e}")
-        
-        return master_integrator
+        return enhanced_game
         
     except Exception as e:
         print(f"\n❌ КРИТИЧЕСКАЯ ОШИБКА ИНИЦИАЛИЗАЦИИ: {e}")
@@ -479,426 +443,93 @@ def main():
         print("\n🎉 Игра успешно запущена!")
         print("📊 Статистика систем:")
         
-        # Получаем информацию о системах
-        system_info = game.get_system_info()
-        for key, value in system_info.items():
-            print(f"   {key}: {value}")
+        # Проверяем состояние улучшенной игры
+        try:
+            if hasattr(game, 'showbase'):
+                print(f"✅ ShowBase готов")
+            if hasattr(game, 'render_system'):
+                print(f"✅ Система рендеринга готова")
+            if hasattr(game, 'state_manager'):
+                print(f"✅ Менеджер состояний готов")
+        except Exception as e:
+            print(f"⚠️  Ошибка проверки состояния: {e}")
         
-        print("\n🎮 Игра готова к использованию!")
-        print("🚀 ЗАПУСК ОКНА ИГРЫ")
+        print("\n🎮 Улучшенная игра готова к использованию!")
+        print("🚀 ЗАПУСК УЛУЧШЕННОГО ОКНА ИГРЫ")
         print("=" * 50)
         
-        # Дополнительная диагностика состояния игры
-        print("🔍 ДИАГНОСТИКА СОСТОЯНИЯ ИГРЫ:")
+        # Дополнительная диагностика состояния улучшенной игры
+        print("🔍 ДИАГНОСТИКА СОСТОЯНИЯ УЛУЧШЕННОЙ ИГРЫ:")
         try:
-            if hasattr(game, 'systems'):
-                print(f"📋 Количество систем: {len(game.systems)}")
-                print(f"📋 Доступные системы: {list(game.systems.keys())}")
-                
-                # Проверяем ключевые системы
-                key_systems = ['rendering_system', 'attribute_system', 'content_system']
-                for system_name in key_systems:
-                    if system_name in game.systems:
-                        system = game.systems[system_name]
-                        print(f"✅ {system_name}: {type(system).__name__}")
-                        
-                        # Специальная проверка системы рендеринга
-                        if system_name == 'rendering_system':
-                            if hasattr(system, 'showbase'):
-                                print(f"   🎬 ShowBase: {type(system.showbase).__name__}")
-                            else:
-                                print(f"   ⚠️  ShowBase: отсутствует")
-                            
-                            if hasattr(system, 'run'):
-                                print(f"   ▶️  Метод run: доступен")
-                            else:
-                                print(f"   ❌ Метод run: отсутствует")
-                    else:
-                        print(f"❌ {system_name}: отсутствует")
+            # Проверяем основные компоненты улучшенной игры
+            if hasattr(game, 'showbase'):
+                print(f"✅ ShowBase: {type(game.showbase).__name__}")
             else:
-                print("❌ Игра не имеет атрибута 'systems'")
+                print("❌ ShowBase: отсутствует")
                 
-            if hasattr(game, 'state'):
-                print(f"📊 Состояние игры: {game.state}")
+            if hasattr(game, 'render_system'):
+                print(f"✅ Система рендеринга: {type(game.render_system).__name__}")
             else:
-                print("⚠️  Игра не имеет атрибута 'state'")
+                print("❌ Система рендеринга: отсутствует")
+                
+            if hasattr(game, 'state_manager'):
+                print(f"✅ Менеджер состояний: {type(game.state_manager).__name__}")
+            else:
+                print("❌ Менеджер состояний: отсутствует")
+                
+            if hasattr(game, 'running'):
+                print(f"📊 Состояние игры: {'запущена' if game.running else 'остановлена'}")
+            else:
+                print("⚠️  Игра не имеет атрибута 'running'")
                 
         except Exception as diag_e:
             print(f"⚠️  Ошибка диагностики состояния: {diag_e}")
         
-        print("\n🎬 Запуск главного цикла игры...")
+        print("\n🎬 Запуск улучшенного главного цикла игры...")
         
-        # Детальная диагностика состояния систем
-        print("🔍 ДЕТАЛЬНАЯ ДИАГНОСТИКА СИСТЕМ:")
+        # Запускаем улучшенную игру
         try:
-            if hasattr(game, 'systems'):
-                for system_name, system in game.systems.items():
-                    print(f"📋 {system_name}:")
-                    print(f"   🏷️  Тип: {type(system).__name__}")
-                    if hasattr(system, 'state'):
-                        print(f"   📊 Состояние: {system.state}")
-                    if hasattr(system, 'component_id'):
-                        print(f"   🆔 ID: {system.component_id}")
-                    if hasattr(system, 'priority'):
-                        print(f"   ⚡ Приоритет: {system.priority}")
-                    
-                    # Специальная проверка для системы рендеринга
-                    if system_name == 'rendering_system':
-                        if hasattr(system, 'showbase'):
-                            print(f"   🎬 ShowBase: {type(system.showbase).__name__}")
-                            if hasattr(system.showbase, 'win'):
-                                print(f"   🪟 Окно: {type(system.showbase.win).__name__}")
-                            else:
-                                print(f"   ⚠️  Окно: отсутствует")
-                        else:
-                            print(f"   ⚠️  ShowBase: отсутствует")
-                        
-                        if hasattr(system, 'run'):
-                            print(f"   ▶️  Метод run: доступен")
-                        else:
-                            print(f"   ❌ Метод run: отсутствует")
-                    
-                    print()  # Пустая строка для разделения
-            else:
-                print("❌ Игра не имеет атрибута 'systems'")
-        except Exception as diag_e:
-            print(f"⚠️  Ошибка детальной диагностики: {diag_e}")
-        
-        # Запускаем систему рендеринга напрямую
-        try:
-            print(f"\n🔍 КОМПЛЕКСНАЯ ДИАГНОСТИКА СИСТЕМЫ РЕНДЕРИНГА:")
+            print(f"\n🚀 ЗАПУСК УЛУЧШЕННОЙ ИГРЫ:")
             print(f"   =================================================")
             
-            if hasattr(game, 'systems') and 'rendering_system' in game.systems:
-                rendering_system = game.systems['rendering_system']
-                print(f"✅ Система рендеринга найдена: {type(rendering_system).__name__}")
-                
-                # 1. ПРОВЕРКА ВСЕХ АТРИБУТОВ RenderingSystem
-                print(f"\n📋 1. ПРОВЕРКА АТРИБУТОВ RenderingSystem:")
-                all_attrs = dir(rendering_system)
-                rendering_attrs = [attr for attr in all_attrs if not attr.startswith('_')]
-                
-                for attr in rendering_attrs:
-                    try:
-                        value = getattr(rendering_system, attr)
-                        if callable(value):
-                            print(f"   🔧 {attr}: {type(value).__name__} (callable)")
-                        else:
-                            print(f"   📊 {attr}: {type(value).__name__} = {value}")
-                    except Exception as e:
-                        print(f"   ❌ {attr}: ошибка доступа - {e}")
-                
-                # 2. ДЕТАЛЬНАЯ ПРОВЕРКА ShowBase
-                print(f"\n🎬 2. ДЕТАЛЬНАЯ ПРОВЕРКА ShowBase:")
-                if hasattr(rendering_system, 'showbase'):
-                    showbase = rendering_system.showbase
-                    print(f"   🏷️  Тип: {type(showbase).__name__}")
-                    
-                    # Проверяем все атрибуты ShowBase
-                    showbase_attrs = ['render', 'render2d', 'camera', 'win', 'taskMgr', 'mouseWatcherNode', 'dataRoot']
-                    for attr in showbase_attrs:
-                        if hasattr(showbase, attr):
-                            value = getattr(showbase, attr)
-                            print(f"   ✅ {attr}: {type(value).__name__}")
-                        else:
-                            print(f"   ❌ {attr}: отсутствует")
-                    
-                    # 3. ПРОВЕРКА ОКНА
-                    print(f"\n🪟 3. ПРОВЕРКА ОКНА:")
-                    if hasattr(showbase, 'win'):
-                        win = showbase.win
-                        print(f"   🏷️  Тип окна: {type(win).__name__}")
-                        
-                        # Проверяем все методы окна
-                        window_methods = [
-                            'isValid', 'getXSize', 'getYSize', 'getState', 'getTitle',
-                            'getOrigin', 'getSize', 'getProperties', 'getPipe'
-                        ]
-                        
-                        for method in window_methods:
-                            if hasattr(win, method):
-                                try:
-                                    if method == 'isValid':
-                                        result = win.isValid()
-                                        print(f"   ✅ {method}: {result}")
-                                    elif method == 'getXSize':
-                                        result = win.getXSize()
-                                        print(f"   📏 {method}: {result}")
-                                    elif method == 'getYSize':
-                                        result = win.getYSize()
-                                        print(f"   📏 {method}: {result}")
-                                    elif method == 'getState':
-                                        result = win.getState()
-                                        print(f"   📊 {method}: {result}")
-                                    elif method == 'getTitle':
-                                        result = win.getTitle()
-                                        print(f"   🏷️  {method}: {result}")
-                                    elif method == 'getOrigin':
-                                        result = win.getOrigin()
-                                        print(f"   📍 {method}: {result}")
-                                    elif method == 'getSize':
-                                        result = win.getSize()
-                                        print(f"   📐 {method}: {result}")
-                                    else:
-                                        result = getattr(win, method)()
-                                        print(f"   ✅ {method}: {result}")
-                                except Exception as e:
-                                    print(f"   ⚠️  {method}: ошибка вызова - {e}")
-                            else:
-                                print(f"   ❌ {method}: отсутствует")
-                        
-                        # Проверяем свойства окна
-                        print(f"\n   🔧 Проверка свойств окна:")
-                        if hasattr(win, 'getProperties'):
-                            try:
-                                props = win.getProperties()
-                                print(f"      📋 Свойства окна: {props}")
-                            except Exception as e:
-                                print(f"      ⚠️  Не удалось получить свойства: {e}")
-                        
-                        # Проверяем pipe
-                        if hasattr(win, 'getPipe'):
-                            try:
-                                pipe = win.getPipe()
-                                print(f"      🔌 Pipe: {type(pipe).__name__}")
-                            except Exception as e:
-                                print(f"      ⚠️  Не удалось получить pipe: {e}")
-                    else:
-                        print(f"   ❌ Окно не найдено в ShowBase")
-                else:
-                    print(f"   ❌ ShowBase не найден в системе рендеринга")
-                
-                # 4. ПРОВЕРКА МЕТОДА RUN
-                print(f"\n▶️  4. ПРОВЕРКА МЕТОДА RUN:")
-                if hasattr(rendering_system, 'run'):
-                    run_method = rendering_system.run
-                    print(f"   ✅ Метод 'run' найден: {type(run_method).__name__}")
-                    print(f"   🔧 Вызываемый: {callable(run_method)}")
-                    
-                    # Проверяем сигнатуру метода
-                    import inspect
-                    try:
-                        sig = inspect.signature(run_method)
-                        print(f"   📝 Сигнатура: {sig}")
-                    except Exception as e:
-                        print(f"   ⚠️  Не удалось получить сигнатуру: {e}")
-                    
-                    # Проверяем docstring
-                    if hasattr(run_method, '__doc__') and run_method.__doc__:
-                        print(f"   📖 Docstring: {run_method.__doc__.strip()}")
-                    else:
-                        print(f"   ⚠️  Docstring отсутствует")
-                else:
-                    print(f"   ❌ Метод 'run' не найден в системе рендеринга")
-                    raise Exception("Система рендеринга не имеет метода 'run'")
-                
-                # 5. ПРОВЕРКА СОСТОЯНИЯ СИСТЕМЫ
-                print(f"\n📊 5. ПРОВЕРКА СОСТОЯНИЯ СИСТЕМЫ:")
-                if hasattr(rendering_system, 'state'):
-                    print(f"   📊 Состояние: {rendering_system.state}")
-                    print(f"   🔍 Значение: {rendering_system.state.value}")
-                else:
-                    print(f"   ⚠️  Состояние: не определено")
-                
-                # 6. ФИНАЛЬНАЯ ПРОВЕРКА ПЕРЕД ЗАПУСКОМ
-                print(f"\n🚀 6. ФИНАЛЬНАЯ ПРОВЕРКА ПЕРЕД ЗАПУСКОМ:")
-                print(f"   🔍 Проверяем все критические компоненты...")
-                
-                # Проверяем, что все критически важные компоненты присутствуют
-                critical_components = ['showbase']
-                missing_components = []
-                for component in critical_components:
-                    if not hasattr(rendering_system, component):
-                        missing_components.append(component)
-                
-                if missing_components:
-                    raise Exception(f"Отсутствуют критические компоненты: {missing_components}")
-                
-                # Дополнительная проверка showbase компонентов
-                showbase_critical = ['render', 'render2d', 'win']
-                missing_showbase = []
-                for component in showbase_critical:
-                    if not hasattr(rendering_system.showbase, component):
-                        missing_showbase.append(component)
-                
-                if missing_showbase:
-                    raise Exception(f"Отсутствуют критические компоненты ShowBase: {missing_showbase}")
-                
-                print(f"   ✅ Все критические компоненты присутствуют")
-                print(f"   ✅ Все компоненты ShowBase присутствуют")
-                print(f"   🚀 Запуск окна игры...")
-                
-                # 7. ЗАПУСК С МОНИТОРИНГОМ
-                print(f"\n🎬 7. ЗАПУСК С МОНИТОРИНГОМ:")
-                print(f"   🚀 Вызываем rendering_system.run()...")
-                
-                try:
-                    print(f"   🔍 Состояние перед вызовом run():")
-                    print(f"      📊 Система: {rendering_system.state}")
-                    print(f"      🎬 ShowBase: {type(rendering_system.showbase).__name__}")
-                    print(f"      🪟 Окно: {type(rendering_system.showbase.win).__name__}")
-                    
-                    # Проверяем, что окно действительно готово
-                    win = rendering_system.showbase.win
-                    if hasattr(win, 'isValid'):
-                        is_valid = win.isValid()
-                        print(f"      ✅ Окно валидно: {is_valid}")
-                    else:
-                        print(f"      ⚠️  Метод isValid отсутствует")
-                    
-                    if hasattr(win, 'getXSize') and hasattr(win, 'getYSize'):
-                        width = win.getXSize()
-                        height = win.getYSize()
-                        print(f"      📏 Размеры: {width}x{height}")
-                    else:
-                        print(f"      ⚠️  Методы получения размеров отсутствуют")
-                    
-                    print(f"   🚀 ВЫЗЫВАЕМ run()...")
-                    
-                    # ПРОСТОЙ ЗАПУСК - как в работающем тесте
-                    print(f"   📋 Запускаем rendering_system.run() напрямую...")
-                    
-                    try:
-                        # ВАЖНО: Запускаем в главном потоке, а не в отдельном!
-                        # Panda3D требует главный поток для обработки сигналов
-                        print(f"      📝 Запуск run() в главном потоке...")
-                        
-                        # Запускаем в фоновом режиме с возможностью прерывания
-                        import threading
-                        import time
-                        
-                        # Флаг для отслеживания запуска
-                        run_started = threading.Event()
-                        run_error = None
-                        
-                        def run_in_main_thread():
-                            nonlocal run_error
-                            try:
-                                run_started.set()
-                                print(f"      ✅ run() начал выполняться")
-                                # Запускаем в главном потоке
-                                rendering_system.run()
-                                print(f"      ✅ run() завершился успешно")
-                            except Exception as e:
-                                run_error = e
-                                print(f"      ❌ run() завершился с ошибкой: {e}")
-                                import traceback
-                                print(f"      🔍 Детали ошибки:")
-                                traceback.print_exc()
-                        
-                        # Запускаем в главном потоке
-                        print(f"      🚀 Запускаем rendering_system.run()...")
-                        run_in_main_thread()
-                        
-                        # Если мы дошли сюда, значит run() завершился
-                        if run_error:
-                            raise Exception(f"Ошибка при запуске окна: {run_error}")
-                        else:
-                            print(f"      ✅ run() завершился успешно")
-                        
-                    except Exception as e:
-                        print(f"      ❌ Ошибка при запуске: {e}")
-                        raise Exception(f"Ошибка при запуске окна: {e}")
-                    
-                except Exception as run_error:
-                    print(f"   ❌ Ошибка при вызове run(): {run_error}")
-                    print(f"   🔍 Детали ошибки:")
-                    import traceback
-                    traceback.print_exc()
-                    raise Exception(f"Ошибка при запуске окна: {run_error}")
-                
-                print("✅ Главный цикл игры запущен")
-                
-                # 8. ПРОВЕРКА ПОСЛЕ ЗАПУСКА
-                print(f"\n🔍 8. ПРОВЕРКА ПОСЛЕ ЗАПУСКА:")
-                if hasattr(rendering_system, 'showbase') and hasattr(rendering_system.showbase, 'win'):
-                    win = rendering_system.showbase.win
-                    if hasattr(win, 'isValid'):
-                        try:
-                            is_valid = win.isValid()
-                            print(f"   ✅ Окно валидно после запуска: {is_valid}")
-                        except Exception as e:
-                            print(f"   ⚠️  Не удалось проверить валидность после запуска: {e}")
-                    
-                    if hasattr(win, 'getXSize') and hasattr(win, 'getYSize'):
-                        try:
-                            width = win.getXSize()
-                            height = win.getYSize()
-                            print(f"   📏 Размеры после запуска: {width}x{height}")
-                        except Exception as e:
-                            print(f"   ⚠️  Не удалось получить размеры после запуска: {e}")
-                else:
-                    print(f"   ⚠️  Не удалось проверить окно после запуска")
-                
-                # 9. ПОДДЕРЖАНИЕ ОКНА ОТКРЫТЫМ
-                print(f"\n🔄 9. ПОДДЕРЖАНИЕ ОКНА ОТКРЫТЫМ:")
-                print(f"   🎮 Окно игры запущено!")
-                print(f"   🪟 Оно должно быть видимым на экране")
-                print(f"   ⏹️  Для выхода закройте окно игры или нажмите Ctrl+C")
-                
-                # ВАЖНО: Добавляем бесконечный цикл чтобы лаунчер не завершался
-                print(f"   🔄 Лаунчер переходит в режим ожидания...")
-                
-                try:
-                    # Ждем пока окно открыто
-                    while True:
-                        if hasattr(rendering_system, 'showbase') and hasattr(rendering_system.showbase, 'win'):
-                            win = rendering_system.showbase.win
-                            if hasattr(win, 'isValid'):
-                                try:
-                                    is_valid = win.isValid()
-                                    if not is_valid:
-                                        print(f"   ⚠️  Окно стало невалидным, завершаем работу")
-                                        break
-                                except Exception as e:
-                                    print(f"   ⚠️  Не удалось проверить валидность окна: {e}")
-                                    break
-                        else:
-                            print(f"   ⚠️  Окно не найдено, завершаем работу")
-                            break
-                        
-                        # Ждем немного перед следующей проверкой
-                        import time
-                        time.sleep(1)
-                        
-                except KeyboardInterrupt:
-                    print(f"\n   🛑 Получен сигнал прерывания (Ctrl+C)")
-                    print(f"   🚪 Завершаем работу...")
-                except Exception as e:
-                    print(f"\n   ❌ Ошибка в цикле ожидания: {e}")
-                
-                print(f"   ✅ Работа завершена")
-                
-                print(f"\n🎉 ОКНО ИГРЫ УСПЕШНО ЗАПУЩЕНО!")
-                print(f"   🎮 Игра готова к использованию")
-                print(f"   🪟 Окно должно быть видимым")
-                print(f"   ⏹️  Для выхода закройте окно игры")
-                
-            else:
-                raise Exception("Система рендеринга не найдена в игре")
+            # Проверяем, что игра готова к запуску
+            if not hasattr(game, 'start'):
+                raise Exception("Улучшенная игра не имеет метода 'start'")
+            
+            print(f"✅ Метод 'start' найден")
+            print(f"🚀 Запускаем улучшенную игру...")
+            
+            # Запускаем игру
+            try:
+                game.start()
+                print(f"✅ Улучшенная игра запущена успешно")
+            except Exception as start_error:
+                print(f"❌ Ошибка при запуске улучшенной игры: {start_error}")
+                raise Exception(f"Ошибка при запуске улучшенной игры: {start_error}")
+            
+            print(f"\n🎉 УЛУЧШЕННАЯ ИГРА УСПЕШНО ЗАПУЩЕНА!")
+            print(f"   🎮 Игра готова к использованию")
+            print(f"   🪟 Окно должно быть видимым")
+            print(f"   ⏹️  Для выхода закройте окно игры или нажмите Ctrl+C")
             
         except Exception as e:
-            logger.error(f"Ошибка запуска окна игры: {e}")
-            print(f"\n❌ ОШИБКА ЗАПУСКА ОКНА ИГРЫ: {e}")
+            logger.error(f"Ошибка запуска улучшенной игры: {e}")
+            print(f"\n❌ ОШИБКА ЗАПУСКА УЛУЧШЕННОЙ ИГРЫ: {e}")
             print("🔍 Детали ошибки:")
             traceback.print_exc()
             
             # Дополнительная диагностика
             print("\n🔍 ДОПОЛНИТЕЛЬНАЯ ДИАГНОСТИКА:")
             try:
-                if hasattr(game, 'systems'):
-                    print(f"📋 Доступные системы: {list(game.systems.keys())}")
+                if hasattr(game, 'showbase'):
+                    print(f"✅ ShowBase: {type(game.showbase).__name__}")
                 else:
-                    print("❌ Игра не имеет атрибута 'systems'")
+                    print("❌ ShowBase отсутствует")
                 
-                if hasattr(game, 'get_system_info'):
-                    try:
-                        info = game.get_system_info()
-                        print(f"📊 Информация о системах: {info}")
-                    except Exception as info_e:
-                        print(f"⚠️  Не удалось получить информацию о системах: {info_e}")
+                if hasattr(game, 'render_system'):
+                    print(f"✅ Система рендеринга: {type(game.render_system).__name__}")
                 else:
-                    print("❌ Игра не имеет метода 'get_system_info'")
+                    print("❌ Система рендеринга отсутствует")
                     
             except Exception as diag_e:
                 print(f"⚠️  Ошибка дополнительной диагностики: {diag_e}")

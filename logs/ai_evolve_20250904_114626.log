@@ -1,3 +1,0 @@
-2025-09-04 11:46:28 - torch._subclasses.fake_tensor - INFO - FakeTensor cache stats:
-2025-09-04 11:46:28 - torch._subclasses.fake_tensor - INFO -   cache_hits: 0
-2025-09-04 11:46:28 - torch._subclasses.fake_tensor - INFO -   cache_misses: 0

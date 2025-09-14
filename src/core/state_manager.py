@@ -477,8 +477,27 @@ class StateManager(BaseComponent):
         """Получение информации о системе"""
         return {
             'name': self.component_id,
-            'state': self.system_state.value,
-            'priority': self.system_priority.value,
+            'state': self.state.value,
+            'priority': self.priority.value,
+            'total_states': len(self._states),
+            'total_groups': len(self._state_groups),
+            'total_subscribers': len(self._subscribers),
+            'change_count': self._change_count,
+            'validation_failures': self._validation_failures
+        }
+    
+    def reset_stats(self):
+        """Сброс статистики"""
+        self._change_count = 0
+        self._validation_failures = 0
+        self._last_cleanup = time.time()
+    
+    def get_system_info(self) -> Dict[str, Any]:
+        """Получение информации о системе"""
+        return {
+            'name': self.component_id,
+            'state': self.state.value,
+            'priority': self.priority.value,
             'total_states': len(self._states),
             'total_groups': len(self._state_groups),
             'total_subscribers': len(self._subscribers),
