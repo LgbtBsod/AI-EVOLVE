@@ -7,10 +7,16 @@ import random
 from typing import Dict, List, Optional, Any, Tuple
 from panda3d.core import CardMaker, Vec3, Vec4, TransparencyAttrib, LODNode
 
-class AdvancedCharacter:
-    """Продвинутый класс персонажа с улучшенной графикой"""
+from .base_entity import BaseEntity
+from ..core.constants import EntityType
+
+class Character(BaseEntity):
+    """Класс персонажа с улучшенной графикой - наследуется от BaseEntity"""
     
-    def __init__(self, game, x=0, y=0, z=0, character_class="warrior", color=(1, 1, 1, 1)):
+    def __init__(self, character_id: str, game, x=0, y=0, z=0, character_class="warrior", color=(1, 1, 1, 1)):
+        # Инициализируем базовую сущность
+        super().__init__(character_id, EntityType.NPC, f"character_{character_id}")
+        
         self.game = game
         self.x = x
         self.y = y

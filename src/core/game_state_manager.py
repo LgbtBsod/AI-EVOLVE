@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, Type, Callable
 import logging
+from src.core.state_manager import StateManager, StateType
 
 logger = logging.getLogger(__name__)
 
 class EnhancedStateManager:
-    """Улучшенный менеджер состояний игры"""
+    """Улучшенный менеджер состояний игры - обертка над StateManager"""
     
     def __init__(self, game):
         self.game = game
@@ -15,6 +16,10 @@ class EnhancedStateManager:
         self.previous_state = None
         self.states = {}
         self.state_stack = []
+        
+        # Используем централизованный StateManager
+        self.state_manager = StateManager()
+        self.state_manager.initialize()
         
     def register_state(self, state_name: str, state_class):
         """Регистрация состояния"""
@@ -39,6 +44,11 @@ class EnhancedStateManager:
         # Входим в новое состояние
         try:
             self.current_state.enter()
+            
+            # Обновляем состояние в централизованном менеджере
+            self.state_manager.set_state(f"current_game_state", state_name, source="enhanced_state_manager")
+            self.state_manager.set_state(f"previous_game_state", self.previous_state.__class__.__name__ if self.previous_state else None, source="enhanced_state_manager")
+            
             logger.info(f"Changed state to: {state_name}")
             return True
         except Exception as e:

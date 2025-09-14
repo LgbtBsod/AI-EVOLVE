@@ -125,6 +125,10 @@ class RenderSystem(BaseComponent):
             priority=Priority.CRITICAL
         )
         
+        # Архитектурные компоненты
+        self.state_manager = None
+        self.attribute_system = None
+        
         # Panda3D компоненты
         self.showbase: Optional[ShowBase] = None
         self.render: Optional[NodePath] = None
@@ -142,6 +146,11 @@ class RenderSystem(BaseComponent):
         # Материалы
         self.materials: Dict[str, MaterialSettings] = {}
         self.material_cache: Dict[str, Material] = {}
+        
+        # Модели и объекты
+        self.loaded_models: Dict[str, NodePath] = {}
+        self.scene_objects: Dict[str, NodePath] = {}
+        self.model_cache: Dict[str, NodePath] = {}
         
         # Настройки рендеринга
         self.render_settings = RenderSettings()
@@ -162,6 +171,12 @@ class RenderSystem(BaseComponent):
         }
         
         logger.info("Система рендеринга инициализирована")
+    
+    def set_architecture_components(self, state_manager, attribute_system=None):
+        """Установка архитектурных компонентов"""
+        self.state_manager = state_manager
+        self.attribute_system = attribute_system
+        logger.info("Архитектурные компоненты установлены в RenderSystem")
     
     def initialize(self) -> bool:
         """Инициализация системы рендеринга"""
@@ -929,6 +944,94 @@ class RenderSystem(BaseComponent):
             logger.error(f"Ошибка уничтожения RenderSystem: {e}")
             return False
     
+    def load_model(self, model_id: str, model_path: str, position: Tuple[float, float, float] = (0, 0, 0)) -> bool:
+        """Загрузка 3D модели"""
+        try:
+            if model_id in self.loaded_models:
+                logger.warning(f"Модель {model_id} уже загружена")
+                return True
+            
+            # Загружаем модель
+            model = self.showbase.loader.loadModel(model_path)
+            if not model:
+                logger.error(f"Не удалось загрузить модель {model_path}")
+                return False
+            
+            # Размещаем модель в сцене
+            model.reparentTo(self.render)
+            model.setPos(*position)
+            
+            # Сохраняем модель
+            self.loaded_models[model_id] = model
+            self.scene_objects[model_id] = model
+            
+            logger.info(f"Модель {model_id} загружена из {model_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка загрузки модели {model_id}: {e}")
+            return False
+    
+    def create_primitive_object(self, object_id: str, primitive_type: str, position: Tuple[float, float, float] = (0, 0, 0)) -> bool:
+        """Создание примитивного объекта"""
+        try:
+            if object_id in self.scene_objects:
+                logger.warning(f"Объект {object_id} уже существует")
+                return True
+            
+            from panda3d.core import CardMaker, GeomNode
+            
+            if primitive_type == "cube":
+                # Создаем куб
+                cm = CardMaker("cube")
+                cm.setFrame(-1, 1, -1, 1)
+                cube = self.render.attachNewNode(cm.generate())
+                cube.setPos(*position)
+                
+            elif primitive_type == "sphere":
+                # Создаем сферу (упрощенная версия)
+                cm = CardMaker("sphere")
+                cm.setFrame(-1, 1, -1, 1)
+                sphere = self.render.attachNewNode(cm.generate())
+                sphere.setPos(*position)
+                
+            else:
+                logger.error(f"Неподдерживаемый тип примитива: {primitive_type}")
+                return False
+            
+            # Сохраняем объект
+            self.scene_objects[object_id] = cube if primitive_type == "cube" else sphere
+            
+            logger.info(f"Создан примитивный объект {object_id} типа {primitive_type}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка создания примитивного объекта {object_id}: {e}")
+            return False
+    
+    def remove_object(self, object_id: str) -> bool:
+        """Удаление объекта из сцены"""
+        try:
+            if object_id not in self.scene_objects:
+                logger.warning(f"Объект {object_id} не найден")
+                return False
+            
+            # Удаляем объект
+            obj = self.scene_objects[object_id]
+            obj.removeNode()
+            
+            # Очищаем из кэшей
+            if object_id in self.loaded_models:
+                del self.loaded_models[object_id]
+            del self.scene_objects[object_id]
+            
+            logger.info(f"Объект {object_id} удален из сцены")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка удаления объекта {object_id}: {e}")
+            return False
+    
     def cleanup(self):
         """Очистка системы рендеринга"""
         try:
@@ -941,6 +1044,10 @@ class RenderSystem(BaseComponent):
             for light in self.lights.values():
                 light.removeNode()
             
+            # Очистка объектов сцены
+            for obj in self.scene_objects.values():
+                obj.removeNode()
+            
             # Очистка данных
             self.cameras.clear()
             self.camera_settings.clear()
@@ -948,6 +1055,9 @@ class RenderSystem(BaseComponent):
             self.lighting_settings.clear()
             self.materials.clear()
             self.material_cache.clear()
+            self.loaded_models.clear()
+            self.scene_objects.clear()
+            self.model_cache.clear()
             
             logger.info("Система рендеринга очищена")
             

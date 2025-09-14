@@ -1,4 +1,0 @@
-2025-09-14 16:11:25 - src.enhanced_main - INFO - Инициализация Panda3D...
-2025-09-14 16:11:25 - src.enhanced_main - INFO - Panda3D инициализирован успешно
-2025-09-14 16:11:25 - src.systems.rendering.render_system - INFO - Система рендеринга инициализирована
-2025-09-14 16:11:25 - src.enhanced_main - ERROR - Ошибка инициализации систем: cannot import name 'Tupl' from 'typing' (C:\Users\lgbtb\AppData\Local\Programs\Python\Python313\Lib\typing.py)

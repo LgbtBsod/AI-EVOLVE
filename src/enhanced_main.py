@@ -87,7 +87,7 @@ class EnhancedGame:
             self.render_system = RenderSystem(self)
             
             # Инициализируем менеджер состояний
-            from src.core.enhanced_state_manager import EnhancedStateManager
+            from src.core.game_state_manager import EnhancedStateManager
             self.state_manager = EnhancedStateManager(self)
             
             # Инициализируем систему частиц
@@ -154,14 +154,14 @@ class EnhancedGame:
     def _register_states(self):
         """Регистрация состояний игры"""
         try:
-            from src.ui.simple_enhanced_start_screen import SimpleEnhancedStartScreen
+            from src.ui.start_screen import StartScreen
             from src.ui.pause_screen import PauseScreen
             from src.ui.settings_screen import SettingsScreen
             from src.ui.death_screen import DeathScreen
             from src.scenes.enhanced_game_scene import EnhancedGameScene
             
             # Регистрируем состояния
-            self.state_manager.register_state("start", SimpleEnhancedStartScreen)
+            self.state_manager.register_state("start", StartScreen)
             self.state_manager.register_state("game", EnhancedGameScene)
             self.state_manager.register_state("pause", PauseScreen)
             self.state_manager.register_state("settings", SettingsScreen)
