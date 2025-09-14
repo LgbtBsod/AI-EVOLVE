@@ -4,6 +4,8 @@
 import time
 import math
 from typing import Dict, List, Optional, Tuple
+from direct.task import Task
+
 # Пробуем импортировать компоненты Panda3D с обработкой ошибок
 try:
     from panda3d.core import LODNode, CullBinManager
@@ -111,7 +113,14 @@ class PerformanceOptimizer:
         def monitor_performance(task):
             # Получаем статистику производительности
             if hasattr(self.game, 'showbase'):
-                self.performance_stats['fps'] = self.game.showbase.getAverageFrameRate()
+                try:
+                    self.performance_stats['fps'] = self.game.showbase.getAverageFrameRate()
+                except AttributeError:
+                    # Альтернативный способ получения FPS
+                    try:
+                        self.performance_stats['fps'] = self.game.showbase.clock.getAverageFrameRate()
+                    except:
+                        self.performance_stats['fps'] = 60.0
                 
             # Адаптивная оптимизация
             if self.adaptive_quality:

@@ -4,6 +4,7 @@
 import math
 import time
 from direct.gui.DirectGui import DirectFrame, DirectButton, OnscreenText
+from direct.task import Task
 from panda3d.core import TextNode
 
 from .base_screen import BaseScreen
@@ -62,7 +63,10 @@ class SimpleEnhancedStartScreen(BaseScreen):
         """Запуск анимации обновления FPS"""
         def update_fps(task):
             if hasattr(self, 'info_label'):
-                fps = self.game.showbase.getAverageFrameRate()
+                try:
+                    fps = self.game.showbase.getAverageFrameRate()
+                except:
+                    fps = 60.0
                 info_text = f"Version 2.0 Enhanced\nPanda3D Engine\nFPS: {fps:.1f}"
                 self.info_label.setText(info_text)
             return Task.cont

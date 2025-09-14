@@ -1,0 +1,18 @@
+2025-09-14 16:13:10 - src.enhanced_main - INFO - Инициализация Panda3D...
+2025-09-14 16:13:11 - src.enhanced_main - INFO - Panda3D инициализирован успешно
+2025-09-14 16:13:11 - src.systems.rendering.render_system - INFO - Система рендеринга инициализирована
+2025-09-14 16:13:11 - src.enhanced_main - INFO - Система ввода настроена
+2025-09-14 16:13:11 - src.enhanced_main - INFO - Игровые системы инициализированы
+2025-09-14 16:13:11 - src.core.enhanced_state_manager - INFO - Registered state: start
+2025-09-14 16:13:11 - src.core.enhanced_state_manager - INFO - Registered state: game
+2025-09-14 16:13:11 - src.core.enhanced_state_manager - INFO - Registered state: pause
+2025-09-14 16:13:11 - src.core.enhanced_state_manager - INFO - Registered state: settings
+2025-09-14 16:13:11 - src.core.enhanced_state_manager - INFO - Registered state: death
+2025-09-14 16:13:11 - src.enhanced_main - INFO - Состояния игры зарегистрированы
+2025-09-14 16:13:11 - src.enhanced_main - INFO - ============================================================
+2025-09-14 16:13:11 - src.enhanced_main - INFO - 🚀 ЗАПУСК УЛУЧШЕННОЙ ИГРЫ AI-EVOLVE
+2025-09-14 16:13:11 - src.enhanced_main - INFO - ============================================================
+2025-09-14 16:13:11 - src.core.enhanced_state_manager - INFO - Changed state to: start
+2025-09-14 16:13:11 - src.enhanced_main - ERROR - Ошибка в главном цикле: name 'Task' is not defined
+2025-09-14 16:13:11 - src.enhanced_main - ERROR - Ошибка запуска игры: name 'Task' is not defined
+2025-09-14 16:13:11 - __main__ - ERROR - Ошибка запуска улучшенной игры: Ошибка при запуске улучшенной игры: name 'Task' is not defined
