@@ -1,6 +1,5 @@
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from enum import Enum
 from pathlib import Path
 from typing import *
 from typing import Dict, List, Optional, Any, Type, TypeVar, Generic, Callable
@@ -15,38 +14,7 @@ import time
 Модульная архитектура с принципом единой ответственности"""
 
 from abc import ABC, abstractmethod
-
-# = БАЗОВЫЕ ИНТЕРФЕЙСЫ АРХИТЕКТУРЫ
-class ComponentType(Enum):
-    """Типы компонентов архитектуры"""
-    SYSTEM = "system"
-    MANAGER = "manager"
-    SERVICE = "service"
-    REPOSITORY = "repository"
-    FACTORY = "factory"
-    CONTROLLER = "controller"
-    UTILITY = "utility"
-    ADAPTER = "adapter"
-
-class LifecycleState(Enum):
-    """Состояния жизненного цикла компонента"""
-    UNINITIALIZED = "uninitialized"
-    INITIALIZING = "initializing"
-    READY = "ready"
-    RUNNING = "running"
-    PAUSED = "paused"
-    STOPPING = "stopping"
-    STOPPED = "stopped"
-    ERROR = "error"
-    DESTROYED = "destroyed"
-
-class Priority(Enum):
-    """Приоритеты компонентов"""
-    CRITICAL = 0
-    HIGH = 1
-    NORMAL = 2
-    LOW = 3
-    BACKGROUND = 4
+from .component_types import ComponentType, LifecycleState, Priority, BaseComponent, IComponent
 
 # = БАЗОВЫЕ КЛАССЫ АРХИТЕКТУРЫ
 class IComponent(ABC):

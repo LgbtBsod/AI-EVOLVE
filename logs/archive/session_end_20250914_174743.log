@@ -1,0 +1,10 @@
+2025-09-14 17:47:43 - src.main - INFO - Инициализация Panda3D...
+2025-09-14 17:47:43 - src.main - INFO - Panda3D инициализирован успешно
+2025-09-14 17:47:43 - src.systems.rendering.render_system - INFO - Система рендеринга инициализирована
+2025-09-14 17:47:43 - src.core.state_manager - INFO - StateManager инициализирован
+2025-09-14 17:47:43 - src.core.architecture.state_manager - INFO - Инициализация компонента state_manager
+2025-09-14 17:47:43 - src.core.state_manager - INFO - StateManager успешно инициализирован
+2025-09-14 17:47:43 - src.core.architecture.state_manager - INFO - Компонент state_manager успешно инициализирован
+2025-09-14 17:47:43 - src.main - INFO - Система ввода настроена
+2025-09-14 17:47:43 - src.main - INFO - Игровые системы инициализированы
+2025-09-14 17:47:43 - src.main - ERROR - Ошибка регистрации состояний: No module named 'src.ui.enhanced_hud'

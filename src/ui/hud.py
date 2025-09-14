@@ -21,6 +21,7 @@ class EnhancedHUD:
             frameSize=(-1, 1, -1, 1),
             parent=self.game.aspect2d
         )
+        self.main_frame.show()  # Явно показываем фрейм
         self.elements.append(self.main_frame)
         
         # Создаем основные панели
@@ -52,6 +53,7 @@ class EnhancedHUD:
             pos=(0, 0, -0.9),
             parent=self.main_frame
         )
+        self.health_bar.show()  # Явно показываем полосу
         self.elements.append(self.health_bar)
         
         # Текст здоровья
@@ -82,6 +84,7 @@ class EnhancedHUD:
             pos=(0, 0, -0.85),
             parent=self.main_frame
         )
+        self.mana_bar.show()  # Явно показываем полосу
         self.elements.append(self.mana_bar)
         
         # Текст маны
@@ -112,6 +115,7 @@ class EnhancedHUD:
             pos=(0, 0, -0.8),
             parent=self.main_frame
         )
+        self.stamina_bar.show()  # Явно показываем полосу
         self.elements.append(self.stamina_bar)
         
         # Текст выносливости
@@ -142,6 +146,7 @@ class EnhancedHUD:
             pos=(0, 0, -0.75),
             parent=self.main_frame
         )
+        self.exp_bar.show()  # Явно показываем полосу
         self.elements.append(self.exp_bar)
         
         # Текст опыта
@@ -322,21 +327,29 @@ class EnhancedHUD:
             
         # Обновляем полосы здоровья, маны и выносливости
         health_percent = character.health / character.max_health if character.max_health > 0 else 0
-        self.health_bar['frameSize'] = (-0.24, -0.24 + 0.48 * health_percent, -0.04, 0.04)
-        self.health_text.setText(f"HP: {int(character.health)}/{int(character.max_health)}")
+        if hasattr(self, 'health_bar'):
+            self.health_bar['frameSize'] = (-0.24, -0.24 + 0.48 * health_percent, -0.04, 0.04)
+        if hasattr(self, 'health_text'):
+            self.health_text.setText(f"HP: {int(character.health)}/{int(character.max_health)}")
         
         mana_percent = character.mana / character.max_mana if character.max_mana > 0 else 0
-        self.mana_bar['frameSize'] = (-0.24, -0.24 + 0.48 * mana_percent, -0.04, 0.04)
-        self.mana_text.setText(f"MP: {int(character.mana)}/{int(character.max_mana)}")
+        if hasattr(self, 'mana_bar'):
+            self.mana_bar['frameSize'] = (-0.24, -0.24 + 0.48 * mana_percent, -0.04, 0.04)
+        if hasattr(self, 'mana_text'):
+            self.mana_text.setText(f"MP: {int(character.mana)}/{int(character.max_mana)}")
         
         stamina_percent = character.stamina / character.max_stamina if character.max_stamina > 0 else 0
-        self.stamina_bar['frameSize'] = (-0.24, -0.24 + 0.48 * stamina_percent, -0.04, 0.04)
-        self.stamina_text.setText(f"SP: {int(character.stamina)}/{int(character.max_stamina)}")
+        if hasattr(self, 'stamina_bar'):
+            self.stamina_bar['frameSize'] = (-0.24, -0.24 + 0.48 * stamina_percent, -0.04, 0.04)
+        if hasattr(self, 'stamina_text'):
+            self.stamina_text.setText(f"SP: {int(character.stamina)}/{int(character.max_stamina)}")
         
         # Обновляем полосу опыта
         exp_percent = character.experience / character.experience_to_next_level if character.experience_to_next_level > 0 else 0
-        self.exp_bar['frameSize'] = (-0.24, -0.24 + 0.48 * exp_percent, -0.04, 0.04)
-        self.exp_text.setText(f"EXP: {character.experience}/{character.experience_to_next_level}")
+        if hasattr(self, 'exp_bar'):
+            self.exp_bar['frameSize'] = (-0.24, -0.24 + 0.48 * exp_percent, -0.04, 0.04)
+        if hasattr(self, 'exp_text'):
+            self.exp_text.setText(f"EXP: {character.experience}/{character.experience_to_next_level}")
         
         # Обновляем панель атрибутов
         if self.is_attributes_open:
@@ -353,14 +366,10 @@ class EnhancedHUD:
         """Обновление панели атрибутов"""
         attributes_text = f"Level: {character.level}\n\n"
         attributes_text += "Base Attributes:\n"
-        attributes_text += f"Strength: {character.base_attributes.strength}\n"
-        attributes_text += f"Agility: {character.base_attributes.agility}\n"
-        attributes_text += f"Intelligence: {character.base_attributes.intelligence}\n"
-        attributes_text += f"Vitality: {character.base_attributes.vitality}\n"
-        attributes_text += f"Wisdom: {character.base_attributes.wisdom}\n"
-        attributes_text += f"Charisma: {character.base_attributes.charisma}\n"
-        attributes_text += f"Luck: {character.base_attributes.luck}\n"
-        attributes_text += f"Endurance: {character.base_attributes.endurance}\n\n"
+        # Используем базовые атрибуты из класса персонажа
+        attributes_text += f"Health: {character.health}/{character.max_health}\n"
+        attributes_text += f"Mana: {character.mana}/{character.max_mana}\n"
+        attributes_text += f"Stamina: {character.stamina}/{character.max_stamina}\n\n"
         attributes_text += "Derived Stats:\n"
         attributes_text += f"Physical Damage: {getattr(character, 'physical_damage', 0):.1f}\n"
         attributes_text += f"Magical Damage: {getattr(character, 'magical_damage', 0):.1f}\n"

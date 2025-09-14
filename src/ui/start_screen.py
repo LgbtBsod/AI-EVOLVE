@@ -5,6 +5,7 @@ import math
 import time
 from direct.gui.DirectGui import OnscreenText
 from panda3d.core import TextNode
+from direct.task import Task
 
 from .animated_menu import AnimatedMenu
 from .base_screen import BaseScreen
@@ -179,7 +180,7 @@ class StartScreen(BaseScreen):
     def _create_info_panel(self):
         """Создание информационной панели"""
         # Панель с информацией о версии
-        info_text = f"Version 2.0 Enhanced\nPanda3D Engine\nFPS: {self.game.showbase.getAverageFrameRate():.1f}"
+        info_text = "Version 2.0 Enhanced\nPanda3D Engine\nFPS: --"
         
         self.info_label = OnscreenText(
             text=info_text,
@@ -198,8 +199,12 @@ class StartScreen(BaseScreen):
         """Запуск анимации обновления FPS"""
         def update_fps(task):
             if hasattr(self, 'info_label'):
-                fps = self.game.showbase.getAverageFrameRate()
-                info_text = f"Version 2.0 Enhanced\nPanda3D Engine\nFPS: {fps:.1f}"
+                # Используем правильный метод для получения FPS
+                try:
+                    fps = self.game.showbase.clock.getAverageFrameRate()
+                    info_text = f"Version 2.0 Enhanced\nPanda3D Engine\nFPS: {fps:.1f}"
+                except:
+                    info_text = "Version 2.0 Enhanced\nPanda3D Engine\nFPS: --"
                 self.info_label.setText(info_text)
             return Task.cont
             
@@ -214,8 +219,8 @@ class StartScreen(BaseScreen):
         
     def open_settings(self):
         """Открыть настройки"""
-        if hasattr(self.game, 'state_manager'):
-            self.game.state_manager.change_state("settings")
+        if hasattr(self.game, 'show_settings'):
+            self.game.show_settings()
         else:
             print("Settings not available")
         

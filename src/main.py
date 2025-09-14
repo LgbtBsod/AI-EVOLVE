@@ -31,6 +31,8 @@ class EnhancedGame:
         self.state_manager = None
         self.input_manager = None
         self.keys = {}
+        self.is_paused = False
+        self.pause_ui_elements = []
         
         # Panda3D компоненты
         self.showbase = None
@@ -147,6 +149,10 @@ class EnhancedGame:
         """Обработка нажатия клавиши"""
         self.keys[key] = True
         
+        # Обработка клавиши ESC для паузы
+        if key == 'escape':
+            self._toggle_pause()
+        
     def _key_up(self, key):
         """Обработка отпускания клавиши"""
         self.keys[key] = False
@@ -155,23 +161,274 @@ class EnhancedGame:
         """Регистрация состояний игры"""
         try:
             from src.ui.start_screen import StartScreen
-            from src.ui.pause_screen import PauseScreen
-            from src.ui.settings_screen import SettingsScreen
             from src.ui.death_screen import DeathScreen
-            from src.scenes.enhanced_game_scene import EnhancedGameScene
+            from src.scenes.main_game_scene import EnhancedGameScene
             
             # Регистрируем состояния
             self.state_manager.register_state("start", StartScreen)
             self.state_manager.register_state("game", EnhancedGameScene)
-            self.state_manager.register_state("pause", PauseScreen)
-            self.state_manager.register_state("settings", SettingsScreen)
             self.state_manager.register_state("death", DeathScreen)
+            
+            # Пауза и настройки теперь обрабатываются через UnifiedUISystem
+            # Добавляем методы для работы с UI системой
+            self._setup_ui_handlers()
             
             logger.info("Состояния игры зарегистрированы")
             
         except Exception as e:
             logger.error(f"Ошибка регистрации состояний: {e}")
             raise
+    
+    def _setup_ui_handlers(self):
+        """Настройка обработчиков UI"""
+        try:
+            # Получаем UnifiedUISystem из master_integrator
+            if hasattr(self, 'master_integrator') and self.master_integrator:
+                ui_system = self.master_integrator.get_system('unified_ui_system')
+                if ui_system:
+                    # Добавляем методы для паузы и настроек
+                    self.show_pause_menu = lambda: self._show_pause_menu(ui_system)
+                    self.show_settings = lambda: self._show_settings(ui_system)
+                    logger.info("UI обработчики настроены")
+        except Exception as e:
+            logger.error(f"Ошибка настройки UI обработчиков: {e}")
+    
+    def _show_pause_menu(self, ui_system):
+        """Показать меню паузы"""
+        try:
+            # Создаем элементы паузы через UnifiedUISystem
+            pause_elements = ui_system.create_text(
+                "PAUSED",
+                position=(0, 0, 0.3),
+                scale=0.15,
+                color=(1, 1, 0, 1),
+                element_id="pause_title"
+            )
+            logger.info("Меню паузы показано")
+        except Exception as e:
+            logger.error(f"Ошибка показа меню паузы: {e}")
+    
+    def _show_settings(self, ui_system):
+        """Показать настройки"""
+        try:
+            # Создаем экран настроек через UnifiedUISystem
+            settings_elements = ui_system.create_settings_screen()
+            logger.info("Настройки показаны")
+        except Exception as e:
+            logger.error(f"Ошибка показа настроек: {e}")
+    
+    def _toggle_pause(self):
+        """Переключение паузы"""
+        try:
+            if self.is_paused:
+                self._resume_game()
+            else:
+                self._pause_game()
+        except Exception as e:
+            logger.error(f"Ошибка переключения паузы: {e}")
+    
+    def _pause_game(self):
+        """Поставить игру на паузу"""
+        try:
+            self.is_paused = True
+            logger.info("Игра поставлена на паузу")
+            
+            # Создаем меню паузы
+            self._create_pause_menu()
+            
+        except Exception as e:
+            logger.error(f"Ошибка постановки на паузу: {e}")
+    
+    def _resume_game(self):
+        """Возобновить игру"""
+        try:
+            self.is_paused = False
+            logger.info("Игра возобновлена")
+            
+            # Удаляем меню паузы
+            self._remove_pause_menu()
+            
+        except Exception as e:
+            logger.error(f"Ошибка возобновления игры: {e}")
+    
+    def _create_pause_menu(self):
+        """Создание меню паузы"""
+        try:
+            from direct.gui.OnscreenText import OnscreenText
+            from direct.gui.DirectButton import DirectButton
+            from direct.gui.DirectFrame import DirectFrame
+            from panda3d.core import TextNode
+            
+            # Фон паузы
+            pause_bg = DirectFrame(
+                frameColor=(0, 0, 0, 0.7),
+                frameSize=(-1, 1, -1, 1),
+                pos=(0, 0, 0),
+                parent=self.aspect2d
+            )
+            pause_bg.show()
+            self.pause_ui_elements.append(pause_bg)
+            
+            # Заголовок паузы
+            pause_title = OnscreenText(
+                text="PAUSED",
+                pos=(0, 0.3),
+                scale=0.15,
+                fg=(1, 1, 0, 1),
+                parent=self.aspect2d,
+                align=TextNode.ACenter
+            )
+            pause_title.show()
+            self.pause_ui_elements.append(pause_title)
+            
+            # Кнопка возобновления
+            resume_button = DirectButton(
+                text="Resume",
+                scale=0.1,
+                pos=(0, 0, 0),
+                command=self._resume_game,
+                parent=self.aspect2d,
+                frameColor=(0.3, 0.3, 0.3, 0.8),
+                text_fg=(1, 1, 1, 1),
+                frameSize=(-1, 1, -0.3, 0.3)
+            )
+            resume_button.show()
+            self.pause_ui_elements.append(resume_button)
+            
+            # Кнопка настроек
+            settings_button = DirectButton(
+                text="Settings",
+                scale=0.1,
+                pos=(0, 0, -0.15),
+                command=self._show_settings_menu,
+                parent=self.aspect2d,
+                frameColor=(0.3, 0.3, 0.3, 0.8),
+                text_fg=(1, 1, 1, 1),
+                frameSize=(-1, 1, -0.3, 0.3)
+            )
+            settings_button.show()
+            self.pause_ui_elements.append(settings_button)
+            
+            # Кнопка выхода в меню
+            menu_button = DirectButton(
+                text="Main Menu",
+                scale=0.1,
+                pos=(0, 0, -0.3),
+                command=self._return_to_menu,
+                parent=self.aspect2d,
+                frameColor=(0.3, 0.3, 0.3, 0.8),
+                text_fg=(1, 1, 1, 1),
+                frameSize=(-1, 1, -0.3, 0.3)
+            )
+            menu_button.show()
+            self.pause_ui_elements.append(menu_button)
+            
+            logger.info("Меню паузы создано и показано")
+            
+        except Exception as e:
+            logger.error(f"Ошибка создания меню паузы: {e}")
+    
+    def _remove_pause_menu(self):
+        """Удаление меню паузы"""
+        try:
+            for element in self.pause_ui_elements:
+                if hasattr(element, 'destroy'):
+                    element.destroy()
+            self.pause_ui_elements.clear()
+        except Exception as e:
+            logger.error(f"Ошибка удаления меню паузы: {e}")
+    
+    def _show_settings_menu(self):
+        """Показать меню настроек"""
+        try:
+            # Создаем простое меню настроек
+            self._create_settings_menu()
+        except Exception as e:
+            logger.error(f"Ошибка показа настроек: {e}")
+    
+    def _create_settings_menu(self):
+        """Создание меню настроек"""
+        try:
+            from direct.gui.OnscreenText import OnscreenText
+            from direct.gui.DirectButton import DirectButton
+            from panda3d.core import TextNode
+            
+            # Фон настроек
+            settings_bg = OnscreenText(
+                text="",
+                pos=(0, 0),
+                scale=1.0,
+                fg=(0, 0, 0, 0.7),
+                parent=self.aspect2d
+            )
+            self.pause_ui_elements.append(settings_bg)
+            
+            # Заголовок настроек
+            settings_title = OnscreenText(
+                text="SETTINGS",
+                pos=(0, 0.3),
+                scale=0.15,
+                fg=(1, 1, 0, 1),
+                parent=self.aspect2d,
+                align=TextNode.ACenter
+            )
+            self.pause_ui_elements.append(settings_title)
+            
+            # Кнопка графики
+            graphics_button = DirectButton(
+                text="Graphics: High",
+                scale=0.1,
+                pos=(0, 0, 0.1),
+                command=self._toggle_graphics,
+                parent=self.aspect2d
+            )
+            self.pause_ui_elements.append(graphics_button)
+            
+            # Кнопка звука
+            sound_button = DirectButton(
+                text="Sound: On",
+                scale=0.1,
+                pos=(0, 0, -0.05),
+                command=self._toggle_sound,
+                parent=self.aspect2d
+            )
+            self.pause_ui_elements.append(sound_button)
+            
+            # Кнопка возврата
+            back_button = DirectButton(
+                text="Back",
+                scale=0.1,
+                pos=(0, 0, -0.2),
+                command=self._return_to_pause,
+                parent=self.aspect2d
+            )
+            self.pause_ui_elements.append(back_button)
+            
+        except Exception as e:
+            logger.error(f"Ошибка создания меню настроек: {e}")
+    
+    def _toggle_graphics(self):
+        """Переключение графики"""
+        print("Graphics settings toggled")
+    
+    def _toggle_sound(self):
+        """Переключение звука"""
+        print("Sound settings toggled")
+    
+    def _return_to_pause(self):
+        """Возврат к меню паузы"""
+        self._remove_pause_menu()
+        self._create_pause_menu()
+    
+    def _return_to_menu(self):
+        """Вернуться в главное меню"""
+        try:
+            self._remove_pause_menu()
+            self.is_paused = False
+            if hasattr(self, 'state_manager'):
+                self.state_manager.change_state("start")
+        except Exception as e:
+            logger.error(f"Ошибка возврата в меню: {e}")
             
     def start(self):
         """Запуск игры"""
@@ -207,10 +464,11 @@ class EnhancedGame:
                 if dt > 0.1:
                     dt = 0.1
                     
-                # Обновляем игру
-                self.update(dt)
+                # Обновляем игру только если не на паузе
+                if not self.is_paused:
+                    self.update(dt)
                 
-                # Обрабатываем ввод
+                # Обрабатываем ввод (всегда, даже на паузе)
                 self.handle_input()
                 
                 # Рендерим кадр

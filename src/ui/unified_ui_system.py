@@ -25,7 +25,7 @@ except ImportError:
         def __init__(self, **kwargs): pass
         def destroy(self): pass
 
-from ..core.architecture import BaseComponent, ComponentType, Priority, LifecycleState
+from ..core.component_types import BaseComponent, ComponentType, Priority, LifecycleState
 from ..core.state_manager import StateManager, StateType
 
 logger = logging.getLogger(__name__)
@@ -121,7 +121,7 @@ class StatsPanel(UIElement):
     update_interval: float = 0.1
 
 class UnifiedUISystem(BaseComponent):
-    """Объединенная система UI
+    """Объединенная система UI с поддержкой настроек
     Управляет всеми элементами пользовательского интерфейса"""
     
     def __init__(self):
@@ -167,6 +167,18 @@ class UnifiedUISystem(BaseComponent):
             'tooltip_delay': 0.5,
             'notification_duration': 3.0,
             'max_notifications': 5
+        }
+        
+        # Настройки игры
+        self.game_settings = {
+            'graphics_quality': 'Medium',
+            'sound_enabled': True,
+            'music_volume': 0.7,
+            'sfx_volume': 0.8,
+            'fullscreen': False,
+            'resolution': (1920, 1080),
+            'vsync': True,
+            'fps_limit': 60
         }
         
         logger.info("Объединенная система UI создана")
@@ -506,6 +518,67 @@ class UnifiedUISystem(BaseComponent):
         except Exception as e:
             logger.error(f"Ошибка остановки системы UI: {e}")
             return False
+    
+    def get_setting(self, key: str, default=None):
+        """Получить настройку игры"""
+        return self.game_settings.get(key, default)
+    
+    def set_setting(self, key: str, value: Any):
+        """Установить настройку игры"""
+        self.game_settings[key] = value
+        logger.info(f"Настройка {key} установлена в {value}")
+    
+    def toggle_graphics_quality(self):
+        """Переключение качества графики"""
+        qualities = ["Low", "Medium", "High", "Ultra"]
+        current_index = qualities.index(self.game_settings['graphics_quality'])
+        next_index = (current_index + 1) % len(qualities)
+        self.set_setting('graphics_quality', qualities[next_index])
+    
+    def toggle_sound(self):
+        """Переключение звука"""
+        self.set_setting('sound_enabled', not self.game_settings['sound_enabled'])
+    
+    def set_volume(self, volume_type: str, volume: float):
+        """Установка громкости"""
+        if volume_type in ['music_volume', 'sfx_volume']:
+            self.set_setting(volume_type, max(0.0, min(1.0, volume)))
+    
+    def create_settings_screen(self):
+        """Создание экрана настроек"""
+        settings_elements = []
+        
+        # Заголовок
+        title = self.create_text(
+            "SETTINGS",
+            position=(0, 0, 0.4),
+            scale=0.15,
+            color=(1, 1, 0, 1),
+            element_id="settings_title"
+        )
+        settings_elements.append(title)
+        
+        # Качество графики
+        graphics_text = self.create_text(
+            f"Graphics: {self.game_settings['graphics_quality']}",
+            position=(0, 0, 0.1),
+            scale=0.08,
+            color=(1, 1, 1, 1),
+            element_id="graphics_text"
+        )
+        settings_elements.append(graphics_text)
+        
+        # Звук
+        sound_text = self.create_text(
+            f"Sound: {'ON' if self.game_settings['sound_enabled'] else 'OFF'}",
+            position=(0, 0, -0.05),
+            scale=0.08,
+            color=(1, 1, 1, 1),
+            element_id="sound_text"
+        )
+        settings_elements.append(sound_text)
+        
+        return settings_elements
     
     def destroy(self) -> bool:
         """Уничтожение системы UI"""

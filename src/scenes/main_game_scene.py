@@ -27,6 +27,14 @@ class EnhancedGameScene:
         self.last_enemy_spawn = 0
         self.enemy_spawn_interval = 3.0  # Интервал между появлениями врагов
         
+        # Система создания объектов игроком
+        self.player_created_objects = []
+        self.creation_mode = None  # None, "enemy", "trap", "chest"
+        
+        # Маяк смерти
+        self.death_beacon = None
+        self.death_position = None
+        
     def enter(self):
         """Вход в игровую сцену"""
         print("Entering enhanced game scene...")
@@ -229,28 +237,29 @@ class EnhancedGameScene:
         
     def _create_player(self):
         """Создание игрока"""
-        from src.entities.enhanced_character import EnhancedCharacter
+        from src.entities.character import Character
         
-        self.player = EnhancedCharacter(self.game, 0, 0, 0, (0, 0, 1, 1))  # Синий цвет
+        # Создаем игрока немного выше земли
+        self.player = Character("player_1", self.game, 0, 0, 0.5, "warrior", (0, 0, 1, 1), is_player=True)  # Синий цвет
         self.player.create_character()
         
     def _create_hud(self):
         """Создание HUD"""
-        from src.ui.enhanced_hud import EnhancedHUD
+        from src.ui.hud import EnhancedHUD
         
         self.hud = EnhancedHUD(self.game)
         self.hud.create_hud()
         
     def _spawn_initial_enemies(self):
         """Создание начальных врагов"""
-        from src.entities.enhanced_enemy import EnhancedEnemy
+        from src.entities.enemy import EnhancedEnemy
         
         # Создаем несколько врагов в разных местах
         enemy_positions = [
-            (5, 5, 0),
-            (-5, 5, 0),
-            (5, -5, 0),
-            (-5, -5, 0)
+            (5, 5, 0.5),
+            (-5, 5, 0.5),
+            (5, -5, 0.5),
+            (-5, -5, 0.5)
         ]
         
         for i, (x, y, z) in enumerate(enemy_positions):
@@ -265,10 +274,42 @@ class EnhancedGameScene:
             # Используем изометрическую камеру
             self.game.render_system.switch_camera("isometric")
         else:
-            # Простая настройка камеры
+            # Простая настройка камеры - изометрический вид
             if hasattr(self.game, 'cam'):
-                self.game.cam.setPos(10, -10, 8)
+                # Позиционируем камеру для изометрического вида
+                self.game.cam.setPos(15, -15, 12)
                 self.game.cam.lookAt(0, 0, 0)
+                # Устанавливаем правильный угол для изометрии
+                self.game.cam.setHpr(45, -30, 0)
+                
+                # Запускаем задачу следования камеры за игроком
+                self._start_camera_follow()
+    
+    def _start_camera_follow(self):
+        """Запуск следования камеры за игроком"""
+        def follow_player(task):
+            if self.player and hasattr(self.game, 'cam'):
+                # Получаем позицию игрока
+                player_x = self.player.x
+                player_y = self.player.y
+                player_z = self.player.z
+                
+                # Позиционируем камеру для изометрического вида
+                camera_offset_x = 20
+                camera_offset_y = -20
+                camera_offset_z = 15
+                
+                self.game.cam.setPos(
+                    player_x + camera_offset_x,
+                    player_y + camera_offset_y,
+                    player_z + camera_offset_z
+                )
+                # Устанавливаем правильный угол для изометрии
+                self.game.cam.setHpr(45, -30, 0)
+                
+            return task.cont
+            
+        self.game.showbase.taskMgr.add(follow_player, "camera_follow")
                 
     def update(self, dt):
         """Обновление игровой сцены"""
@@ -277,7 +318,22 @@ class EnhancedGameScene:
             
         # Обновляем игрока
         if self.player:
-            self.player.update_cooldown(dt)
+            # Обновляем кулдаун атаки
+            if self.player.attack_cooldown > 0:
+                self.player.attack_cooldown -= dt
+            if self.player.attack_cooldown < 0:
+                self.player.attack_cooldown = 0
+                
+            # Восстанавливаем характеристики
+            self.player.health = min(self.player.max_health, self.player.health + self.player.health_regen * dt)
+            self.player.mana = min(self.player.max_mana, self.player.mana + self.player.mana_regen * dt)
+            self.player.stamina = min(self.player.max_stamina, self.player.stamina + self.player.stamina_regen * dt)
+            
+            # Обновляем ИИ персонажа
+            self.player.update_ai(self.enemies, [], dt)
+            
+            # Автоматическое использование скилов
+            self.player.use_skill_automatically(self.enemies, dt)
             
         # Обновляем врагов
         for enemy in self.enemies[:]:  # Используем копию списка для безопасного удаления
@@ -295,6 +351,10 @@ class EnhancedGameScene:
         if self.hud and self.player:
             self.hud.update_hud(self.player)
             
+        # Проверяем смерть персонажа
+        if self.player and not self.player.is_alive():
+            self._handle_player_death()
+            
     def _spawn_enemies(self, dt):
         """Спавн новых врагов"""
         current_time = time.time()
@@ -303,7 +363,7 @@ class EnhancedGameScene:
         if (current_time - self.last_enemy_spawn >= self.enemy_spawn_interval and 
             len(self.enemies) < self.max_enemies):
             
-            from src.entities.enhanced_enemy import EnhancedEnemy
+            from src.entities.enemy import EnhancedEnemy
             
             # Выбираем случайную позицию на краю карты
             side = random.randint(0, 3)
@@ -361,10 +421,26 @@ class EnhancedGameScene:
         # Перемещаем игрока
         if dx != 0 or dy != 0:
             self.player.move_by(dx, dy, 0, 0.016)
+            # Обновляем анимацию
+            self.player.set_animation_state("walking")
+        else:
+            # Если не двигаемся, переходим в idle
+            self.player.set_animation_state("idle")
             
         # Атака ближайшего врага
         if keys.get('space', False):
             self._attack_nearest_enemy()
+            
+        # Создание объектов
+        if keys.get('1', False):
+            self.creation_mode = "enemy"
+            self._create_object_at_player()
+        elif keys.get('2', False):
+            self.creation_mode = "trap"
+            self._create_object_at_player()
+        elif keys.get('3', False):
+            self.creation_mode = "chest"
+            self._create_object_at_player()
             
     def _attack_nearest_enemy(self):
         """Атака ближайшего врага"""
@@ -415,4 +491,204 @@ class EnhancedGameScene:
                 obj.removeNode()
         self.world_objects.clear()
         
+        # Удаляем маяк смерти
+        self._remove_death_beacon()
+        
         print("Enhanced game scene exited!")
+    
+    def _create_object_at_player(self):
+        """Создание объекта рядом с игроком"""
+        if not self.player:
+            return
+            
+        # Создаем объект рядом с игроком
+        offset_x = random.uniform(-3, 3)
+        offset_y = random.uniform(-3, 3)
+        x = self.player.x + offset_x
+        y = self.player.y + offset_y
+        z = 0.5
+        
+        if self.creation_mode == "enemy":
+            self._create_enemy_at(x, y, z)
+        elif self.creation_mode == "trap":
+            self._create_trap_at(x, y, z)
+        elif self.creation_mode == "chest":
+            self._create_chest_at(x, y, z)
+            
+        print(f"Создан {self.creation_mode} в позиции ({x:.1f}, {y:.1f})")
+    
+    def _create_enemy_at(self, x, y, z):
+        """Создание врага в указанной позиции"""
+        from src.entities.enemy import EnhancedEnemy
+        
+        enemy_types = ["basic", "strong", "elite"]
+        enemy_type = random.choice(enemy_types)
+        
+        enemy = EnhancedEnemy(self.game, x, y, z, enemy_type)
+        enemy.create_enemy()
+        self.enemies.append(enemy)
+        self.player_created_objects.append(enemy)
+    
+    def _create_trap_at(self, x, y, z):
+        """Создание ловушки в указанной позиции"""
+        trap = self.game.render.attachNewNode("trap")
+        
+        # Создаем ловушку как куб
+        self._create_visible_cube(
+            trap, "trap_body", 0, 0, 0.2, 1.0, 1.0, 0.4, (0.8, 0.4, 0.2, 1)
+        )
+        
+        trap.setPos(x, y, z)
+        self.world_objects.append(trap)
+        self.player_created_objects.append(trap)
+        
+        # Добавляем логику ловушки
+        self._add_trap_logic(trap, x, y, z)
+    
+    def _create_chest_at(self, x, y, z):
+        """Создание сундука в указанной позиции"""
+        chest = self.game.render.attachNewNode("chest")
+        
+        # Создаем сундук как куб
+        self._create_visible_cube(
+            chest, "chest_body", 0, 0, 0.3, 1.2, 0.8, 0.6, (0.6, 0.4, 0.2, 1)
+        )
+        
+        # Крышка сундука
+        self._create_visible_cube(
+            chest, "chest_lid", 0, 0, 0.6, 1.2, 0.8, 0.1, (0.7, 0.5, 0.3, 1)
+        )
+        
+        chest.setPos(x, y, z)
+        self.world_objects.append(chest)
+        self.player_created_objects.append(chest)
+        
+        # Добавляем логику сундука
+        self._add_chest_logic(chest, x, y, z)
+    
+    def _add_trap_logic(self, trap, x, y, z):
+        """Добавление логики ловушки"""
+        def check_trap_trigger(task):
+            if self.player:
+                distance = math.sqrt((self.player.x - x)**2 + (self.player.y - y)**2)
+                if distance <= 1.5:  # Радиус срабатывания
+                    # Ловушка срабатывает
+                    self.player.take_damage(20, "physical")
+                    print("Ловушка сработала!")
+                    # Удаляем ловушку после срабатывания
+                    trap.removeNode()
+                    if trap in self.world_objects:
+                        self.world_objects.remove(trap)
+                    if trap in self.player_created_objects:
+                        self.player_created_objects.remove(trap)
+                    return task.done
+            return task.cont
+            
+        self.game.showbase.taskMgr.add(check_trap_trigger, f"trap_{id(trap)}")
+    
+    def _add_chest_logic(self, chest, x, y, z):
+        """Добавление логики сундука"""
+        def check_chest_interaction(task):
+            if self.player:
+                distance = math.sqrt((self.player.x - x)**2 + (self.player.y - y)**2)
+                if distance <= 2.0:  # Радиус взаимодействия
+                    # Игрок может открыть сундук
+                    if hasattr(self.player, 'keys') and 'e' in self.player.keys and self.player.keys['e']:
+                        # Открываем сундук
+                        self._open_chest(chest, x, y, z)
+                        return task.done
+            return task.cont
+            
+        self.game.showbase.taskMgr.add(check_chest_interaction, f"chest_{id(chest)}")
+    
+    def _open_chest(self, chest, x, y, z):
+        """Открытие сундука"""
+        # Даем игроку награду
+        if self.player:
+            self.player.experience += 50
+            self.player.health = min(self.player.max_health, self.player.health + 25)
+            print("Сундук открыт! Получено: 50 опыта, 25 здоровья")
+        
+        # Анимация открытия
+        chest.setHpr(0, 0, 45)  # Поворачиваем крышку
+        
+        # Удаляем сундук через некоторое время
+        def remove_chest(task):
+            chest.removeNode()
+            if chest in self.world_objects:
+                self.world_objects.remove(chest)
+            if chest in self.player_created_objects:
+                self.player_created_objects.remove(chest)
+            return task.done
+            
+        self.game.showbase.taskMgr.doMethodLater(2.0, remove_chest, f"remove_chest_{id(chest)}")
+    
+    def _handle_player_death(self):
+        """Обработка смерти персонажа"""
+        if not self.death_beacon and self.player:
+            # Сохраняем позицию смерти
+            self.death_position = (self.player.x, self.player.y, self.player.z)
+            
+            # Создаем маяк смерти
+            self._create_death_beacon()
+            
+            # Переходим к экрану смерти
+            if hasattr(self.game, 'state_manager'):
+                self.game.state_manager.change_state("death")
+    
+    def _create_death_beacon(self):
+        """Создание маяка смерти"""
+        if not self.death_position:
+            return
+            
+        try:
+            # Создаем маяк в месте смерти персонажа
+            self.death_beacon = self.game.render.attachNewNode("death_beacon")
+            
+            # Создаем маяк как светящийся столб
+            from panda3d.core import CardMaker
+            cm = CardMaker("beacon")
+            cm.setFrame(-0.5, 0.5, -0.5, 0.5)
+            beacon_plane = self.death_beacon.attachNewNode(cm.generate())
+            beacon_plane.setColor(1, 0, 0, 0.8)  # Красный цвет
+            
+            # Позиционируем маяк
+            self.death_beacon.setPos(*self.death_position)
+            self.death_beacon.setHpr(0, 0, 0)
+            
+            # Анимация маяка
+            self._animate_death_beacon()
+            
+            print(f"Маяк смерти создан в позиции {self.death_position}")
+            
+        except Exception as e:
+            print(f"Ошибка создания маяка смерти: {e}")
+    
+    def _animate_death_beacon(self):
+        """Анимация маяка смерти"""
+        import time
+        start_time = time.time()
+        
+        def animate_beacon(task):
+            if not self.death_beacon:
+                return task.done
+                
+            current_time = time.time()
+            # Пульсация маяка
+            scale = 1.0 + 0.3 * (current_time - start_time) % 2
+            self.death_beacon.setScale(scale)
+            
+            # Вращение
+            self.death_beacon.setHpr(0, 0, (current_time - start_time) * 30)
+            
+            return task.cont
+            
+        self.game.showbase.taskMgr.add(animate_beacon, "death_beacon_animation")
+    
+    def _remove_death_beacon(self):
+        """Удаление маяка смерти"""
+        if self.death_beacon:
+            self.death_beacon.removeNode()
+            self.death_beacon = None
+            self.death_position = None
+            print("Маяк смерти удален")

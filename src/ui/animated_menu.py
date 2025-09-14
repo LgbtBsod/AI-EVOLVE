@@ -118,7 +118,9 @@ class AnimatedMenu:
             
             # Эффект свечения
             glow_intensity = 0.3 + math.sin(current_time * 3) * 0.1
-            self.title_glow['fg'] = (0, 0.5, 1, glow_intensity)
+            from panda3d.core import LVector4
+            glow_color = LVector4(0, 0.5, 1, glow_intensity)
+            self.title_glow.setFg(glow_color)
             
             return Task.cont
             
@@ -128,7 +130,7 @@ class AnimatedMenu:
                              frame_color=(0.8, 0.8, 0.8, 1), text_color=(0, 0, 0, 1),
                              hover_color=(1, 1, 1, 1), click_color=(0.6, 0.6, 0.6, 1)):
         """Создание анимированной кнопки"""
-        button = AnimatedButton(
+        button = DirectButton(
             text=text,
             scale=scale,
             pos=pos,
@@ -137,10 +139,10 @@ class AnimatedMenu:
             frameColor=frame_color,
             text_fg=text_color,
             text_scale=0.7,
-            frameSize=(-2, 2, -0.5, 0.5),
-            hover_color=hover_color,
-            click_color=click_color
+            frameSize=(-2, 2, -0.5, 0.5)
         )
+        # Сразу показываем кнопку
+        button.show()
         self.elements.append(button)
         return button
         
@@ -159,8 +161,18 @@ class AnimatedMenu:
                 if hasattr(element, 'setAlpha'):
                     element.setAlpha(alpha)
                 elif hasattr(element, 'setColor'):
-                    color = element['fg'] if hasattr(element, 'fg') else (1, 1, 1, 1)
-                    element.setColor(color[0], color[1], color[2], color[3] * alpha)
+                    # Для OnscreenText используем setFg вместо setColor
+                    if hasattr(element, 'setFg'):
+                        # Получаем текущий цвет из fg параметра
+                        current_fg = getattr(element, 'fg', (1, 1, 1, 1))
+                        # setFg принимает LVector4 или tuple
+                        from panda3d.core import LVector4
+                        new_color = LVector4(current_fg[0], current_fg[1], current_fg[2], current_fg[3] * alpha)
+                        element.setFg(new_color)
+                    else:
+                        # Для других элементов используем setColor
+                        color = (1, 1, 1, 1)
+                        element.setColor(color[0], color[1], color[2], color[3] * alpha)
             
             if progress >= 1.0:
                 return Task.done
@@ -183,8 +195,18 @@ class AnimatedMenu:
                 if hasattr(element, 'setAlpha'):
                     element.setAlpha(alpha)
                 elif hasattr(element, 'setColor'):
-                    color = element['fg'] if hasattr(element, 'fg') else (1, 1, 1, 1)
-                    element.setColor(color[0], color[1], color[2], color[3] * alpha)
+                    # Для OnscreenText используем setFg вместо setColor
+                    if hasattr(element, 'setFg'):
+                        # Получаем текущий цвет из fg параметра
+                        current_fg = getattr(element, 'fg', (1, 1, 1, 1))
+                        # setFg принимает LVector4 или tuple
+                        from panda3d.core import LVector4
+                        new_color = LVector4(current_fg[0], current_fg[1], current_fg[2], current_fg[3] * alpha)
+                        element.setFg(new_color)
+                    else:
+                        # Для других элементов используем setColor
+                        color = (1, 1, 1, 1)
+                        element.setColor(color[0], color[1], color[2], color[3] * alpha)
             
             if progress >= 1.0:
                 return Task.done

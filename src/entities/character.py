@@ -13,9 +13,10 @@ from ..core.constants import EntityType
 class Character(BaseEntity):
     """Класс персонажа с улучшенной графикой - наследуется от BaseEntity"""
     
-    def __init__(self, character_id: str, game, x=0, y=0, z=0, character_class="warrior", color=(1, 1, 1, 1)):
+    def __init__(self, character_id: str, game, x=0, y=0, z=0, character_class="warrior", color=(1, 1, 1, 1), is_player=False):
         # Инициализируем базовую сущность
-        super().__init__(character_id, EntityType.NPC, f"character_{character_id}")
+        entity_type = EntityType.PLAYER if is_player else EntityType.NPC
+        super().__init__(character_id, entity_type, f"character_{character_id}")
         
         self.game = game
         self.x = x
@@ -64,9 +65,34 @@ class Character(BaseEntity):
         self.animation_time = 0
         self.bob_offset = 0
         self.rotation_offset = 0
+        self.attack_start_time = 0
         
         # ID сущности для систем
         self.entity_id = f"character_{id(self)}"
+        
+        # ИИ управление
+        self.ai_enabled = True
+        self.ai_state = "idle"  # idle, exploring, fighting, looting
+        self.target_enemy = None
+        self.target_item = None
+        self.last_ai_update = 0
+        self.ai_update_interval = 0.1  # Обновление ИИ каждые 100мс
+        
+        # Дополнительные характеристики игрока
+        self.is_player = is_player
+        if is_player:
+            self.reputation = 0
+            self.fame = 0
+            self.achievements = []
+            self.total_playtime = 0.0
+            self.charisma_bonus = 0.0
+            self.persuasion_skill = 0.5
+            self.quests_completed = []
+            self.locations_visited = []
+            self.npcs_met = []
+            self.last_save = 0.0
+            self.last_exploration = 0.0
+            self.last_social = 0.0
         
         # Настройки класса
         self._setup_character_class()
@@ -402,6 +428,8 @@ class Character(BaseEntity):
         
     def _start_animations(self):
         """Запуск анимаций персонажа"""
+        from direct.task import Task
+        
         def animate_character(task):
             current_time = time.time()
             self.animation_time = current_time
@@ -409,17 +437,20 @@ class Character(BaseEntity):
             # Анимация покачивания (idle)
             if self.animation_state == "idle":
                 self.bob_offset = math.sin(current_time * 2) * 0.05
-                self.node.setZ(self.z + self.bob_offset)
+                if self.node:
+                    self.node.setZ(self.z + self.bob_offset)
                 
                 # Анимация дыхания
                 breath_scale = 1.0 + math.sin(current_time * 3) * 0.02
-                self.node.setScale(breath_scale)
+                if self.node:
+                    self.node.setScale(breath_scale)
                 
             # Анимация ходьбы
             elif self.animation_state == "walking":
                 walk_cycle = math.sin(current_time * 4) * 0.1
                 self.bob_offset = walk_cycle
-                self.node.setZ(self.z + self.bob_offset)
+                if self.node:
+                    self.node.setZ(self.z + self.bob_offset)
                 
                 # Анимация рук
                 arm_swing = math.sin(current_time * 4) * 0.3
@@ -522,8 +553,198 @@ class Character(BaseEntity):
         self.health = max(0, self.health - actual_damage)
         return self.health <= 0
         
+    def update_ai(self, enemies, items, dt):
+        """Обновление ИИ персонажа"""
+        if not self.ai_enabled or not self.is_alive():
+            return
+            
+        current_time = time.time()
+        if current_time - self.last_ai_update < self.ai_update_interval:
+            return
+            
+        self.last_ai_update = current_time
+        
+        # Определяем ближайшего врага
+        nearest_enemy = self._find_nearest_enemy(enemies)
+        
+        if nearest_enemy and self.get_distance_to(nearest_enemy) <= self.attack_range:
+            # Враг в зоне атаки - атакуем
+            self.ai_state = "fighting"
+            self.target_enemy = nearest_enemy
+            self.attack(nearest_enemy)
+        elif nearest_enemy and self.get_distance_to(nearest_enemy) <= 10:
+            # Враг рядом - преследуем
+            self.ai_state = "fighting"
+            self.target_enemy = nearest_enemy
+            self._move_towards_enemy(nearest_enemy, dt)
+        else:
+            # Нет врагов - исследуем или ищем предметы
+            self.ai_state = "exploring"
+            self.target_enemy = None
+            self._explore_area(dt)
+    
+    def _find_nearest_enemy(self, enemies):
+        """Поиск ближайшего врага"""
+        nearest_enemy = None
+        nearest_distance = float('inf')
+        
+        for enemy in enemies:
+            if enemy.is_alive():
+                distance = self.get_distance_to(enemy)
+                if distance < nearest_distance:
+                    nearest_distance = distance
+                    nearest_enemy = enemy
+                    
+        return nearest_enemy
+    
+    def _move_towards_enemy(self, enemy, dt):
+        """Движение к врагу"""
+        if hasattr(enemy, 'x') and hasattr(enemy, 'y'):
+            self.move_towards(enemy.x, enemy.y, dt)
+        elif hasattr(enemy, 'get_position'):
+            target_x, target_y, target_z = enemy.get_position()
+            self.move_towards(target_x, target_y, dt)
+    
+    def _explore_area(self, dt):
+        """Исследование области"""
+        # Простое случайное движение для исследования
+        import random
+        if random.random() < 0.1:  # 10% шанс изменить направление
+            dx = random.uniform(-1, 1)
+            dy = random.uniform(-1, 1)
+            self.move_by(dx, dy, 0, dt)
+    
+    def move_towards(self, target_x, target_y, dt=0.016):
+        """Движение к цели"""
+        # Вычисляем направление к цели
+        dx = target_x - self.x
+        dy = target_y - self.y
+        distance = math.sqrt(dx*dx + dy*dy)
+        
+        if distance > 0.1:  # Если не слишком близко
+            # Нормализуем направление
+            dx /= distance
+            dy /= distance
+            
+            # Двигаемся с учетом скорости
+            move_distance = self.speed * dt
+            self.x += dx * move_distance
+            self.y += dy * move_distance
+            
+            if self.node:
+                self.node.setPos(self.x, self.y, self.z)
+                self.set_animation_state("walking")
+                
+            # Поворачиваем персонажа лицом к цели
+            angle = math.atan2(dy, dx) * 180 / math.pi
+            if self.node:
+                self.node.setHpr(angle, 0, 0)
+    
+    def get_distance_to(self, target):
+        """Получение расстояния до цели"""
+        if hasattr(target, 'x') and hasattr(target, 'y'):
+            return math.sqrt((self.x - target.x)**2 + (self.y - target.y)**2)
+        elif hasattr(target, 'get_position'):
+            target_x, target_y, target_z = target.get_position()
+            return math.sqrt((self.x - target_x)**2 + (self.y - target_y)**2)
+        return float('inf')
+    
+    def use_skill_automatically(self, enemies, dt):
+        """Автоматическое использование скилов"""
+        if not self.is_alive():
+            return
+            
+        # Простое использование скилов на основе класса
+        if self.character_class == "warrior":
+            # Воин использует атаку ближайшего врага
+            nearest_enemy = self._find_nearest_enemy(enemies)
+            if nearest_enemy and self.get_distance_to(nearest_enemy) <= self.attack_range:
+                self.attack(nearest_enemy)
+        elif self.character_class == "mage":
+            # Маг использует магические атаки
+            if self.mana >= 10:  # Требует маны
+                nearest_enemy = self._find_nearest_enemy(enemies)
+                if nearest_enemy and self.get_distance_to(nearest_enemy) <= self.attack_range * 2:
+                    self._cast_magic_attack(nearest_enemy)
+        elif self.character_class == "rogue":
+            # Разбойник использует скрытность и критические атаки
+            if self.stamina >= 20:  # Требует выносливости
+                nearest_enemy = self._find_nearest_enemy(enemies)
+                if nearest_enemy and self.get_distance_to(nearest_enemy) <= self.attack_range:
+                    self._stealth_attack(nearest_enemy)
+    
+    def _cast_magic_attack(self, target):
+        """Магическая атака"""
+        if self.mana >= 10:
+            self.mana -= 10
+            damage = self.magical_damage
+            target.take_damage(damage, "magical")
+            print(f"Маг атаковал врага магией на {damage} урона!")
+    
+    def _stealth_attack(self, target):
+        """Скрытная атака"""
+        if self.stamina >= 20:
+            self.stamina -= 20
+            damage = self.physical_damage * 1.5  # Увеличенный урон
+            target.take_damage(damage, "physical")
+            print(f"Разбойник атаковал врага скрытно на {damage} урона!")
+    
     def destroy(self):
         """Уничтожение персонажа"""
         if self.node:
             self.node.removeNode()
             self.node = None
+    
+    # Методы игрока
+    def add_achievement(self, achievement: str):
+        """Добавление достижения"""
+        if self.is_player and achievement not in self.achievements:
+            self.achievements.append(achievement)
+            print(f"Достижение получено: {achievement}")
+    
+    def complete_quest(self, quest_id: str):
+        """Завершение квеста"""
+        if self.is_player and quest_id not in self.quests_completed:
+            self.quests_completed.append(quest_id)
+            self.experience += 100  # Награда за квест
+            print(f"Квест завершен: {quest_id}")
+    
+    def visit_location(self, location: str):
+        """Посещение локации"""
+        if self.is_player and location not in self.locations_visited:
+            self.locations_visited.append(location)
+            print(f"Локация посещена: {location}")
+    
+    def meet_npc(self, npc_id: str):
+        """Встреча с NPC"""
+        if self.is_player and npc_id not in self.npcs_met:
+            self.npcs_met.append(npc_id)
+            print(f"Встречен NPC: {npc_id}")
+    
+    def update_playtime(self, dt: float):
+        """Обновление времени игры"""
+        if self.is_player:
+            self.total_playtime += dt
+    
+    def save_game(self):
+        """Сохранение игры"""
+        if self.is_player:
+            self.last_save = time.time()
+            print("Игра сохранена")
+    
+    def get_player_stats(self):
+        """Получение статистики игрока"""
+        if not self.is_player:
+            return None
+        
+        return {
+            'reputation': self.reputation,
+            'fame': self.fame,
+            'achievements_count': len(self.achievements),
+            'quests_completed_count': len(self.quests_completed),
+            'locations_visited_count': len(self.locations_visited),
+            'npcs_met_count': len(self.npcs_met),
+            'total_playtime': self.total_playtime,
+            'charisma_bonus': self.charisma_bonus,
+            'persuasion_skill': self.persuasion_skill
+        }

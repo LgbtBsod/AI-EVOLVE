@@ -1,0 +1,17 @@
+2025-09-14 17:32:04 - src.enhanced_main - INFO - Инициализация Panda3D...
+2025-09-14 17:32:04 - src.enhanced_main - INFO - Panda3D инициализирован успешно
+2025-09-14 17:32:04 - src.systems.rendering.render_system - INFO - Система рендеринга инициализирована
+2025-09-14 17:32:04 - src.core.state_manager - INFO - StateManager инициализирован
+2025-09-14 17:32:04 - src.core.architecture.state_manager - INFO - Инициализация компонента state_manager
+2025-09-14 17:32:04 - src.core.state_manager - INFO - StateManager успешно инициализирован
+2025-09-14 17:32:04 - src.core.architecture.state_manager - INFO - Компонент state_manager успешно инициализирован
+2025-09-14 17:32:04 - src.enhanced_main - INFO - Система ввода настроена
+2025-09-14 17:32:04 - src.enhanced_main - INFO - Игровые системы инициализированы
+2025-09-14 17:32:04 - src.core.game_state_manager - INFO - Registered state: start
+2025-09-14 17:32:04 - src.core.game_state_manager - INFO - Registered state: game
+2025-09-14 17:32:04 - src.core.game_state_manager - INFO - Registered state: death
+2025-09-14 17:32:04 - src.enhanced_main - INFO - Состояния игры зарегистрированы
+2025-09-14 17:32:04 - src.enhanced_main - INFO - ============================================================
+2025-09-14 17:32:04 - src.enhanced_main - INFO - 🚀 ЗАПУСК УЛУЧШЕННОЙ ИГРЫ AI-EVOLVE
+2025-09-14 17:32:04 - src.enhanced_main - INFO - ============================================================
+2025-09-14 17:32:04 - src.core.game_state_manager - INFO - Changed state to: start

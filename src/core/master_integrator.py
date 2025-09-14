@@ -13,7 +13,7 @@ import math
 import threading
 from collections import defaultdict, deque
 
-from src.core.architecture import BaseComponent, ComponentType, Priority, LifecycleState
+from src.core.component_types import BaseComponent, ComponentType, Priority, LifecycleState
 from src.core.state_manager import StateManager, StateType
 from src.systems.attributes.attribute_system import AttributeSystem, AttributeSet, AttributeModifier, StatModifier, BaseAttribute, DerivedStat
 

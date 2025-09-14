@@ -333,7 +333,7 @@ def initialize_game():
         # Импортируем улучшенные компоненты
         print("📦 Импорт улучшенных компонентов...")
         try:
-            from src.enhanced_main import EnhancedGame
+            from src.main import EnhancedGame
             print("✅ EnhancedGame импортирован")
         except Exception as e:
             print(f"❌ Ошибка импорта EnhancedGame: {e}")
