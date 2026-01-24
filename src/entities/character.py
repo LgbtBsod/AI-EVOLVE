@@ -49,7 +49,9 @@ class Character(BaseEntity):
         self.critical_damage = 150.0
         self.dodge_chance = 0.0
         self.magic_resistance = 0.0
-        self.speed = 5.0
+        # Скорость передвижения героя. Для демонстрации поискового поведения
+        # делаем её повыше, чтобы движение было явно заметно.
+        self.speed = 8.0
         
         # Восстановление
         self.health_regen = 1.0
@@ -553,8 +555,14 @@ class Character(BaseEntity):
         self.health = max(0, self.health - actual_damage)
         return self.health <= 0
         
-    def update_ai(self, enemies, items, dt):
-        """Обновление ИИ персонажа"""
+    def update_ai(self, enemies, items, dt, exit_position=None, vision_range: float = 0.0,
+                  known_exit_positions: Optional[List[Tuple[float, float]]] = None):
+        """Обновление ИИ персонажа.
+
+        :param exit_position: текущие координаты маяка выхода (если известны системе сцены)
+        :param vision_range: дистанция, на которой герой может «увидеть» маяк визуально
+        :param known_exit_positions: подсказки о координатах выхода, полученные от карт / NPC
+        """
         if not self.ai_enabled or not self.is_alive():
             return
             
@@ -566,22 +574,44 @@ class Character(BaseEntity):
         
         # Определяем ближайшего врага
         nearest_enemy = self._find_nearest_enemy(enemies)
-        
+
+        # 1. Бой и преследование врагов
         if nearest_enemy and self.get_distance_to(nearest_enemy) <= self.attack_range:
             # Враг в зоне атаки - атакуем
             self.ai_state = "fighting"
             self.target_enemy = nearest_enemy
             self.attack(nearest_enemy)
+            return
         elif nearest_enemy and self.get_distance_to(nearest_enemy) <= 10:
             # Враг рядом - преследуем
             self.ai_state = "fighting"
             self.target_enemy = nearest_enemy
             self._move_towards_enemy(nearest_enemy, dt)
-        else:
-            # Нет врагов - исследуем или ищем предметы
-            self.ai_state = "exploring"
-            self.target_enemy = None
-            self._explore_area(dt)
+            return
+
+        # 2. Поиск выхода на следующий уровень
+        target_exit = None
+
+        # 2.1. Если есть подсказки по координатам (карты / NPC), используем их
+        if known_exit_positions:
+            target_exit = known_exit_positions[0]
+
+        # 2.2. Если маяк в зоне прямой видимости — считаем, что герой заметил его визуально
+        if not target_exit and exit_position and vision_range > 0.0:
+            ex, ey, _ = exit_position
+            dist_to_exit = math.sqrt((self.x - ex) ** 2 + (self.y - ey) ** 2)
+            if dist_to_exit <= vision_range:
+                target_exit = (ex, ey)
+
+        if target_exit:
+            self.ai_state = "seeking_exit"
+            self.move_towards(target_exit[0], target_exit[1], dt)
+            return
+
+        # 3. Нет врагов и нет информации о выходе — фоновое исследование
+        self.ai_state = "exploring"
+        self.target_enemy = None
+        self._explore_area(dt)
     
     def _find_nearest_enemy(self, enemies):
         """Поиск ближайшего врага"""
@@ -606,12 +636,13 @@ class Character(BaseEntity):
             self.move_towards(target_x, target_y, dt)
     
     def _explore_area(self, dt):
-        """Исследование области"""
-        # Простое случайное движение для исследования
+        """Исследование области — мягкое блуждание, пока нет явных целей."""
         import random
-        if random.random() < 0.1:  # 10% шанс изменить направление
-            dx = random.uniform(-1, 1)
-            dy = random.uniform(-1, 1)
+
+        # Небольшой шанс изменить направление и сделать шаг
+        if random.random() < 0.1:
+            dx = random.uniform(-1.0, 1.0)
+            dy = random.uniform(-1.0, 1.0)
             self.move_by(dx, dy, 0, dt)
     
     def move_towards(self, target_x, target_y, dt=0.016):

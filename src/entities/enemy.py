@@ -31,10 +31,16 @@ class EnhancedEnemy:
         self.last_attack_time = 0
         self.attack_cooldown = 1.0
         
-        # Движение
-        self.move_speed = 3.0
-        self.detection_range = 8.0
-        self.attack_range = 1.5
+        # Движение и зоны обнаружения/атаки
+        self.move_speed = 4.0
+        # Зона отслеживания должна быть заметно больше, чтобы враги
+        # реагировали на появление героя в заметном радиусе.
+        self.detection_range = 20.0
+        self.attack_range = 2.0
+
+        # Точка спавна используется как центр области блуждания
+        self.spawn_x = self.x
+        self.spawn_y = self.y
         
     def _setup_enemy_type(self):
         """Настройка характеристик в зависимости от типа врага"""
@@ -301,8 +307,28 @@ class EnhancedEnemy:
                     target_x, target_y, target_z = player.get_position()
                     self.move_towards(target_x, target_y, dt)
         else:
-            # Игрок вне зоны обнаружения
+            # Игрок вне зоны обнаружения — враг блуждает в пределах локальной области
             self.state = "idle"
+            self._wander(dt)
+
+    def _wander(self, dt):
+        """Простое блуждание врага в пределах 10×10 вокруг точки спавна."""
+        import random
+        max_offset = 5.0  # от спавна по каждой оси
+
+        # Не каждый кадр меняем направление, чтобы движение было плавным
+        if random.random() < 0.1:
+            dx = random.uniform(-1.0, 1.0)
+            dy = random.uniform(-1.0, 1.0)
+
+            # Предлагаемую позицию ограничиваем рамками 10×10 вокруг спавна
+            proposed_x = self.x + dx * self.move_speed * dt
+            proposed_y = self.y + dy * self.move_speed * dt
+
+            clamped_x = max(self.spawn_x - max_offset, min(self.spawn_x + max_offset, proposed_x))
+            clamped_y = max(self.spawn_y - max_offset, min(self.spawn_y + max_offset, proposed_y))
+
+            self.move_to(clamped_x, clamped_y)
     
     def get_stats(self):
         """Получение характеристик врага"""

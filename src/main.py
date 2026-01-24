@@ -125,8 +125,10 @@ class EnhancedGame:
         """Настройка системы ввода"""
         try:
             # Настраиваем обработку клавиатуры
-            self.showbase.accept("escape", self.quit)
-            self.showbase.accept("p", self.toggle_pause)
+            # ESC теперь открывает/закрывает меню паузы, а не мгновенно завершает игру.
+            self.showbase.accept("escape", self._toggle_pause)
+            # Отдельная клавиша для полного выхода из игры (например, Ctrl+Q можно добавить позже).
+            self.showbase.accept("p", self._toggle_pause)
             
             # Настраиваем отслеживание клавиш
             self.showbase.accept("w", self._key_down, ["w"])
@@ -220,6 +222,13 @@ class EnhancedGame:
     def _toggle_pause(self):
         """Переключение паузы"""
         try:
+            # Пауза доступна только из игрового состояния.
+            if not self.state_manager:
+                return
+            current_state = self.state_manager.get_current_state_name()
+            if current_state != "game":
+                return
+
             if self.is_paused:
                 self._resume_game()
             else:

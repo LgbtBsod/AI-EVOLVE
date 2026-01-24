@@ -694,7 +694,10 @@ class RenderSystem(BaseComponent):
         """Переключение камеры"""
         try:
             if camera_id not in self.cameras:
-                logger.error(f"Камера {camera_id} не найдена")
+                # В прототипах RenderSystem может существовать без явной регистрации
+                # дополнительных камер (например, только базовая камера ShowBase).
+                # В этом случае отсутствие камеры не является критической ошибкой.
+                logger.warning(f"Камера {camera_id} не найдена")
                 return False
             
             # Переключение активной камеры

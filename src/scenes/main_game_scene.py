@@ -19,7 +19,9 @@ class EnhancedGameScene:
         self.is_paused = False
         
         # Настройки мира
-        self.world_size = 50
+        # Базовый размер был 50; увеличиваем линейный масштаб в 100 раз,
+        # что даёт рост площади примерно в 10 000 раз.
+        self.world_size = 50 * 100
         self.enemy_spawn_rate = 0.1  # Вероятность появления врага за кадр
         self.max_enemies = 10
         
@@ -34,6 +36,14 @@ class EnhancedGameScene:
         # Маяк смерти
         self.death_beacon = None
         self.death_position = None
+
+        # Маяк выхода на следующий уровень
+        self.exit_beacon = None
+        self.exit_beacon_position = None
+        self.player_vision_range = 30.0
+        self.known_exit_positions = []
+        self.map_hint_items = []
+        self.npc_hints = []
         
     def enter(self):
         """Вход в игровую сцену"""
@@ -50,6 +60,11 @@ class EnhancedGameScene:
         
         # Создаем начальных врагов
         self._spawn_initial_enemies()
+
+        # Создаем маяк выхода и подсказки (карты и NPC)
+        self._create_exit_beacon()
+        self._spawn_exit_hint_maps()
+        self._spawn_exit_hint_npcs()
         
         # Настраиваем камеру
         self._setup_camera()
@@ -66,6 +81,81 @@ class EnhancedGameScene:
         
         # Создаем декоративные объекты
         self._create_decorations()
+
+    def _create_exit_beacon(self):
+        """Создание маяка выхода на следующий уровень в случайном месте карты."""
+        from panda3d.core import CardMaker
+        import random
+
+        if self.exit_beacon:
+            self.exit_beacon.removeNode()
+            self.exit_beacon = None
+
+        # Случайная позиция в пределах мира с небольшим отступом от краёв
+        margin = self.world_size * 0.1
+        x = random.uniform(-self.world_size / 2 + margin, self.world_size / 2 - margin)
+        y = random.uniform(-self.world_size / 2 + margin, self.world_size / 2 - margin)
+        z = 0.5
+
+        self.exit_beacon_position = (x, y, z)
+        self.exit_beacon = self.game.render.attachNewNode("exit_beacon")
+
+        # Высокий светящийся столб, заметный издалека
+        cm = CardMaker("exit_beacon_card")
+        cm.setFrame(-0.5, 0.5, -5.0, 5.0)  # высокий прямоугольник
+        card = self.exit_beacon.attachNewNode(cm.generate())
+        card.setColor(1, 1, 0, 0.9)  # ярко-жёлтый
+        card.setTransparency(TransparencyAttrib.MAlpha)
+
+        self.exit_beacon.setPos(x, y, z)
+
+    def _spawn_exit_hint_maps(self):
+        """Создаёт несколько 'карт', которые раскрывают координаты маяка при подборе."""
+        from panda3d.core import CardMaker
+        import random
+
+        # Простые визуальные маркеры неподалёку от стартовой области
+        for i in range(2):
+            mx = random.uniform(-20, 20)
+            my = random.uniform(-20, 20)
+            mz = 0.3
+
+            node = self.game.render.attachNewNode(f"map_hint_{i}")
+            cm = CardMaker(f"map_hint_card_{i}")
+            cm.setFrame(-0.3, 0.3, -0.3, 0.3)
+            card = node.attachNewNode(cm.generate())
+            card.setColor(0.2, 0.6, 1.0, 0.9)  # голубая "карта"
+            card.setTransparency(TransparencyAttrib.MAlpha)
+
+            node.setPos(mx, my, mz)
+            self.map_hint_items.append({"node": node, "used": False})
+
+    def _spawn_exit_hint_npcs(self):
+        """Создаёт несколько простых NPC-маркеров, часть из которых даёт подсказку о маяке."""
+        from panda3d.core import CardMaker
+        import random
+
+        for i in range(3):
+            nx = random.uniform(-40, 40)
+            ny = random.uniform(-40, 40)
+            nz = 0.3
+
+            node = self.game.render.attachNewNode(f"npc_hint_{i}")
+            cm = CardMaker(f"npc_hint_card_{i}")
+            cm.setFrame(-0.4, 0.4, -0.8, 0.8)
+            card = node.attachNewNode(cm.generate())
+
+            # Не все NPC «знают» координаты выхода
+            knows_exit = random.random() < 0.6
+            if knows_exit:
+                card.setColor(0.8, 0.8, 0.2, 0.9)  # жёлтоватый
+            else:
+                card.setColor(0.5, 0.5, 0.5, 0.9)  # серый
+
+            card.setTransparency(TransparencyAttrib.MAlpha)
+            node.setPos(nx, ny, nz)
+
+            self.npc_hints.append({"node": node, "used": False, "knows_exit": knows_exit})
         
     def _create_ground(self):
         """Создание земли"""
@@ -76,8 +166,10 @@ class EnhancedGameScene:
         cm = CardMaker("ground")
         cm.setFrame(-self.world_size/2, self.world_size/2, -self.world_size/2, self.world_size/2)
         ground_plane = ground.attachNewNode(cm.generate())
+        # Поворачиваем плоскость так, чтобы она лежала горизонтально (XZ),
+        # а не была вертикальной «стенкой» вдоль камеры.
         ground_plane.setPos(0, 0, 0)
-        ground_plane.setHpr(0, 0, 0)
+        ground_plane.setHpr(0, -90, 0)
         ground_plane.setColor(0.3, 0.6, 0.3, 1)  # Зеленый цвет травы
         
         self.world_objects.append(ground)
@@ -254,12 +346,13 @@ class EnhancedGameScene:
         """Создание начальных врагов"""
         from src.entities.enemy import EnhancedEnemy
         
-        # Создаем несколько врагов в разных местах
+        # Создаем несколько врагов на удалённых позициях по краям арены,
+        # чтобы игрок сначала двигался, а не сразу вступал в бой.
         enemy_positions = [
-            (5, 5, 0.5),
-            (-5, 5, 0.5),
-            (5, -5, 0.5),
-            (-5, -5, 0.5)
+            (self.world_size * 0.3, self.world_size * 0.3, 0.5),
+            (-self.world_size * 0.3, self.world_size * 0.3, 0.5),
+            (self.world_size * 0.3, -self.world_size * 0.3, 0.5),
+            (-self.world_size * 0.3, -self.world_size * 0.3, 0.5)
         ]
         
         for i, (x, y, z) in enumerate(enemy_positions):
@@ -271,8 +364,20 @@ class EnhancedGameScene:
     def _setup_camera(self):
         """Настройка камеры"""
         if hasattr(self.game, 'render_system'):
-            # Используем изометрическую камеру
-            self.game.render_system.switch_camera("isometric")
+            # Пытаемся использовать изометрическую камеру из системы рендеринга
+            # Если камера не найдена (например, RenderSystem не полностью инициализирован),
+            # используем резервную ручную настройку камеры.
+            switched = False
+            try:
+                switched = self.game.render_system.switch_camera("isometric")
+            except Exception:
+                switched = False
+
+            if not switched and hasattr(self.game, 'cam'):
+                # Резервный вариант — настраиваем камеру напрямую
+                self.game.cam.setPos(15, -15, 12)
+                self.game.cam.lookAt(0, 0, 0)
+                self.game.cam.setHpr(45, -30, 0)
         else:
             # Простая настройка камеры - изометрический вид
             if hasattr(self.game, 'cam'):
@@ -330,7 +435,14 @@ class EnhancedGameScene:
             self.player.stamina = min(self.player.max_stamina, self.player.stamina + self.player.stamina_regen * dt)
             
             # Обновляем ИИ персонажа
-            self.player.update_ai(self.enemies, [], dt)
+            self.player.update_ai(
+                self.enemies,
+                [],
+                dt,
+                exit_position=self.exit_beacon_position,
+                vision_range=self.player_vision_range,
+                known_exit_positions=[(x, y) for (x, y, _) in [self.exit_beacon_position] if self.known_exit_positions]  # если уже есть подсказки
+            )
             
             # Автоматическое использование скилов
             self.player.use_skill_automatically(self.enemies, dt)
@@ -346,6 +458,10 @@ class EnhancedGameScene:
                 
         # Спавним новых врагов
         self._spawn_enemies(dt)
+
+        # Обрабатываем подсказки по картам и NPC (координаты выхода)
+        if self.player:
+            self._update_exit_hints(dt)
         
         # Обновляем HUD
         if self.hud and self.player:
@@ -390,57 +506,53 @@ class EnhancedGameScene:
             self.enemies.append(enemy)
             
             self.last_enemy_spawn = current_time
+
+    def _update_exit_hints(self, dt):
+        """Обновление подсказок о расположении маяка выхода.
+
+        1) Карты: при подходе достаточно близко игрок автоматически «читает карту»
+           и запоминает координаты маяка.
+        2) NPC: при подходе к некоторым NPC (knows_exit=True) игрок получает
+           такую же подсказку. Не все NPC обладают этой информацией."""
+        px, py, pz = self.player.x, self.player.y, self.player.z
+
+        # 1. Карты
+        for hint in self.map_hint_items:
+            if hint["used"]:
+                continue
+            node = hint["node"]
+            hx, hy, hz = node.getPos()
+            dist = math.sqrt((px - hx) ** 2 + (py - hy) ** 2)
+            if dist <= 2.0:
+                # Игрок «подобрал» карту — узнаёт точные координаты маяка
+                if self.exit_beacon_position:
+                    ex, ey, ez = self.exit_beacon_position
+                    self.known_exit_positions = [(ex, ey)]
+                node.removeNode()
+                hint["used"] = True
+
+        # 2. NPC
+        for npc in self.npc_hints:
+            if npc["used"]:
+                continue
+            node = npc["node"]
+            nx, ny, nz = node.getPos()
+            dist = math.sqrt((px - nx) ** 2 + (py - ny) ** 2)
+            if dist <= 3.0 and npc["knows_exit"]:
+                # Этот NPC «подсказал» координаты выхода
+                if self.exit_beacon_position:
+                    ex, ey, ez = self.exit_beacon_position
+                    self.known_exit_positions = [(ex, ey)]
+                npc["used"] = True
             
     def handle_input(self, keys):
-        """Обработка ввода"""
-        if self.is_paused:
-            return
-            
-        if not self.player:
-            return
-            
-        # Движение игрока
-        move_speed = 5.0
-        dx = 0
-        dy = 0
-        
-        if keys.get('w', False) or keys.get('W', False):
-            dy += 1
-        if keys.get('s', False) or keys.get('S', False):
-            dy -= 1
-        if keys.get('a', False) or keys.get('A', False):
-            dx -= 1
-        if keys.get('d', False) or keys.get('D', False):
-            dx += 1
-            
-        # Нормализуем движение по диагонали
-        if dx != 0 and dy != 0:
-            dx *= 0.707
-            dy *= 0.707
-            
-        # Перемещаем игрока
-        if dx != 0 or dy != 0:
-            self.player.move_by(dx, dy, 0, 0.016)
-            # Обновляем анимацию
-            self.player.set_animation_state("walking")
-        else:
-            # Если не двигаемся, переходим в idle
-            self.player.set_animation_state("idle")
-            
-        # Атака ближайшего врага
-        if keys.get('space', False):
-            self._attack_nearest_enemy()
-            
-        # Создание объектов
-        if keys.get('1', False):
-            self.creation_mode = "enemy"
-            self._create_object_at_player()
-        elif keys.get('2', False):
-            self.creation_mode = "trap"
-            self._create_object_at_player()
-        elif keys.get('3', False):
-            self.creation_mode = "chest"
-            self._create_object_at_player()
+        """Обработка ввода.
+
+        В текущей версии сцены герой управляется **полностью ИИ**:
+        движения и атаки считаются в `update()` через `update_ai` и `use_skill_automatically`.
+        Поэтому здесь мы намеренно не используем WASD/Space для прямого управления,
+        а оставляем метод пустым (можно расширить под чисто отладочные хоткеи)."""
+        return
             
     def _attack_nearest_enemy(self):
         """Атака ближайшего врага"""

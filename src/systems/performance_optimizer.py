@@ -167,10 +167,19 @@ class PerformanceOptimizer:
             
     def _apply_optimization_settings(self):
         """Применение настроек оптимизации"""
+        # Если система рендеринга недоступна или не инициализирована, выходим тихо,
+        # чтобы не падать на прототипах без полного RenderSystem.
         if not hasattr(self.game, 'render_system'):
             return
-            
+
         render_system = self.game.render_system
+
+        # В некоторых конфигурациях (например, при использовании EnhancedGame)
+        # RenderSystem может существовать как оболочка без собственного ShowBase/окна.
+        showbase = getattr(render_system, "showbase", None)
+        if showbase is None or not hasattr(showbase, "win") or showbase.win is None:
+            # Нечего настраивать — пропускаем без ошибок.
+            return
         
         if self.optimization_level == "low":
             # Низкое качество

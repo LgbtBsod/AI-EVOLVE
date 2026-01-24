@@ -1,0 +1,79 @@
+2026-01-24 20:20:01 - src.main - INFO - Инициализация Panda3D...
+2026-01-24 20:20:01 - src.main - INFO - Panda3D инициализирован успешно
+2026-01-24 20:20:01 - src.systems.rendering.render_system - INFO - Система рендеринга инициализирована
+2026-01-24 20:20:01 - src.core.state_manager - INFO - StateManager инициализирован
+2026-01-24 20:20:01 - src.core.architecture.state_manager - INFO - Инициализация компонента state_manager
+2026-01-24 20:20:01 - src.core.state_manager - INFO - StateManager успешно инициализирован
+2026-01-24 20:20:01 - src.core.architecture.state_manager - INFO - Компонент state_manager успешно инициализирован
+2026-01-24 20:20:01 - src.main - INFO - Система ввода настроена
+2026-01-24 20:20:01 - src.main - INFO - Игровые системы инициализированы
+2026-01-24 20:20:01 - src.core.game_state_manager - INFO - Registered state: start
+2026-01-24 20:20:01 - src.core.game_state_manager - INFO - Registered state: game
+2026-01-24 20:20:01 - src.core.game_state_manager - INFO - Registered state: death
+2026-01-24 20:20:01 - src.main - INFO - Состояния игры зарегистрированы
+2026-01-24 20:20:01 - src.main - INFO - ============================================================
+2026-01-24 20:20:01 - src.main - INFO - 🚀 ЗАПУСК УЛУЧШЕННОЙ ИГРЫ AI-EVOLVE
+2026-01-24 20:20:01 - src.main - INFO - ============================================================
+2026-01-24 20:20:01 - src.core.game_state_manager - INFO - Changed state to: start
+2026-01-24 20:20:08 - src.systems.rendering.render_system - WARNING - Камера isometric не найдена
+2026-01-24 20:20:08 - src.core.game_state_manager - INFO - Changed state to: game
+2026-01-24 20:20:12 - src.core.game_state_manager - INFO - Changed state to: death
+2026-01-24 20:20:13 - src.systems.rendering.render_system - WARNING - Камера isometric не найдена
+2026-01-24 20:20:13 - src.core.game_state_manager - INFO - Changed state to: game
+2026-01-24 20:20:17 - src.core.game_state_manager - INFO - Changed state to: death
+2026-01-24 20:20:17 - src.systems.rendering.render_system - WARNING - Камера isometric не найдена
+2026-01-24 20:20:17 - src.core.game_state_manager - INFO - Changed state to: game
+2026-01-24 20:20:21 - src.core.game_state_manager - INFO - Changed state to: death
+2026-01-24 20:20:22 - src.systems.rendering.render_system - WARNING - Камера isometric не найдена
+2026-01-24 20:20:22 - src.core.game_state_manager - INFO - Changed state to: game
+2026-01-24 20:20:25 - src.core.game_state_manager - INFO - Changed state to: death
+2026-01-24 20:20:26 - src.systems.rendering.render_system - WARNING - Камера isometric не найдена
+2026-01-24 20:20:26 - src.core.game_state_manager - INFO - Changed state to: game
+2026-01-24 20:20:30 - src.core.game_state_manager - INFO - Changed state to: death
+2026-01-24 20:20:31 - src.systems.rendering.render_system - WARNING - Камера isometric не найдена
+2026-01-24 20:20:31 - src.core.game_state_manager - INFO - Changed state to: game
+2026-01-24 20:20:35 - src.core.game_state_manager - INFO - Changed state to: death
+2026-01-24 20:20:37 - src.main - INFO - Игра поставлена на паузу
+2026-01-24 20:20:37 - src.main - INFO - Меню паузы создано и показано
+2026-01-24 20:20:38 - src.main - INFO - Игра возобновлена
+2026-01-24 20:20:38 - src.main - INFO - Игра поставлена на паузу
+2026-01-24 20:20:38 - src.main - INFO - Меню паузы создано и показано
+2026-01-24 20:20:41 - src.main - INFO - Меню паузы создано и показано
+2026-01-24 20:20:42 - src.main - INFO - Игра возобновлена
+2026-01-24 20:20:43 - src.main - INFO - Игра поставлена на паузу
+2026-01-24 20:20:43 - src.main - INFO - Меню паузы создано и показано
+2026-01-24 20:20:43 - src.main - INFO - Игра возобновлена
+2026-01-24 20:20:45 - src.core.game_state_manager - INFO - Changed state to: start
+2026-01-24 20:20:45 - src.main - INFO - Игра поставлена на паузу
+2026-01-24 20:20:45 - src.main - INFO - Меню паузы создано и показано
+2026-01-24 20:20:46 - src.main - INFO - Игра возобновлена
+2026-01-24 20:20:46 - src.main - INFO - Игра поставлена на паузу
+2026-01-24 20:20:46 - src.main - INFO - Меню паузы создано и показано
+2026-01-24 20:20:46 - src.main - INFO - Игра возобновлена
+2026-01-24 20:20:52 - src.main - INFO - Игра поставлена на паузу
+2026-01-24 20:20:52 - src.main - INFO - Меню паузы создано и показано
+2026-01-24 20:20:52 - src.main - INFO - Игра возобновлена
+2026-01-24 20:20:52 - src.main - INFO - Игра поставлена на паузу
+2026-01-24 20:20:52 - src.main - INFO - Меню паузы создано и показано
+2026-01-24 20:20:53 - src.main - INFO - Игра возобновлена
+2026-01-24 20:20:54 - src.main - INFO - Игра поставлена на паузу
+2026-01-24 20:20:54 - src.main - INFO - Меню паузы создано и показано
+2026-01-24 20:20:55 - src.main - INFO - Игра возобновлена
+2026-01-24 20:20:55 - src.main - INFO - Игра поставлена на паузу
+2026-01-24 20:20:55 - src.main - INFO - Меню паузы создано и показано
+2026-01-24 20:20:55 - src.main - INFO - Игра возобновлена
+2026-01-24 20:20:55 - src.systems.rendering.render_system - WARNING - Камера isometric не найдена
+2026-01-24 20:20:55 - src.core.game_state_manager - INFO - Changed state to: game
+2026-01-24 20:20:56 - src.main - INFO - Игра поставлена на паузу
+2026-01-24 20:20:56 - src.main - INFO - Меню паузы создано и показано
+2026-01-24 20:21:01 - src.main - INFO - Игра возобновлена
+2026-01-24 20:21:02 - src.main - INFO - Игра поставлена на паузу
+2026-01-24 20:21:02 - src.main - INFO - Меню паузы создано и показано
+2026-01-24 20:21:04 - src.main - INFO - Меню паузы создано и показано
+2026-01-24 20:21:05 - src.core.game_state_manager - INFO - Changed state to: start
+2026-01-24 20:21:07 - src.main - INFO - Игра поставлена на паузу
+2026-01-24 20:21:07 - src.main - INFO - Меню паузы создано и показано
+2026-01-24 20:21:08 - src.core.game_state_manager - INFO - Changed state to: start
+2026-01-24 20:22:25 - src.main - INFO - Выход из игры...
+2026-01-24 20:22:25 - src.systems.rendering.render_system - INFO - Система рендеринга очищена
+2026-01-24 20:22:25 - src.main - INFO - Ресурсы очищены
