@@ -143,11 +143,13 @@ class GameEngine(ShowBase):
             self.component_manager.register_component(self.master_integrator)
 
             # Передаем архитектурные компоненты в MasterIntegrator до инициализации
+            # AttributeSystem будет создан внутри MasterIntegrator, поэтому передаем None
             if self.master_integrator and self.state_manager:
                 try:
+                    # AttributeSystem будет создан в _create_all_systems, поэтому пока передаем None
                     self.master_integrator.set_architecture_components(self.state_manager, None)  # type: ignore[arg-type]
-                except Exception:
-                    logger.warning("Не удалось передать архитектурные компоненты в MasterIntegrator до инициализации")
+                except Exception as e:
+                    logger.warning(f"Не удалось передать архитектурные компоненты в MasterIntegrator до инициализации: {e}")
 
             # Инициализация всех компонентов
             if not self.component_manager.initialize_all():

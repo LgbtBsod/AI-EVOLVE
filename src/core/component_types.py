@@ -108,6 +108,11 @@ class BaseComponent(IComponent):
         self._last_update_time = 0.0
         self._update_count = 0
         self._error_count = 0
+        self._last_error = None
+        self._initialization_time = 0.0
+        self._total_runtime = 0.0
+        self._dependencies: List[str] = []
+        self._dependents: List[str] = []
         
         # Callbacks
         self._state_change_callbacks: List[Callable] = []
@@ -139,6 +144,7 @@ class BaseComponent(IComponent):
             
             if result:
                 self._state = LifecycleState.READY
+                self._initialization_time = time.time()
                 self._logger.info(f"Компонент {self._component_id} инициализирован")
             else:
                 self._state = LifecycleState.ERROR
@@ -149,6 +155,7 @@ class BaseComponent(IComponent):
         except Exception as e:
             self._state = LifecycleState.ERROR
             self._error_count += 1
+            self._last_error = str(e)
             self._logger.error(f"Критическая ошибка инициализации {self._component_id}: {e}")
             return False
     
@@ -174,6 +181,54 @@ class BaseComponent(IComponent):
             self._state = LifecycleState.ERROR
             self._error_count += 1
             self._logger.error(f"Критическая ошибка запуска {self._component_id}: {e}")
+            return False
+    
+    def pause(self) -> bool:
+        """Приостановка компонента"""
+        try:
+            if self._state != LifecycleState.RUNNING:
+                self._logger.warning(f"Попытка приостановки компонента {self._component_id} в состоянии {self._state}")
+                return False
+            
+            self._state = LifecycleState.PAUSED
+            self._logger.info(f"Приостановка компонента {self._component_id}")
+            
+            result = self._on_pause()
+            
+            if not result:
+                self._state = LifecycleState.ERROR
+                self._logger.error(f"Ошибка приостановки компонента {self._component_id}")
+            
+            return result
+            
+        except Exception as e:
+            self._state = LifecycleState.ERROR
+            self._error_count += 1
+            self._logger.error(f"Критическая ошибка приостановки {self._component_id}: {e}")
+            return False
+    
+    def resume(self) -> bool:
+        """Возобновление компонента"""
+        try:
+            if self._state != LifecycleState.PAUSED:
+                self._logger.warning(f"Попытка возобновления компонента {self._component_id} в состоянии {self._state}")
+                return False
+            
+            self._state = LifecycleState.RUNNING
+            self._logger.info(f"Возобновление компонента {self._component_id}")
+            
+            result = self._on_resume()
+            
+            if not result:
+                self._state = LifecycleState.ERROR
+                self._logger.error(f"Ошибка возобновления компонента {self._component_id}")
+            
+            return result
+            
+        except Exception as e:
+            self._state = LifecycleState.ERROR
+            self._error_count += 1
+            self._logger.error(f"Критическая ошибка возобновления {self._component_id}: {e}")
             return False
     
     def stop(self) -> bool:
@@ -232,18 +287,47 @@ class BaseComponent(IComponent):
         """Обновление компонента"""
         try:
             if self._state != LifecycleState.RUNNING:
-                return True
+                return True  # Не обновляем неактивные компоненты
             
+            start_time = time.time()
             self._last_update_time = time.time()
-            self._update_count += 1
             
-            return self._on_update(delta_time)
+            result = self._on_update(delta_time)
+            
+            if result:
+                self._total_runtime += time.time() - start_time
+                self._update_count += 1
+            else:
+                self._logger.warning(f"Ошибка обновления компонента {self._component_id}")
+            
+            return result
             
         except Exception as e:
             self._state = LifecycleState.ERROR
             self._error_count += 1
+            self._last_error = str(e)
             self._logger.error(f"Критическая ошибка обновления {self._component_id}: {e}")
             return False
+    
+    def add_dependency(self, component_id: str) -> None:
+        """Добавление зависимости от другого компонента"""
+        if component_id not in self._dependencies:
+            self._dependencies.append(component_id)
+    
+    def remove_dependency(self, component_id: str) -> None:
+        """Удаление зависимости от компонента"""
+        if component_id in self._dependencies:
+            self._dependencies.remove(component_id)
+    
+    def add_dependent(self, component_id: str) -> None:
+        """Добавление зависимого компонента"""
+        if component_id not in self._dependents:
+            self._dependents.append(component_id)
+    
+    def remove_dependent(self, component_id: str) -> None:
+        """Удаление зависимого компонента"""
+        if component_id in self._dependents:
+            self._dependents.remove(component_id)
     
     # Виртуальные методы для переопределения
     def _on_initialize(self) -> bool:
@@ -251,6 +335,14 @@ class BaseComponent(IComponent):
         return True
     
     def _on_start(self) -> bool:
+        """Переопределяется в наследниках"""
+        return True
+    
+    def _on_pause(self) -> bool:
+        """Переопределяется в наследниках"""
+        return True
+    
+    def _on_resume(self) -> bool:
         """Переопределяется в наследниках"""
         return True
     
@@ -277,5 +369,16 @@ class BaseComponent(IComponent):
             'last_update_time': self._last_update_time,
             'update_count': self._update_count,
             'error_count': self._error_count,
-            'uptime': time.time() - self._creation_time
+            'last_error': self._last_error,
+            'initialization_time': self._initialization_time,
+            'total_runtime': self._total_runtime,
+            'uptime': time.time() - self._creation_time,
+            'dependencies': self._dependencies.copy(),
+            'dependents': self._dependents.copy()
         }
+    
+    def __str__(self) -> str:
+        return f"BaseComponent(id={self._component_id}, type={self._component_type.value}, state={self._state.value})"
+    
+    def __repr__(self) -> str:
+        return self.__str__()

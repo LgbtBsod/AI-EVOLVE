@@ -184,6 +184,10 @@ class MasterIntegrator(BaseComponent):
             # Определение порядка инициализации
             self._calculate_initialization_order()
             
+            # Убеждаемся, что AttributeSystem установлен перед передачей другим системам
+            if 'attribute_system' in self.systems and not self.attribute_system:
+                self.attribute_system = self.systems['attribute_system']  # type: ignore[assignment]
+            
             # Инициализация систем в правильном порядке
             if not self._initialize_systems_in_order():
                 return False
@@ -449,11 +453,17 @@ class MasterIntegrator(BaseComponent):
                 # Устанавливаем архитектурные компоненты
                 if hasattr(system, 'set_architecture_components'):
                     if system_name == 'attribute_system':
-                        # AttributeSystem не нуждается в других системах
-                        pass
+                        # AttributeSystem получает только StateManager
+                        if self.state_manager:
+                            system.set_architecture_components(self.state_manager)
                     else:
                         # Остальные системы получают StateManager и AttributeSystem
-                        system.set_architecture_components(self.state_manager, self.attribute_system)
+                        if self.state_manager and self.attribute_system:
+                            system.set_architecture_components(self.state_manager, self.attribute_system)
+                        elif self.state_manager:
+                            # Если AttributeSystem еще не готов, передаем только StateManager
+                            logger.warning(f"AttributeSystem не готов для {system_name}, передается только StateManager")
+                            system.set_architecture_components(self.state_manager, None)
                 
                 # Инициализируем систему
                 if not system.initialize():

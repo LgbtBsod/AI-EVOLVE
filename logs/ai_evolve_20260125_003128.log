@@ -1,0 +1,41 @@
+2026-01-25 00:31:29 - src.main - INFO - Инициализация Panda3D...
+2026-01-25 00:31:30 - src.main - INFO - Panda3D инициализирован успешно
+2026-01-25 00:31:30 - src.systems.rendering.render_system - INFO - Система рендеринга инициализирована
+2026-01-25 00:31:30 - src.core.state_manager - INFO - StateManager инициализирован
+2026-01-25 00:31:30 - src.core.component_types.state_manager - INFO - Инициализация компонента state_manager
+2026-01-25 00:31:30 - src.core.state_manager - INFO - StateManager успешно инициализирован
+2026-01-25 00:31:30 - src.core.component_types.state_manager - INFO - Компонент state_manager инициализирован
+2026-01-25 00:31:30 - src.main - INFO - Система ввода настроена
+2026-01-25 00:31:30 - src.main - INFO - Игровые системы инициализированы
+2026-01-25 00:31:30 - src.core.game_state_manager - INFO - Registered state: start
+2026-01-25 00:31:30 - src.core.game_state_manager - INFO - Registered state: game
+2026-01-25 00:31:30 - src.core.game_state_manager - INFO - Registered state: death
+2026-01-25 00:31:30 - src.main - INFO - Состояния игры зарегистрированы
+2026-01-25 00:31:30 - src.main - INFO - ============================================================
+2026-01-25 00:31:30 - src.main - INFO - 🚀 ЗАПУСК УЛУЧШЕННОЙ ИГРЫ AI-EVOLVE
+2026-01-25 00:31:30 - src.main - INFO - ============================================================
+2026-01-25 00:31:30 - src.core.game_state_manager - INFO - Changed state to: start
+2026-01-25 00:31:33 - src.systems.rendering.render_system - WARNING - Камера isometric не найдена
+2026-01-25 00:31:33 - src.core.game_state_manager - INFO - Changed state to: game
+2026-01-25 00:31:45 - src.main - INFO - Игра поставлена на паузу
+2026-01-25 00:31:45 - src.main - INFO - Меню паузы создано и показано
+2026-01-25 00:31:45 - src.main - INFO - Игра возобновлена
+2026-01-25 00:31:46 - src.main - INFO - Игра поставлена на паузу
+2026-01-25 00:31:46 - src.main - INFO - Меню паузы создано и показано
+2026-01-25 00:31:46 - src.main - INFO - Игра возобновлена
+2026-01-25 00:31:46 - src.main - INFO - Игра поставлена на паузу
+2026-01-25 00:31:46 - src.main - INFO - Меню паузы создано и показано
+2026-01-25 00:31:46 - src.main - INFO - Игра возобновлена
+2026-01-25 00:31:47 - src.main - INFO - Игра поставлена на паузу
+2026-01-25 00:31:47 - src.main - INFO - Меню паузы создано и показано
+2026-01-25 00:31:48 - src.main - INFO - Меню паузы создано и показано
+2026-01-25 00:31:53 - src.main - INFO - Игра возобновлена
+2026-01-25 00:32:08 - src.main - INFO - Игра поставлена на паузу
+2026-01-25 00:32:08 - src.main - INFO - Меню паузы создано и показано
+2026-01-25 00:32:08 - src.main - INFO - Игра возобновлена
+2026-01-25 00:32:09 - src.main - INFO - Игра поставлена на паузу
+2026-01-25 00:32:09 - src.main - INFO - Меню паузы создано и показано
+2026-01-25 00:32:09 - src.core.game_state_manager - INFO - Changed state to: start
+2026-01-25 00:32:10 - src.main - INFO - Выход из игры...
+2026-01-25 00:32:10 - src.systems.rendering.render_system - INFO - Система рендеринга очищена
+2026-01-25 00:32:10 - src.main - INFO - Ресурсы очищены
