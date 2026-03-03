@@ -16,16 +16,12 @@ import pickle
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-# Попытка импорта ML фреймворков
-try:
-    import torch
-    import torch.nn as nn
-    import torch.optim as optim
-    from torch.utils.data import Dataset, DataLoader
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
-    logging.warning("PyTorch недоступен, будет использована упрощенная система")
+# Импорт ML-фреймворка обязателен по ТЗ (без fallback)
+import torch
+import torch.nn as nn
+import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
+TORCH_AVAILABLE = True
 
 try:
     from sklearn.ensemble import RandomForestClassifier
@@ -74,25 +70,24 @@ class LearningType(Enum):
     TRANSFER = "transfer"
 
 # = НЕЙРОННЫЕ СЕТИ (PyTorch)
-if TORCH_AVAILABLE:
-    class AINeuralNetwork(nn.Module):
-        """Нейронная сеть для принятия решений AI"""
-        
-        def __init__(self, input_size: int, hidden_size: int, output_size: int):
-            super(AINeuralNetwork, self).__init__()
-            self.fc1 = nn.Linear(input_size, hidden_size)
-            self.fc2 = nn.Linear(hidden_size, hidden_size)
-            self.fc3 = nn.Linear(hidden_size, output_size)
-            self.relu = nn.ReLU()
-            self.dropout = nn.Dropout(0.2)
-            
-        def forward(self, x):
-            x = self.relu(self.fc1(x))
-            x = self.dropout(x)
-            x = self.relu(self.fc2(x))
-            x = self.dropout(x)
-            x = self.fc3(x)
-            return x
+class AINeuralNetwork(nn.Module):
+    """Нейронная сеть для принятия решений AI."""
+
+    def __init__(self, input_size: int, hidden_size: int, output_size: int):
+        super().__init__()
+        self.fc1 = nn.Linear(input_size, hidden_size)
+        self.fc2 = nn.Linear(hidden_size, hidden_size)
+        self.fc3 = nn.Linear(hidden_size, output_size)
+        self.relu = nn.ReLU()
+        self.dropout = nn.Dropout(0.2)
+
+    def forward(self, x):
+        x = self.relu(self.fc1(x))
+        x = self.dropout(x)
+        x = self.relu(self.fc2(x))
+        x = self.dropout(x)
+        x = self.fc3(x)
+        return x
 
 # = СТРУКТУРЫ ДАННЫХ
 @dataclass

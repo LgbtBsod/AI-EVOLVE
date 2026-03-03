@@ -1,4 +1,4 @@
-ет#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Улучшенные интерфейсы для систем - интеграция с новой архитектурой"""
 
 from abc import ABC, abstractmethod
@@ -14,6 +14,8 @@ import time
 from .architecture import BaseComponent, ComponentType, Priority
 from .repository import RepositoryManager, DataType, StorageType
 from .state_manager import StateManager, StateType
+
+logger = logging.getLogger(__name__)
 
 # ============================================================================
 # БАЗОВЫЕ ИНТЕРФЕЙСЫ СИСТЕМ
@@ -259,76 +261,3 @@ class IUpdatableSystem(IGameSystem):
     def update(self, delta_time: float) -> bool:
         """Обновление системы"""
         pass
-    
-    @abstractmethod
-    def get_update_stats(self) -> Dict[str, Any]:
-        """Получение статистики обновления"""
-        pass
-
-class IConfigurableSystem(IGameSystem):
-    """Интерфейс для конфигурируемых систем"""
-    
-    @abstractmethod
-    def load_config(self, config_path: Path) -> bool:
-        """Загрузка конфигурации"""
-        pass
-    
-    @abstractmethod
-    def save_config(self, config_path: Path) -> bool:
-        """Сохранение конфигурации"""
-        pass
-    
-    @abstractmethod
-    def get_config(self) -> Dict[str, Any]:
-        """Получение конфигурации"""
-        pass
-
-# ============================================================================
-# УТИЛИТЫ
-# ============================================================================
-
-def validate_system_interface(system: IGameSystem) -> bool:
-    """Проверка соответствия системы интерфейсу"""
-    try:
-        # Проверяем наличие всех обязательных методов
-        required_methods = [
-            'initialize', 'start', 'stop', 'destroy', 'update'
-        ]
-        
-        for method_name in required_methods:
-            if not hasattr(system, method_name):
-                logger.error(f"Система {getattr(system, 'component_id', 'unknown')} не имеет метода {method_name}")
-                return False
-        
-        # Проверяем наличие всех обязательных свойств
-        required_properties = [
-            'component_id', 'component_type', 'priority', 'state'
-        ]
-        
-        for prop_name in required_properties:
-            if not hasattr(system, prop_name):
-                logger.error(f"Система {getattr(system, 'component_id', 'unknown')} не имеет свойства {prop_name}")
-                return False
-        
-        return True
-        
-    except Exception as e:
-        logger.error(f"Ошибка валидации системы: {e}")
-        return False
-
-def get_system_info(system: IGameSystem) -> Dict[str, Any]:
-    """Получение информации о системе"""
-    try:
-        return {
-            'component_id': getattr(system, 'component_id', 'unknown'),
-            'component_type': getattr(system, 'component_type', 'unknown'),
-            'priority': getattr(system, 'priority', 'unknown'),
-            'state': getattr(system, 'state', 'unknown'),
-            'methods': [method for method in dir(system) if not method.startswith('_')],
-            'interfaces': [cls.__name__ for cls in system.__class__.__bases__ if hasattr(cls, '__abstractmethods__')]
-        }
-    except Exception as e:
-        logger.error(f"Ошибка получения информации о системе: {e}")
-        return {'error': str(e)}
-
-logger = logging.getLogger(__name__)
