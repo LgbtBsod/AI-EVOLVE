@@ -224,7 +224,8 @@ def check_dependencies():
     # Обязательные пакеты
     required_packages = [
         "panda3d",
-        "numpy"
+        "numpy",
+        "torch"
     ]
     
     # Опциональные пакеты

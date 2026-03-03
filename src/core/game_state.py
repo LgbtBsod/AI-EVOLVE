@@ -1,57 +1,13 @@
-from dataclasses import dataclass, field
+"""Game states and state transitions."""
+from __future__ import annotations
 
-from enum import Enum
+from enum import Enum, auto
 
-from pathlib import Path
 
-from typing import *
-
-import logging
-
-import os
-
-import re
-
-import sys
-
-import time
-
-#!/usr / bin / env python3
-"""Game State - Состояния игры
-Определяет все возможные состояния игрового процесса"""from enum import Enum, auto
-
-class GameState(Enum):"""Состояния игры"""
-    pass
-pass
-pass
-pass
-pass
-pass
-pass
-INITIALIZING= auto()      # Инициализация
-MAIN_MENU= auto()         # Главное меню
-LOADING= auto()           # Загрузка
-PLAYING= auto()           # Игровой процесс
-PAUSED= auto()            # Пауза
-INVENTORY= auto()         # Инвентарь
-SETTINGS= auto()          # Настройки
-SAVING= auto()            # Сохранение
-LOADING_SAVE= auto()      # Загрузка сохранения
-QUITTING= auto()          # Выход из игры
-ERROR= auto()             # Ошибка
-TUTORIAL= auto()          # Обучение
-CREDITS= auto()           # Титры
-GAME_OVER= auto()         # Конец игры
-VICTORY= auto()           # Победа
-BATTLE= auto()            # Бой
-DIALOG= auto()            # Диалог
-CRAFTING= auto()          # Крафтинг
-TRADING= auto()           # Торговля
-EVOLUTION= auto()         # Эволюция
-GENETICS= auto()          # Генетика
-EMOTIONS= auto()          # Эмоции
-QUESTS= auto()            # Квесты
-MAP= auto()               # Карта
-CHARACTER= auto()         # Персонаж
-SKILLS= auto()            # Навыки
-SOCIAL= auto()            # Социальные взаимодействия
+class GameState(Enum):
+    MENU = auto()
+    LOADING = auto()
+    RUNNING = auto()
+    PAUSED = auto()
+    GAME_OVER = auto()
+    EXITING = auto()

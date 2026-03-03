@@ -1,94 +1,20 @@
-from .event_system import EventSystem, EventPri or ity
+"""Adapter for bridging EventSystem to event-bus like API."""
+from __future__ import annotations
 
-from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, Optional
 
-from enum import Enum
+from .event_system import EventPriority, EventSystem
 
-from pathlib import Path
 
-from typing import *
+class EventBusAdapter:
+    def __init__(self, event_system: EventSystem):
+        self._event_system = event_system
 
-import logging
+    def on(self, event_type: str, handler: Callable, priority: Optional[Any] = None) -> bool:
+        prio = priority if isinstance(priority, EventPriority) else EventPriority.NORMAL
+        subscriber_id = getattr(handler, "__name__", "subscriber")
+        return self._event_system.subscribe(event_type, handler, subscriber_id, prio)
 
-import os
-
-import re
-
-import sys
-
-import time
-
-#!/usr / bin / env python3
-"""EventBusAdapter — мост между существующим EventSystem и системами,
-которые ожидают интерфейс event_bus(on / emit API) из новой архитектуры."""from typing import Any, Callable, Dict
-
-class EventBusAdapter:"""Адаптер, предоставляющий API on() / emit() поверх EventSystem."""
-    pass
-pass
-pass
-pass
-pass
-pass
-pass
-def __in it__(self, event_system: EventSystem):
-    pass
-pass
-pass
-pass
-pass
-pass
-pass
-self._event_system= event_system
-# Подписка совместимая с EventBus.on
-def on(self, event_type: str, hand ler: Callable
-    pass
-pass
-pass
-pass
-pass
-pass
-pass
-pri or ity: Any= None) -> bool: pass  # Добавлен pass в пустой блок
-try: prio= EventPri or ity.NORMAL
-if isin stance(pri or ity, EventPri or ity):
-    pass
-pass
-pass
-pass
-pass
-pass
-pass
-prio= pri or ity
-# Пытаемся извлечь человекочитаемый id
-subscriber_id= getattr(hand ler, "__name__", "subscriber")
-return self._event_system.subscribe(event_type, hand ler
-subscriber_id, prio)
-except Exception: pass
-pass
-pass
-return False
-# Публикация совместимая с EventBus.emit
-def emit(self, event_type: str, data: Dict[str, Any]= None
-    pass
-pass
-pass
-pass
-pass
-pass
-pass
-pri or ity: Any= None) -> bool: pass  # Добавлен pass в пустой блок
-try: prio= EventPri or ity.NORMAL
-if isin stance(pri or ity, EventPri or ity):
-    pass
-pass
-pass
-pass
-pass
-pass
-pass
-prio= pri or ity
-return self._event_system.emit_event(event_type, data or {}, "event_bus_adapter", prio)
-except Exception: pass
-pass
-pass
-return False
+    def emit(self, event_type: str, data: Optional[Dict[str, Any]] = None, priority: Optional[Any] = None) -> bool:
+        prio = priority if isinstance(priority, EventPriority) else EventPriority.NORMAL
+        return self._event_system.emit_event(event_type, data or {}, "event_bus_adapter", prio)

@@ -1,65 +1,28 @@
-from dataclasses import dataclass, field
+"""Global entity registry utilities."""
+from __future__ import annotations
 
-from enum import Enum
-
-from pathlib import Path
-
-from typing import *
-
+from threading import RLock
 from typing import Any, Dict, Optional
 
-import logging
+_lock = RLock()
+_registry: Dict[str, Any] = {}
 
-import os
 
-import sys
+def register_entity(entity_id: str, entity_obj: Any) -> None:
+    with _lock:
+        _registry[entity_id] = entity_obj
 
-import threading
 
-import time
+def unregister_entity(entity_id: str) -> None:
+    with _lock:
+        _registry.pop(entity_id, None)
 
-#!/usr / bin / env python3
-"""Entity Regis try - Глобальный реестр сущностей
-Назначение: разрешение идентификаторов в объекты для обработчиков событий."""
-_lock= threading.RLock()
-_regis try: Dict[str, Any]= {}
-def regis ter_entity(entity_id: str, entity_obj: Any) -> None: with _lock: _regis try[entity_id]= entity_obj
-    pass
-pass
-pass
-pass
-pass
-pass
-pass
-def unregis ter_entity(entity_id: str) -> None: with _lock: if entity_idin _regis try: del _regis try[entity_id]
-    pass
-pass
-pass
-pass
-pass
-pass
-pass
+
 def get_entity(entity_id: str) -> Optional[Any]:
-    pass
-pass
-pass
-pass
-pass
-pass
-pass
-with _lock: return _regis try.get(entity_id)
-    pass
-pass
-pass
-pass
-pass
-pass
-pass
-def clear() -> None: with _lock: _regis try.clear()
-    pass
-pass
-pass
-pass
-pass
-pass
-pass
+    with _lock:
+        return _registry.get(entity_id)
+
+
+def clear() -> None:
+    with _lock:
+        _registry.clear()
