@@ -7,8 +7,10 @@ import os
 import sys
 import time
 import traceback
+import subprocess
+import hashlib
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 # Добавляем корневую директорию в путь
 ROOT_DIR = Path(__file__).parent
@@ -216,92 +218,123 @@ def check_python_version() -> bool:
         return False
     return True
 
-def check_dependencies():
-    """Проверка зависимостей"""
+def _install_packages(packages: List[str]) -> bool:
+    """Устанавливает отсутствующие зависимости через pip."""
+    if not packages:
+        return True
+
+    print(f"\n📥 Установка отсутствующих пакетов: {', '.join(packages)}")
+    cmd = [sys.executable, "-m", "pip", "install", *packages]
+    try:
+        subprocess.check_call(cmd)
+        print("✅ Установка зависимостей завершена")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Ошибка установки зависимостей: {e}")
+        return False
+
+
+def _requirements_hash(requirements_file: Path) -> str:
+    """Возвращает sha256-хэш requirements-файла."""
+    return hashlib.sha256(requirements_file.read_bytes()).hexdigest()
+
+
+def _requirements_marker_path() -> Path:
+    """Путь к маркеру последней успешной установки requirements."""
+    return ROOT_DIR / ".requirements_installed.sha256"
+
+
+def install_requirements_file(requirements_file: Path) -> bool:
+    """Устанавливает зависимости из requirements-файла, если он существует.
+
+    Если requirements не менялся с последней успешной установки, шаг пропускается.
+    """
+    if not requirements_file.exists():
+        print(f"ℹ️  {requirements_file.name} не найден, пропускаем установку из файла")
+        return True
+
+    marker_path = _requirements_marker_path()
+    current_hash = _requirements_hash(requirements_file)
+    force_reinstall = os.environ.get("AI_EVOLVE_FORCE_REINSTALL", "0") == "1"
+
+    if not force_reinstall and marker_path.exists():
+        installed_hash = marker_path.read_text(encoding="utf-8").strip()
+        if installed_hash == current_hash:
+            print(f"✅ {requirements_file.name} не изменился, установка пропущена")
+            return True
+
+    print(f"\n📥 Установка зависимостей из {requirements_file.name}...")
+    cmd = [sys.executable, "-m", "pip", "install", "-r", str(requirements_file)]
+    try:
+        subprocess.check_call(cmd)
+        marker_path.write_text(current_hash, encoding="utf-8")
+        print(f"✅ Зависимости из {requirements_file.name} установлены")
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Ошибка установки из {requirements_file.name}: {e}")
+        return False
+
+
+def check_dependencies(auto_install: bool = True, auto_install_optional: bool = False) -> bool:
+    """Проверка зависимостей с возможностью автоустановки."""
     print("\n📦 ПРОВЕРКА ЗАВИСИМОСТЕЙ")
     print("=" * 50)
-    
-    # Обязательные пакеты
-    required_packages = [
-        "panda3d",
-        "numpy",
-        "torch"
-    ]
-    
-    # Опциональные пакеты
-    optional_packages = [
-        "PIL",
-        "cv2",
-        "matplotlib"
-    ]
-    
-    missing_required = []
-    missing_optional = []
-    
-    for package in required_packages:
+
+    required_packages = {
+        "panda3d": "panda3d",
+        "numpy": "numpy",
+    }
+
+    optional_packages = {
+        "torch": "torch",
+        "PIL": "pillow",
+        "cv2": "opencv-python",
+        "matplotlib": "matplotlib",
+    }
+
+    missing_required: List[str] = []
+    missing_optional: List[str] = []
+
+    for module_name, pip_name in required_packages.items():
         try:
-            if package == "panda3d":
-                # Специальная проверка Panda3D
-                import panda3d
-                print(f"✅ {package} - установлен (версия: {panda3d.__version__})")
-                
-                # Проверяем возможность создания окна с разными импортами
-                try:
-                    print("🔍 Тестирование создания окна Panda3D...")
-                    
-                    # Пробуем разные способы импорта ShowBase
-                    try:
-                        from panda3d.core import ShowBase, WindowProperties
-                        print("✅ Импорт из panda3d.core успешен")
-                    except ImportError:
-                        try:
-                            from direct.showbase.ShowBase import ShowBase
-                            print("✅ Импорт из direct.showbase.ShowBase успешен")
-                        except ImportError:
-                            try:
-                                from direct.showbase import ShowBase
-                                print("✅ Импорт из direct.showbase успешен")
-                            except ImportError:
-                                raise ImportError("Не удалось импортировать ShowBase ни одним способом")
-                    
-                    # Тестируем создание окна
-                    test_base = ShowBase()
-                    test_base.destroy()
-                    print("✅ Panda3D окно создается успешно")
-                    
-                except Exception as window_e:
-                    print(f"⚠️  Panda3D окно не создается: {window_e}")
-                    # Не прерываем запуск, так как Panda3D может работать в headless режиме
-                    
-            else:
-                __import__(package)
-                print(f"✅ {package} - установлен")
-        except ImportError as e:
-            missing_required.append(package)
-            print(f"❌ {package} - отсутствует: {e}")
+            __import__(module_name)
+            print(f"✅ {module_name} - установлен")
         except Exception as e:
-            missing_required.append(package)
-            print(f"❌ {package} - ошибка: {e}")
-    
-    for package in optional_packages:
+            missing_required.append(pip_name)
+            print(f"❌ {module_name} - недоступен: {e}")
+
+    for module_name, pip_name in optional_packages.items():
         try:
-            __import__(package)
-            print(f"✅ {package} - установлен")
-        except ImportError:
-            missing_optional.append(package)
-            print(f"⚠️  {package} - отсутствует (опционально)")
-    
+            __import__(module_name)
+            print(f"✅ {module_name} - установлен")
+        except Exception as e:
+            missing_optional.append(pip_name)
+            print(f"⚠️  {module_name} - недоступен (опционально): {e}")
+
+    if missing_required and auto_install:
+        if not _install_packages(missing_required):
+            return False
+        # Повторная проверка после установки
+        for module_name in required_packages:
+            try:
+                __import__(module_name)
+            except Exception as e:
+                print(f"❌ {module_name} по-прежнему недоступен после установки: {e}")
+                return False
+        missing_required = []
+
     if missing_required:
         print(f"\n❌ Отсутствуют необходимые пакеты: {', '.join(missing_required)}")
         print("Установите их командой:")
-        print(f"pip install {' '.join(missing_required)}")
+        print(f"{sys.executable} -m pip install {' '.join(missing_required)}")
         return False
-    
+
+    if missing_optional and auto_install and auto_install_optional:
+        _install_packages(missing_optional)
+
     if missing_optional:
         print(f"\n⚠️  Отсутствуют опциональные пакеты: {', '.join(missing_optional)}")
-        print("Некоторые функции могут работать медленнее")
-        print(f"pip install {' '.join(missing_optional)}")
-    
+
     print("\n✅ Все необходимые зависимости установлены")
     return True
 
@@ -429,8 +462,12 @@ def main():
         if not check_python_version():
             return 1
         
+        # Предустановка зависимостей из requirements
+        if not install_requirements_file(ROOT_DIR / "requirements.txt"):
+            return 1
+
         # Проверка зависимостей
-        if not check_dependencies():
+        if not check_dependencies(auto_install=True, auto_install_optional=False):
             return 1
         
         # Создание директорий

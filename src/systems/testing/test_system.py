@@ -5,7 +5,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import *
 from typing import Dict, List, Optional, Any, Tuple, Callable
 import logging
 import math
@@ -18,6 +17,10 @@ import concurrent.futures
 from src.core.architecture import BaseComponent, ComponentType, Priority, LifecycleState
 
 logger = logging.getLogger(__name__)
+
+# Это доменный модуль подсистемы тестирования, а не pytest-тесты.
+# Флаг предотвращает ошибочную автоколлекцию pytest по имени файла test_*.py.
+__test__ = False
 
 # = ТИПЫ ТЕСТОВ
 
@@ -54,6 +57,7 @@ class TestCase:
     name: str
     description: str
     test_type: TestType
+    test_function: Callable
     priority: TestPriority = TestPriority.NORMAL
     timeout: float = 30.0
     retry_count: int = 0
@@ -61,7 +65,6 @@ class TestCase:
     dependencies: List[str] = field(default_factory=list)
     setup_function: Optional[Callable] = None
     teardown_function: Optional[Callable] = None
-    test_function: Callable
     parameters: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass

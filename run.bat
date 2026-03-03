@@ -13,15 +13,12 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Проверяем наличие зависимостей
-echo 🔍 Проверка зависимостей...
-python -c "import pygame, numpy, psutil" >nul 2>&1
-if errorlevel 1 (
-    echo ⚠️  Не все зависимости установлены
-    echo Устанавливаем зависимости...
-    python install_dependencies.py
+REM Устанавливаем зависимости из requirements.txt
+if exist requirements.txt (
+    echo 📦 Установка зависимостей из requirements.txt...
+    python -m pip install -r requirements.txt
     if errorlevel 1 (
-        echo ❌ Ошибка установки зависимостей
+        echo ❌ Ошибка установки зависимостей из requirements.txt
         pause
         exit /b 1
     )
