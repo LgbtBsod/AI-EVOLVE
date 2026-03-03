@@ -5,3 +5,6 @@
 *.backup_*
 *.integrity
 *.bak
+
+# Локальный маркер успешной установки зависимостей
+.requirements_installed.sha256

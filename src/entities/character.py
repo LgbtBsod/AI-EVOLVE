@@ -79,6 +79,11 @@ class Character(BaseEntity):
         self.target_item = None
         self.last_ai_update = 0
         self.ai_update_interval = 0.1  # Обновление ИИ каждые 100мс
+        self.last_defensive_skill_time = 0.0
+        self.defensive_skill_cooldown = 3.0
+        self.exploration_target = None
+        self.exploration_retarget_interval = 2.0
+        self.last_exploration_target_time = 0.0
         
         # Дополнительные характеристики игрока
         self.is_player = is_player
@@ -556,12 +561,15 @@ class Character(BaseEntity):
         return self.health <= 0
         
     def update_ai(self, enemies, items, dt, exit_position=None, vision_range: float = 0.0,
-                  known_exit_positions: Optional[List[Tuple[float, float]]] = None):
+                  known_exit_positions: Optional[List[Tuple[float, float]]] = None,
+                  hint_positions: Optional[List[Tuple[float, float]]] = None):
         """Обновление ИИ персонажа.
 
         :param exit_position: текущие координаты маяка выхода (если известны системе сцены)
         :param vision_range: дистанция, на которой герой может «увидеть» маяк визуально
         :param known_exit_positions: подсказки о координатах выхода, полученные от карт / NPC
+        :param hint_positions: позиции объектов-подсказок (карты/NPC), которые стоит посетить
+        до получения точного местоположения выхода
         """
         if not self.ai_enabled or not self.is_alive():
             return
@@ -576,6 +584,12 @@ class Character(BaseEntity):
         nearest_enemy = self._find_nearest_enemy(enemies)
 
         # 1. Бой и преследование врагов
+        # Если здоровье низкое, приоритет — выживание: отходим от врага.
+        if nearest_enemy and self.health <= self.max_health * 0.3 and self.get_distance_to(nearest_enemy) <= 12:
+            self.ai_state = "retreating"
+            self._move_away_from_enemy(nearest_enemy, dt)
+            return
+
         if nearest_enemy and self.get_distance_to(nearest_enemy) <= self.attack_range:
             # Враг в зоне атаки - атакуем
             self.ai_state = "fighting"
@@ -589,30 +603,93 @@ class Character(BaseEntity):
             self._move_towards_enemy(nearest_enemy, dt)
             return
 
-        # 2. Поиск выхода на следующий уровень
-        target_exit = None
+        # 2. Лутинг и взаимодействие с найденными интерактивными объектами (например, сундуки)
+        nearest_item = self._find_nearest_item(items)
+        if nearest_item:
+            item_x, item_y = self._extract_item_position(nearest_item)
+            if item_x is not None and item_y is not None:
+                # Не уходим в бесконечный лут-маршрут через всю карту:
+                # лутим только достижимые/ближние интерактивные объекты.
+                dist_to_item = math.sqrt((self.x - item_x) ** 2 + (self.y - item_y) ** 2)
+                if dist_to_item <= 30.0:
+                    self.ai_state = "looting"
+                    self.move_towards(item_x, item_y, dt)
+                    return
 
-        # 2.1. Если есть подсказки по координатам (карты / NPC), используем их
-        if known_exit_positions:
-            target_exit = known_exit_positions[0]
-
-        # 2.2. Если маяк в зоне прямой видимости — считаем, что герой заметил его визуально
-        if not target_exit and exit_position and vision_range > 0.0:
-            ex, ey, _ = exit_position
-            dist_to_exit = math.sqrt((self.x - ex) ** 2 + (self.y - ey) ** 2)
-            if dist_to_exit <= vision_range:
-                target_exit = (ex, ey)
+        # 3. Поиск выхода на следующий уровень
+        target_exit = self._select_best_exit_target(
+            known_exit_positions=known_exit_positions,
+            exit_position=exit_position,
+            vision_range=vision_range,
+        )
 
         if target_exit:
             self.ai_state = "seeking_exit"
             self.move_towards(target_exit[0], target_exit[1], dt)
             return
 
-        # 3. Нет врагов и нет информации о выходе — фоновое исследование
+        # 4. Если выход неизвестен, но есть доступные подсказки — идём к ближайшей.
+        hint_target = self._select_best_hint_target(hint_positions)
+        if hint_target:
+            self.ai_state = "seeking_hint"
+            self.move_towards(hint_target[0], hint_target[1], dt)
+            return
+
+        # 5. Нет врагов, лута и информации о выходе — фоновое исследование
         self.ai_state = "exploring"
         self.target_enemy = None
         self._explore_area(dt)
     
+
+    def _select_best_hint_target(self, hint_positions=None):
+        """Выбор ближайшей позиции подсказки (карта/NPC)."""
+        candidates = []
+        for pos in hint_positions or []:
+            if not isinstance(pos, (tuple, list)) or len(pos) < 2:
+                continue
+            try:
+                hx, hy = float(pos[0]), float(pos[1])
+            except (TypeError, ValueError):
+                continue
+            dist = math.sqrt((self.x - hx) ** 2 + (self.y - hy) ** 2)
+            candidates.append((dist, (hx, hy)))
+
+        if not candidates:
+            return None
+
+        candidates.sort(key=lambda x: x[0])
+        return candidates[0][1]
+
+    def _select_best_exit_target(self, known_exit_positions=None, exit_position=None, vision_range: float = 0.0):
+        """Выбор наилучшей цели выхода: ближайшая известная/видимая точка."""
+        candidates = []
+
+        for pos in known_exit_positions or []:
+            if not isinstance(pos, (tuple, list)) or len(pos) < 2:
+                continue
+            try:
+                ex, ey = float(pos[0]), float(pos[1])
+            except (TypeError, ValueError):
+                continue
+            dist = math.sqrt((self.x - ex) ** 2 + (self.y - ey) ** 2)
+            candidates.append((dist, (ex, ey)))
+
+        if exit_position and len(exit_position) >= 2 and vision_range > 0.0:
+            try:
+                ex, ey = float(exit_position[0]), float(exit_position[1])
+            except (TypeError, ValueError):
+                ex, ey = None, None
+            if ex is not None and ey is not None:
+                dist = math.sqrt((self.x - ex) ** 2 + (self.y - ey) ** 2)
+                if dist <= vision_range:
+                    candidates.append((dist, (ex, ey)))
+
+        if not candidates:
+            return None
+
+        candidates.sort(key=lambda x: x[0])
+        return candidates[0][1]
+
     def _find_nearest_enemy(self, enemies):
         """Поиск ближайшего врага"""
         nearest_enemy = None
@@ -627,6 +704,66 @@ class Character(BaseEntity):
                     
         return nearest_enemy
     
+    def _find_nearest_item(self, items):
+        """Поиск ближайшего интерактивного объекта (например, сундука)."""
+        nearest_item = None
+        nearest_distance = float('inf')
+
+        for item in items or []:
+            item_x, item_y = self._extract_item_position(item)
+            if item_x is None or item_y is None:
+                continue
+
+            distance = math.sqrt((self.x - item_x) ** 2 + (self.y - item_y) ** 2)
+            if distance < nearest_distance:
+                nearest_distance = distance
+                nearest_item = item
+
+        return nearest_item
+
+    def _extract_item_position(self, item):
+        """Извлекает 2D-позицию объекта для навигации ИИ."""
+        if hasattr(item, 'x') and hasattr(item, 'y'):
+            return item.x, item.y
+
+        if hasattr(item, 'getPos'):
+            pos = item.getPos()
+            if hasattr(pos, 'x') and hasattr(pos, 'y'):
+                return pos.x, pos.y
+            if isinstance(pos, (tuple, list)) and len(pos) >= 2:
+                return pos[0], pos[1]
+
+        if hasattr(item, 'get_position'):
+            x, y, _ = item.get_position()
+            return x, y
+
+        return None, None
+
+    def _move_away_from_enemy(self, enemy, dt):
+        """Отход от врага при критическом здоровье."""
+        if hasattr(enemy, 'x') and hasattr(enemy, 'y'):
+            dx = self.x - enemy.x
+            dy = self.y - enemy.y
+        elif hasattr(enemy, 'get_position'):
+            ex, ey, _ = enemy.get_position()
+            dx = self.x - ex
+            dy = self.y - ey
+        else:
+            return
+
+        distance = math.sqrt(dx * dx + dy * dy)
+        if distance <= 0.001:
+            # Если позиции совпали, делаем небольшой случайный рывок.
+            self.move_by(1.0, 0.0, 0.0, dt)
+            return
+
+        # Нормализуем вектор от врага к персонажу и идем в этом направлении.
+        dx /= distance
+        dy /= distance
+        retreat_target_x = self.x + dx * 5.0
+        retreat_target_y = self.y + dy * 5.0
+        self.move_towards(retreat_target_x, retreat_target_y, dt)
+
     def _move_towards_enemy(self, enemy, dt):
         """Движение к врагу"""
         if hasattr(enemy, 'x') and hasattr(enemy, 'y'):
@@ -636,14 +773,28 @@ class Character(BaseEntity):
             self.move_towards(target_x, target_y, dt)
     
     def _explore_area(self, dt):
-        """Исследование области — мягкое блуждание, пока нет явных целей."""
+        """Исследование области с устойчивой целевой точкой, а не хаотичными рывками."""
         import random
 
-        # Небольшой шанс изменить направление и сделать шаг
-        if random.random() < 0.1:
-            dx = random.uniform(-1.0, 1.0)
-            dy = random.uniform(-1.0, 1.0)
-            self.move_by(dx, dy, 0, dt)
+        now = time.time()
+        need_new_target = (
+            self.exploration_target is None
+            or (now - self.last_exploration_target_time) >= self.exploration_retarget_interval
+        )
+
+        if need_new_target:
+            self.exploration_target = (
+                self.x + random.uniform(-8.0, 8.0),
+                self.y + random.uniform(-8.0, 8.0),
+            )
+            self.last_exploration_target_time = now
+
+        tx, ty = self.exploration_target
+        self.move_towards(tx, ty, dt)
+
+        # Если приблизились к точке — выбираем новую на следующем тике.
+        if math.sqrt((self.x - tx) ** 2 + (self.y - ty) ** 2) <= 0.75:
+            self.exploration_target = None
     
     def move_towards(self, target_x, target_y, dt=0.016):
         """Движение к цели"""
@@ -681,10 +832,24 @@ class Character(BaseEntity):
         return float('inf')
     
     def use_skill_automatically(self, enemies, dt):
-        """Автоматическое использование скилов"""
+        """Автоматическое использование скилов."""
         if not self.is_alive():
             return
-            
+
+        # Защитные/выживательные действия имеют приоритет над атакой,
+        # но ограничены кулдауном, чтобы не спамить каждый тик.
+        now = time.time()
+        defensive_ready = (now - self.last_defensive_skill_time) >= self.defensive_skill_cooldown
+        if defensive_ready and self.health <= self.max_health * 0.4:
+            if self.character_class == "mage" and self.mana >= 15 and self.health < self.max_health:
+                if self._cast_self_heal():
+                    self.last_defensive_skill_time = now
+                    return
+            if self.character_class in ("warrior", "rogue") and self.stamina >= 25 and self.health < self.max_health:
+                if self._use_second_wind():
+                    self.last_defensive_skill_time = now
+                    return
+
         # Простое использование скилов на основе класса
         if self.character_class == "warrior":
             # Воин использует атаку ближайшего врага
@@ -704,6 +869,24 @@ class Character(BaseEntity):
                 if nearest_enemy and self.get_distance_to(nearest_enemy) <= self.attack_range:
                     self._stealth_attack(nearest_enemy)
     
+    def _cast_self_heal(self):
+        """Самоисцеление мага за счет маны."""
+        if self.mana < 15 or self.health >= self.max_health:
+            return False
+        self.mana -= 15
+        heal_amount = 20
+        self.health = min(self.max_health, self.health + heal_amount)
+        return True
+
+    def _use_second_wind(self):
+        """Экстренное восстановление воина/разбойника за счет выносливости."""
+        if self.stamina < 25 or self.health >= self.max_health:
+            return False
+        self.stamina -= 25
+        heal_amount = 15
+        self.health = min(self.max_health, self.health + heal_amount)
+        return True
+
     def _cast_magic_attack(self, target):
         """Магическая атака"""
         if self.mana >= 10:
