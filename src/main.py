@@ -49,22 +49,29 @@ class EnhancedGame:
         """Инициализация Panda3D"""
         try:
             from direct.showbase.ShowBase import ShowBase
-            from panda3d.core import WindowProperties
-            
+            from panda3d.core import WindowProperties, loadPrcFileData
+
             logger.info("Инициализация Panda3D...")
-            
+
+            # Настраиваем headless режим для сервера/CI
+            loadPrcFileData('', 'window-type offscreen')
+            loadPrcFileData('', 'gl-renderer pbuffer')
+            loadPrcFileData('', 'show-frame-rate-meter false')
+            loadPrcFileData('', 'audio-library-name nullaudio')
+
             # Создаем базовое окно
             self.showbase = ShowBase()
             
-            # Настраиваем свойства окна
-            props = WindowProperties()
-            props.setTitle("AI-EVOLVE Enhanced Edition")
-            props.setSize(1280, 720)
-            props.setFullscreen(False)
-            props.setCursorHidden(False)
-            
-            # Применяем свойства
-            self.showbase.win.requestProperties(props)
+            # Настраиваем свойства окна (только если это реальное окно, а не offscreen буфер)
+            if hasattr(self.showbase.win, 'requestProperties'):
+                props = WindowProperties()
+                props.setTitle("AI-EVOLVE Enhanced Edition")
+                props.setSize(1280, 720)
+                props.setFullscreen(False)
+                props.setCursorHidden(False)
+                
+                # Применяем свойства
+                self.showbase.win.requestProperties(props)
             
             # Получаем основные компоненты
             self.render = self.showbase.render
