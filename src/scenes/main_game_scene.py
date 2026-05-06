@@ -44,6 +44,15 @@ class EnhancedGameScene:
         self.known_exit_positions = []
         self.map_hint_items = []
         self.npc_hints = []
+        self.echo_trail_nodes = []
+        self.echo_trail_points = []
+        self._action_key_state = {}
+        self.current_level = 1
+        self.exit_reach_distance = 2.0
+        self.echo_refresh_interval = 1.0
+        self.last_echo_refresh_time = 0.0
+        self._runtime_task_names = set()
+        self._opened_chest_ids = set()
         
     def enter(self):
         """Вход в игровую сцену"""
@@ -373,14 +382,14 @@ class EnhancedGameScene:
             except Exception:
                 switched = False
 
-            if not switched and hasattr(self.game, 'cam'):
+            if not switched and getattr(self.game, 'cam', None) is not None:
                 # Резервный вариант — настраиваем камеру напрямую
                 self.game.cam.setPos(15, -15, 12)
                 self.game.cam.lookAt(0, 0, 0)
                 self.game.cam.setHpr(45, -30, 0)
         else:
             # Простая настройка камеры - изометрический вид
-            if hasattr(self.game, 'cam'):
+            if getattr(self.game, 'cam', None) is not None:
                 # Позиционируем камеру для изометрического вида
                 self.game.cam.setPos(15, -15, 12)
                 self.game.cam.lookAt(0, 0, 0)
@@ -390,10 +399,34 @@ class EnhancedGameScene:
                 # Запускаем задачу следования камеры за игроком
                 self._start_camera_follow()
     
+    def _register_task_name(self, task_name: str):
+        """Регистрирует имя runtime-задачи для последующей безопасной очистки."""
+        if task_name:
+            self._runtime_task_names.add(task_name)
+
+    def _complete_runtime_task(self, task_name: str):
+        """Отмечает runtime-задачу завершенной и исключает из реестра."""
+        if task_name:
+            self._runtime_task_names.discard(task_name)
+
+    def _remove_runtime_tasks(self):
+        """Удаляет runtime-задачи сцены из taskMgr, если он доступен."""
+        task_mgr = getattr(getattr(self.game, "showbase", None), "taskMgr", None)
+        if not task_mgr:
+            self._runtime_task_names.clear()
+            return
+
+        for task_name in list(self._runtime_task_names):
+            try:
+                task_mgr.remove(task_name)
+            except Exception:
+                pass
+        self._runtime_task_names.clear()
+
     def _start_camera_follow(self):
         """Запуск следования камеры за игроком"""
         def follow_player(task):
-            if self.player and hasattr(self.game, 'cam'):
+            if self.player and getattr(self.game, 'cam', None) is not None:
                 # Получаем позицию игрока
                 player_x = self.player.x
                 player_y = self.player.y
@@ -414,7 +447,9 @@ class EnhancedGameScene:
                 
             return task.cont
             
-        self.game.showbase.taskMgr.add(follow_player, "camera_follow")
+        task_name = "camera_follow"
+        self._register_task_name(task_name)
+        self.game.showbase.taskMgr.add(follow_player, task_name)
                 
     def update(self, dt):
         """Обновление игровой сцены"""
@@ -435,13 +470,15 @@ class EnhancedGameScene:
             self.player.stamina = min(self.player.max_stamina, self.player.stamina + self.player.stamina_regen * dt)
             
             # Обновляем ИИ персонажа
+            ai_known_exits = list(self.known_exit_positions) + list(self.echo_trail_points)
             self.player.update_ai(
                 self.enemies,
-                [],
+                self._get_interactive_items(),
                 dt,
                 exit_position=self.exit_beacon_position,
                 vision_range=self.player_vision_range,
-                known_exit_positions=[(x, y) for (x, y, _) in [self.exit_beacon_position] if self.known_exit_positions]  # если уже есть подсказки
+                known_exit_positions=ai_known_exits,
+                hint_positions=self._get_hint_positions()
             )
             
             # Автоматическое использование скилов
@@ -455,6 +492,8 @@ class EnhancedGameScene:
                 # Удаляем мертвых врагов
                 enemy.destroy()
                 self.enemies.remove(enemy)
+                if enemy in self.player_created_objects:
+                    self.player_created_objects.remove(enemy)
                 
         # Спавним новых врагов
         self._spawn_enemies(dt)
@@ -462,7 +501,12 @@ class EnhancedGameScene:
         # Обрабатываем подсказки по картам и NPC (координаты выхода)
         if self.player:
             self._update_exit_hints(dt)
+            self._check_exit_beacon_reached()
         
+        # Поддерживаем актуальность эхо-тропы, пока точные координаты выхода не раскрыты.
+        if self.player:
+            self._refresh_echo_trail_guidance()
+
         # Обновляем HUD
         if self.hud and self.player:
             self.hud.update_hud(self.player)
@@ -471,6 +515,39 @@ class EnhancedGameScene:
         if self.player and not self.player.is_alive():
             self._handle_player_death()
             
+    def _get_interactive_items(self):
+        """Список интерактивных объектов для AI (например, сундуков)."""
+        chests = []
+        for obj in self.player_created_objects:
+            if hasattr(obj, 'getName') and obj.getName() == 'chest':
+                chests.append(obj)
+        return chests
+
+
+    def _get_hint_positions(self):
+        """Возвращает координаты еще не использованных подсказок (карты/NPC)."""
+        points = []
+
+        for hint in self.map_hint_items:
+            if hint.get("used"):
+                continue
+            node = hint.get("node")
+            if not node or not hasattr(node, "getPos"):
+                continue
+            hx, hy, _hz = node.getPos()
+            points.append((hx, hy))
+
+        for npc in self.npc_hints:
+            if npc.get("used"):
+                continue
+            node = npc.get("node")
+            if not node or not hasattr(node, "getPos"):
+                continue
+            nx, ny, _nz = node.getPos()
+            points.append((nx, ny))
+
+        return points
+
     def _spawn_enemies(self, dt):
         """Спавн новых врагов"""
         current_time = time.time()
@@ -525,9 +602,7 @@ class EnhancedGameScene:
             dist = math.sqrt((px - hx) ** 2 + (py - hy) ** 2)
             if dist <= 2.0:
                 # Игрок «подобрал» карту — узнаёт точные координаты маяка
-                if self.exit_beacon_position:
-                    ex, ey, ez = self.exit_beacon_position
-                    self.known_exit_positions = [(ex, ey)]
+                self._register_exit_knowledge(precise=True)
                 node.removeNode()
                 hint["used"] = True
 
@@ -540,20 +615,208 @@ class EnhancedGameScene:
             dist = math.sqrt((px - nx) ** 2 + (py - ny) ** 2)
             if dist <= 3.0 and npc["knows_exit"]:
                 # Этот NPC «подсказал» координаты выхода
-                if self.exit_beacon_position:
-                    ex, ey, ez = self.exit_beacon_position
-                    self.known_exit_positions = [(ex, ey)]
+                self._register_exit_knowledge(precise=True)
                 npc["used"] = True
+            elif dist <= 3.0:
+                # Даже если NPC не знает точные координаты, он может дать «эхо-направление».
+                self._register_exit_knowledge(precise=False)
+                npc["used"] = True
+
+
+
+    def _refresh_echo_trail_guidance(self):
+        """Периодически обновляет эхо-тропу от текущей позиции героя к выходу.
+
+        Это нужно, чтобы направляющие точки не "устаревали", если игрок
+        существенно сместился после получения неполной подсказки от NPC."""
+        if self.known_exit_positions:
+            return
+        if not self.echo_trail_points:
+            return
+        if not self.exit_beacon_position:
+            return
+        if not self.player or not hasattr(self.player, "x") or not hasattr(self.player, "y"):
+            return
+
+        now = time.time()
+        if now - self.last_echo_refresh_time < self.echo_refresh_interval:
+            return
+
+        ex, ey, _ez = self.exit_beacon_position
+        self._rebuild_echo_trail(ex, ey)
+        self.last_echo_refresh_time = now
+
+    def _register_exit_knowledge(self, precise: bool):
+        """Регистрирует знания о выходе: точные координаты или цепочку эхо-точек."""
+        if not self.exit_beacon_position:
+            return
+
+        ex, ey, _ez = self.exit_beacon_position
+        if precise:
+            self.known_exit_positions = [(ex, ey)]
+            self._rebuild_echo_trail(ex, ey)
+            self.last_echo_refresh_time = time.time()
+            return
+
+        # Неполная подсказка: строим эхо-тропу без раскрытия точной конечной точки в known_exit_positions.
+        if not self.echo_trail_points:
+            self._rebuild_echo_trail(ex, ey)
+            self.last_echo_refresh_time = time.time()
+
+    def _rebuild_echo_trail(self, target_x: float, target_y: float):
+        """Пересоздаёт эхо-следы от текущей позиции игрока к выходу."""
+        for node in self.echo_trail_nodes:
+            if hasattr(node, "removeNode"):
+                node.removeNode()
+        self.echo_trail_nodes = []
+        self.echo_trail_points = []
+
+        if not self.player or not hasattr(self.player, "x") or not hasattr(self.player, "y"):
+            return
+
+        px, py = self.player.x, self.player.y
+        steps = 4
+        for idx in range(1, steps + 1):
+            t = idx / (steps + 1)
+            tx = px + (target_x - px) * t
+            ty = py + (target_y - py) * t
+            self.echo_trail_points.append((tx, ty))
+
+            if not getattr(self.game, "render", None):
+                continue
+            marker = self.game.render.attachNewNode(f"echo_trail_{idx}")
+            cm = CardMaker(f"echo_trail_card_{idx}")
+            cm.setFrame(-0.2, 0.2, -0.2, 0.2)
+            card = marker.attachNewNode(cm.generate())
+            card.setColor(0.7, 0.9, 1.0, 0.8)
+            card.setTransparency(TransparencyAttrib.MAlpha)
+            marker.setPos(tx, ty, 0.35)
+            self.echo_trail_nodes.append(marker)
+
+    def _check_exit_beacon_reached(self):
+        """Проверяет, достиг ли игрок маяка выхода, и запускает переход на новый уровень."""
+        if not self.player or not self.exit_beacon_position:
+            return
+        if not hasattr(self.player, "x") or not hasattr(self.player, "y"):
+            return
+
+        ex, ey, _ez = self.exit_beacon_position
+        distance = math.sqrt((self.player.x - ex) ** 2 + (self.player.y - ey) ** 2)
+        if distance <= self.exit_reach_distance:
+            self._advance_to_next_level()
+
+    def _advance_to_next_level(self):
+        """Переводит сцену на следующий уровень без пересоздания всего состояния игры."""
+        self.current_level += 1
+
+        # Повышаем сложность плавно, но ограничиваем верхней границей.
+        self.max_enemies = min(40, self.max_enemies + 2)
+        self.enemy_spawn_interval = max(1.2, self.enemy_spawn_interval * 0.95)
+
+        # Очищаем временные объекты текущего уровня и перегенерируем маяк/подсказки.
+        self._remove_runtime_tasks()
+        self._clear_exit_hints()
+        self._destroy_non_player_created_enemies()
+        self._opened_chest_ids.clear()
+        self._create_exit_beacon()
+        self._spawn_exit_hint_maps()
+        self._spawn_exit_hint_npcs()
+        self.known_exit_positions = []
+
+        # Возвращаем героя в стартовую зону нового уровня и сбрасываем исследовательскую цель.
+        if self.player and hasattr(self.player, "set_position"):
+            self.player.set_position(0.0, 0.0, getattr(self.player, "z", 0.5))
+        elif self.player and hasattr(self.player, "x") and hasattr(self.player, "y"):
+            self.player.x = 0.0
+            self.player.y = 0.0
+        if self.player and hasattr(self.player, "exploration_target"):
+            self.player.exploration_target = None
+
+        # Новый уровень стартует с волной врагов (если рендер инициализирован).
+        if getattr(self.game, "render", None):
+            self._spawn_initial_enemies()
+
+        # После очистки runtime-задач возвращаем слежение камеры.
+        if getattr(getattr(self.game, "showbase", None), "taskMgr", None) and getattr(self.game, "cam", None) is not None:
+            self._start_camera_follow()
+
+        # Пытаемся сохранить прогресс уровня на объекте игры, если есть подходящее поле.
+        if hasattr(self.game, "current_level"):
+            self.game.current_level = self.current_level
+
+    def _clear_exit_hints(self):
+        """Удаляет текущие объекты подсказок и очищает их внутренние списки."""
+        for hint in self.map_hint_items:
+            node = hint.get("node")
+            if node and hasattr(node, "removeNode"):
+                node.removeNode()
+        self.map_hint_items.clear()
+
+        for npc in self.npc_hints:
+            node = npc.get("node")
+            if node and hasattr(node, "removeNode"):
+                node.removeNode()
+        self.npc_hints.clear()
+
+        for node in self.echo_trail_nodes:
+            if node and hasattr(node, "removeNode"):
+                node.removeNode()
+        self.echo_trail_nodes.clear()
+        self.echo_trail_points.clear()
+
+    def _destroy_non_player_created_enemies(self):
+        """Удаляет активных врагов уровня, оставляя только созданные игроком сущности."""
+        player_created_enemy_ids = {
+            id(obj) for obj in self.player_created_objects if hasattr(obj, "destroy")
+        }
+
+        remaining_enemies = []
+        for enemy in self.enemies:
+            if id(enemy) in player_created_enemy_ids:
+                remaining_enemies.append(enemy)
+                continue
+            enemy.destroy()
+
+        self.enemies = remaining_enemies
             
     def handle_input(self, keys):
-        """Обработка ввода.
+        """Обработка ввода с гибридной схемой управления.
 
-        В текущей версии сцены герой управляется **полностью ИИ**:
-        движения и атаки считаются в `update()` через `update_ai` и `use_skill_automatically`.
-        Поэтому здесь мы намеренно не используем WASD/Space для прямого управления,
-        а оставляем метод пустым (можно расширить под чисто отладочные хоткеи)."""
-        return
-            
+        Перемещение и автоскилы персонажа выполняет ИИ,
+        а игрок управляет вспомогательными действиями клавиатурой/мышью.
+        """
+        if not self.player:
+            return
+
+        # Для логики сундуков и взаимодействий
+        if not hasattr(self.player, 'keys') or not isinstance(self.player.keys, dict):
+            self.player.keys = {}
+        self.player.keys['e'] = bool(keys.get('e', False))
+
+        # Выбор режима создания объектов
+        if keys.get('1', False):
+            self.creation_mode = 'enemy'
+        elif keys.get('2', False):
+            self.creation_mode = 'trap'
+        elif keys.get('3', False):
+            self.creation_mode = 'chest'
+
+        # Одноразовые действия (по фронту нажатия)
+        action_map = {
+            '1': self._create_object_at_player,
+            '2': self._create_object_at_player,
+            '3': self._create_object_at_player,
+            'space': self._attack_nearest_enemy,
+            'mouse1': self._attack_nearest_enemy,
+        }
+
+        for action_key, action in action_map.items():
+            pressed = bool(keys.get(action_key, False))
+            was_pressed = bool(self._action_key_state.get(action_key, False))
+            if pressed and not was_pressed:
+                action()
+            self._action_key_state[action_key] = pressed
+
     def _attack_nearest_enemy(self):
         """Атака ближайшего врага"""
         if not self.player:
@@ -603,9 +866,18 @@ class EnhancedGameScene:
                 obj.removeNode()
         self.world_objects.clear()
         
-        # Удаляем маяк смерти
+        # Удаляем runtime-задачи и маяк смерти
+        self._remove_runtime_tasks()
         self._remove_death_beacon()
-        
+
+        # Удаляем маяк выхода и подсказки
+        if self.exit_beacon:
+            self.exit_beacon.removeNode()
+            self.exit_beacon = None
+        self.exit_beacon_position = None
+        self._clear_exit_hints()
+        self._opened_chest_ids.clear()
+
         print("Enhanced game scene exited!")
     
     def _create_object_at_player(self):
@@ -620,6 +892,9 @@ class EnhancedGameScene:
         y = self.player.y + offset_y
         z = 0.5
         
+        if not self.creation_mode:
+            self.creation_mode = random.choice(["enemy", "trap", "chest"])
+
         if self.creation_mode == "enemy":
             self._create_enemy_at(x, y, z)
         elif self.creation_mode == "trap":
@@ -680,6 +955,8 @@ class EnhancedGameScene:
     
     def _add_trap_logic(self, trap, x, y, z):
         """Добавление логики ловушки"""
+        task_name = f"trap_{id(trap)}"
+
         def check_trap_trigger(task):
             if self.player:
                 distance = math.sqrt((self.player.x - x)**2 + (self.player.y - y)**2)
@@ -693,28 +970,38 @@ class EnhancedGameScene:
                         self.world_objects.remove(trap)
                     if trap in self.player_created_objects:
                         self.player_created_objects.remove(trap)
+                    self._complete_runtime_task(task_name)
                     return task.done
             return task.cont
-            
-        self.game.showbase.taskMgr.add(check_trap_trigger, f"trap_{id(trap)}")
+
+        self._register_task_name(task_name)
+        self.game.showbase.taskMgr.add(check_trap_trigger, task_name)
     
     def _add_chest_logic(self, chest, x, y, z):
         """Добавление логики сундука"""
+        task_name = f"chest_{id(chest)}"
+
         def check_chest_interaction(task):
             if self.player:
                 distance = math.sqrt((self.player.x - x)**2 + (self.player.y - y)**2)
                 if distance <= 2.0:  # Радиус взаимодействия
-                    # Игрок может открыть сундук
-                    if hasattr(self.player, 'keys') and 'e' in self.player.keys and self.player.keys['e']:
-                        # Открываем сундук
-                        self._open_chest(chest, x, y, z)
-                        return task.done
+                    # Сундук открывается автоматически при подходе персонажа,
+                    # чтобы ИИ мог полноценно проходить лут-цикл без ручного нажатия.
+                    self._open_chest(chest, x, y, z)
+                    self._complete_runtime_task(task_name)
+                    return task.done
             return task.cont
-            
-        self.game.showbase.taskMgr.add(check_chest_interaction, f"chest_{id(chest)}")
+
+        self._register_task_name(task_name)
+        self.game.showbase.taskMgr.add(check_chest_interaction, task_name)
     
     def _open_chest(self, chest, x, y, z):
         """Открытие сундука"""
+        chest_id = id(chest)
+        if chest_id in self._opened_chest_ids:
+            return
+        self._opened_chest_ids.add(chest_id)
+
         # Даем игроку награду
         if self.player:
             self.player.experience += 50
@@ -731,9 +1018,13 @@ class EnhancedGameScene:
                 self.world_objects.remove(chest)
             if chest in self.player_created_objects:
                 self.player_created_objects.remove(chest)
+            self._opened_chest_ids.discard(chest_id)
+            self._complete_runtime_task(task_name)
             return task.done
             
-        self.game.showbase.taskMgr.doMethodLater(2.0, remove_chest, f"remove_chest_{id(chest)}")
+        task_name = f"remove_chest_{id(chest)}"
+        self._register_task_name(task_name)
+        self.game.showbase.taskMgr.doMethodLater(2.0, remove_chest, task_name)
     
     def _handle_player_death(self):
         """Обработка смерти персонажа"""
@@ -780,9 +1071,11 @@ class EnhancedGameScene:
         """Анимация маяка смерти"""
         import time
         start_time = time.time()
-        
+        task_name = "death_beacon_animation"
+
         def animate_beacon(task):
             if not self.death_beacon:
+                self._complete_runtime_task(task_name)
                 return task.done
                 
             current_time = time.time()
@@ -795,7 +1088,8 @@ class EnhancedGameScene:
             
             return task.cont
             
-        self.game.showbase.taskMgr.add(animate_beacon, "death_beacon_animation")
+        self._register_task_name(task_name)
+        self.game.showbase.taskMgr.add(animate_beacon, task_name)
     
     def _remove_death_beacon(self):
         """Удаление маяка смерти"""

@@ -13,3 +13,12 @@ logs/
 .env.local
 .env.*
 ```
+# Автоматически созданные файлы
+.backups/
+.integrity/
+*.backup_*
+*.integrity
+*.bak
+
+# Локальный маркер успешной установки зависимостей
+.requirements_installed.sha256

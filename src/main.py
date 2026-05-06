@@ -33,6 +33,7 @@ class EnhancedGame:
         self.keys = {}
         self.is_paused = False
         self.pause_ui_elements = []
+        self.headless_mode = False
         
         # Panda3D компоненты
         self.showbase = None
@@ -46,7 +47,12 @@ class EnhancedGame:
         self._register_states()
         
     def _initialize_panda3d(self):
-        """Инициализация Panda3D"""
+        """Инициализация Panda3D с fallback в headless-режим."""
+        from direct.showbase.ShowBase import ShowBase
+        from panda3d.core import WindowProperties, loadPrcFileData
+
+        logger.info("Инициализация Panda3D...")
+
         try:
             from direct.showbase.ShowBase import ShowBase
             from panda3d.core import WindowProperties, loadPrcFileData
@@ -79,14 +85,40 @@ class EnhancedGame:
             self.aspect2d = self.showbase.aspect2d
             
             # Настройка камеры
+            self.showbase = ShowBase()
+        except Exception as e:
+            logger.warning(f"Оконный режим Panda3D недоступен, переключение в headless: {e}")
+            # Fallback-конфиг для контейнеров/CI без GPU и аудио-устройств.
+            loadPrcFileData("", "window-type none")
+            loadPrcFileData("", "audio-library-name null")
+            self.showbase = ShowBase()
+            self.headless_mode = True
+
+        # Настраиваем свойства окна только если окно доступно
+        if getattr(self.showbase, 'win', None):
+            props = WindowProperties()
+            props.setTitle("AI-EVOLVE Enhanced Edition")
+            props.setSize(1280, 720)
+            props.setFullscreen(False)
+            props.setCursorHidden(False)
+            self.showbase.win.requestProperties(props)
+
+        # Получаем основные компоненты
+        self.render = getattr(self.showbase, 'render', None)
+        self.cam = getattr(self.showbase, 'cam', None)
+        self.aspect2d = getattr(self.showbase, 'aspect2d', None)
+
+        # Настройка камеры (если доступна)
+        if self.cam is not None:
             self.cam.setPos(10, -10, 8)
             self.cam.lookAt(0, 0, 0)
-            
+        else:
+            logger.warning("Камера Panda3D недоступна (headless/ограниченная среда)")
+
+        if self.headless_mode:
+            logger.warning("Panda3D запущен в headless-режиме (без графического окна)")
+        else:
             logger.info("Panda3D инициализирован успешно")
-            
-        except Exception as e:
-            logger.error(f"Ошибка инициализации Panda3D: {e}")
-            raise
             
     def _initialize_systems(self):
         """Инициализация игровых систем"""
@@ -148,6 +180,18 @@ class EnhancedGame:
             self.showbase.accept("d-up", self._key_up, ["d"])
             self.showbase.accept("space", self._key_down, ["space"])
             self.showbase.accept("space-up", self._key_up, ["space"])
+
+            # Игровые действия, которые остаются за игроком (ИИ управляет движением/скиллами)
+            self.showbase.accept("e", self._key_down, ["e"])
+            self.showbase.accept("e-up", self._key_up, ["e"])
+            self.showbase.accept("1", self._key_down, ["1"])
+            self.showbase.accept("1-up", self._key_up, ["1"])
+            self.showbase.accept("2", self._key_down, ["2"])
+            self.showbase.accept("2-up", self._key_up, ["2"])
+            self.showbase.accept("3", self._key_down, ["3"])
+            self.showbase.accept("3-up", self._key_up, ["3"])
+            self.showbase.accept("mouse1", self._key_down, ["mouse1"])
+            self.showbase.accept("mouse1-up", self._key_up, ["mouse1"])
             
             logger.info("Система ввода настроена")
             
