@@ -1,4 +1,18 @@
+```
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
+# Logs
+logs/
+
+# Environment
+.env
+.env.local
+.env.*
+```
 # Автоматически созданные файлы
 .backups/
 .integrity/
