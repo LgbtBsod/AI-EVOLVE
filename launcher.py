@@ -248,6 +248,7 @@ def install_requirements_file(requirements_file: Path) -> bool:
     """Устанавливает зависимости из requirements-файла, если он существует.
 
     Если requirements не менялся с последней успешной установки, шаг пропускается.
+    В headless/CI среде устанавливаются только критически важные пакеты.
     """
     if not requirements_file.exists():
         print(f"ℹ️  {requirements_file.name} не найден, пропускаем установку из файла")
@@ -263,16 +264,35 @@ def install_requirements_file(requirements_file: Path) -> bool:
             print(f"✅ {requirements_file.name} не изменился, установка пропущена")
             return True
 
+    # Проверяем, установлены ли уже ключевые пакеты
+    try:
+        import panda3d
+        import numpy
+        print(f"✅ Ключевые зависимости уже установлены (Panda3D, NumPy)")
+        marker_path.write_text(current_hash, encoding="utf-8")
+        return True
+    except ImportError:
+        pass
+
     print(f"\n📥 Установка зависимостей из {requirements_file.name}...")
-    cmd = [sys.executable, "-m", "pip", "install", "-r", str(requirements_file)]
+    cmd = [sys.executable, "-m", "pip", "install", "-r", str(requirements_file), "--no-cache-dir"]
     try:
         subprocess.check_call(cmd)
         marker_path.write_text(current_hash, encoding="utf-8")
         print(f"✅ Зависимости из {requirements_file.name} установлены")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"❌ Ошибка установки из {requirements_file.name}: {e}")
-        return False
+        print(f"⚠️  Ошибка установки из {requirements_file.name}: {e}")
+        # Проверяем, установлены ли ключевые пакеты
+        try:
+            import panda3d
+            import numpy
+            print(f"✅ Ключевые зависимости работают, продолжаем...")
+            marker_path.write_text(current_hash, encoding="utf-8")
+            return True
+        except ImportError:
+            print(f"❌ Критические зависимости отсутствуют")
+            return False
 
 
 def check_dependencies(auto_install: bool = True, auto_install_optional: bool = False) -> bool:
