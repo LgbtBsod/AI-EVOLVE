@@ -1,768 +1,313 @@
 #!/usr/bin/env python3
-"""Система адаптивных диалогов
-Поддерживает динамические ответы, память о разговорах, эмоциональные реакции"""
+# -*- coding: utf-8 -*-
+"""
+Система диалогов и взаимодействия с NPC
+Поддержка проверки характеристик (харизма) для получения информации
+"""
 
+import random
+from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Any, Tuple, Set
-import logging
-import random
-import time
-import json
-import math
-from pathlib import Path
 
-from src.core.architecture import BaseComponent, ComponentType, Priority, LifecycleState
-from src.core.constants import DialogueType, EmotionType
-from src.core.state_manager import StateManager, StateType
 
-# = ДОПОЛНИТЕЛЬНЫЕ ТИПЫ ДИАЛОГОВ
+class DialogueOutcome(Enum):
+    """Возможные исходы диалога"""
+    SUCCESS = "success"  # Получена полезная информация
+    PARTIAL = "partial"  # Получена частичная информация
+    FAILURE = "failure"  # Отказ в информации
+    HOSTILE = "hostile"  # Враждебная реакция (энкантер!)
+    NEUTRAL = "neutral"  # Нейтральная беседа без информации
 
-class RelationshipType(Enum):
-    """Типы отношений"""
-    STRANGER = "stranger"
-    ACQUAINTANCE = "acquaintance"
-    FRIEND = "friend"
-    CLOSE_FRIEND = "close_friend"
-    LOVER = "lover"
-    ENEMY = "enemy"
-    RIVAL = "rival"
-    MENTOR = "mentor"
-    STUDENT = "student"
-
-# = СТРУКТУРЫ ДАННЫХ
-@dataclass
-class DialogueMemory:
-    """Память о диалоге"""
-    dialogue_id: str
-    timestamp: float
-    speaker_id: str
-    listener_id: str
-    dialogue_type: DialogueType
-    topic: str
-    emotion: EmotionType
-    relationship_change: float
-    key_phrases: List[str] = field(default_factory=list)
-    important_info: Dict[str, Any] = field(default_factory=dict)
-    success: bool = True
 
 @dataclass
-class DialogueOption:
-    """Вариант ответа в диалоге"""
-    option_id: str
+class DialogueLine:
+    """Строка диалога"""
+    speaker: str
     text: str
-    conditions: Dict[str, Any] = field(default_factory=dict)
-    consequences: Dict[str, Any] = field(default_factory=dict)
-    emotion_requirement: Optional[EmotionType] = None
-    relationship_requirement: Optional[RelationshipType] = None
-    skill_requirement: Optional[str] = None
-    skill_level: int = 0
-    success_rate: float = 1.0
-    learning_data: Dict[str, Any] = field(default_factory=dict)
+    emotion: str = "neutral"
+    requires_check: bool = False
+    check_attribute: str = ""
+    check_difficulty: float = 0.0
+
 
 @dataclass
-class DialogueNode:
-    """Узел диалога"""
-    node_id: str
-    speaker_id: str
-    text: str
-    emotion: EmotionType
-    options: List[DialogueOption] = field(default_factory=list)
-    conditions: Dict[str, Any] = field(default_factory=dict)
-    consequences: Dict[str, Any] = field(default_factory=dict)
-    memory_impact: float = 0.0
-    relationship_impact: float = 0.0
+class DialogueResult:
+    """Результат диалога"""
+    outcome: DialogueOutcome
+    information: Optional[Dict[str, Any]] = None
+    message: str = ""
+    reputation_change: float = 0.0
+    triggered_encounter: bool = False
+    encounter_type: str = ""
+
 
 @dataclass
-class CharacterPersonality:
-    """Личность персонажа для диалогов"""
-    character_id: str
-    base_emotion: EmotionType
-    personality_traits: Dict[str, float] = field(default_factory=dict)
-    relationship_preferences: Dict[str, RelationshipType] = field(default_factory=dict)
-    dialogue_style: Dict[str, float] = field(default_factory=dict)
-    memory_decay_rate: float = 0.95
-    emotional_stability: float = 0.5
-    trust_level: float = 0.5
+class NPCProfile:
+    """Профиль NPC"""
+    npc_id: str
+    name: str
+    personality: str = "friendly"  # friendly, neutral, suspicious, hostile
+    knowledge_level: float = 0.5  # 0.0 - 1.0
+    knows_exit_location: bool = False
+    exit_hint_accuracy: float = 0.8  # Точность подсказки
+    charisma_threshold: float = 0.3  # Порог харизмы для сотрудничества
+    gossip_topics: List[str] = field(default_factory=list)
+    rewards_for_help: List[str] = field(default_factory=list)
 
-@dataclass
-class DialogueContext:
-    """Контекст диалога"""
-    current_topic: str
-    emotional_state: EmotionType
-    relationship_level: RelationshipType
-    trust_level: float
-    previous_topics: List[str] = field(default_factory=list)
-    recent_memories: List[DialogueMemory] = field(default_factory=list)
-    conversation_history: List[str] = field(default_factory=list)
-    key_phrases: Set[str] = field(default_factory=set)
 
-# = НАСТРОЙКИ ДИАЛОГОВ
-@dataclass
-class DialogueSettings:
-    """Настройки системы диалогов"""
-    max_memory_entries: int = 100
-    memory_decay_rate: float = 0.95
-    emotional_influence: float = 0.3
-    relationship_influence: float = 0.4
-    context_influence: float = 0.3
-    learning_rate: float = 0.1
-    max_conversation_length: int = 50
-    enable_emotional_adaptation: bool = True
-    enable_relationship_evolution: bool = True
-    enable_context_memory: bool = True
-
-# = СИСТЕМА ДИАЛОГОВ
-class DialogueSystem(BaseComponent):
-    """Система адаптивных диалогов"""
+class DialogueSystem:
+    """
+    Система диалогов с проверкой характеристик и случайными событиями
+    """
     
     def __init__(self):
-        super().__init__(
-            component_id="DialogueSystem",
-            component_type=ComponentType.SYSTEM,
-            priority=Priority.HIGH
-        )
+        # Профили NPC
+        self.npc_profiles: Dict[str, NPCProfile] = {}
         
-        # Настройки системы
-        self.settings = DialogueSettings()
+        # История диалогов
+        self.dialogue_history: List[DialogueResult] = []
         
-        # Персонажи и их личности
-        self.character_personalities: Dict[str, CharacterPersonality] = {}
+        # Шаблоны ответов
+        self.response_templates = self._load_response_templates()
         
-        # Память диалогов
-        self.dialogue_memories: Dict[str, List[DialogueMemory]] = {}
-        
-        # Шаблоны диалогов
-        self.dialogue_templates: Dict[str, List[DialogueNode]] = {}
-        
-        # Активные диалоги
-        self.active_dialogues: Dict[str, DialogueContext] = {}
-        
-        # Статистика
-        self.stats = {
-            "total_dialogues": 0,
-            "successful_dialogues": 0,
-            "emotional_changes": 0,
-            "relationship_changes": 0,
-            "memory_entries": 0,
-            "context_adaptations": 0
-        }
-        
-        # Callbacks
-        self.dialogue_callbacks: List[callable] = []
-        self.emotion_callbacks: List[callable] = []
-        self.relationship_callbacks: List[callable] = []
-        
-        self.logger = logging.getLogger(__name__)
-    
-    def _on_initialize(self) -> bool:
-        """Инициализация системы диалогов"""
-        try:
-            # Загрузка шаблонов диалогов
-            self._load_dialogue_templates()
-            
-            # Инициализация базовых личностей
-            self._initialize_base_personalities()
-            
-            self.logger.info("DialogueSystem инициализирован")
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Ошибка инициализации DialogueSystem: {e}")
-            return False
-    
-    def _load_dialogue_templates(self):
-        """Загрузка шаблонов диалогов"""
-        try:
-            # Базовые шаблоны для разных типов диалогов
-            self.dialogue_templates["greeting"] = [
-                DialogueNode(
-                    node_id="greeting_friendly",
-                    speaker_id="npc",
-                    text="Привет! Рад тебя видеть.",
-                    emotion=EmotionType.JOY,
-                    options=[
-                        DialogueOption(
-                            option_id="greet_back",
-                            text="Привет! Как дела?",
-                            consequences={"relationship": 0.1, "emotion": EmotionType.JOY}
-                        ),
-                        DialogueOption(
-                            option_id="greet_casual",
-                            text="Привет.",
-                            consequences={"relationship": 0.0, "emotion": EmotionType.NEUTRAL}
-                        )
-                    ]
-                )
+    def _load_response_templates(self) -> Dict[str, List[str]]:
+        """Загрузить шаблоны ответов для разных ситуаций"""
+        return {
+            'exit_hint_success': [
+                "Я видел светящийся столб на {direction}! Иди туда.",
+                "Маяк находится примерно {distance} метров на {direction}.",
+                "Если пойдешь на {direction}, найдешь выход.",
+                "Держи путь на {direction}, там твой выход."
+            ],
+            'exit_hint_partial': [
+                "Кажется, что-то светится на {direction}, но я не уверен.",
+                "Слышал, выход где-то на {direction}, но точно не скажу.",
+                "Может быть на {direction}, но я там не был."
+            ],
+            'exit_hint_failure': [
+                "Понятия не имею, ищи сам.",
+                "Не буду тебе помогать.",
+                "У меня свои проблемы."
+            ],
+            'hostile_response': [
+                "Ты мне не нравишься. Уходи!",
+                "Пошел вон отсюда!",
+                "Сейчас как дам!"
+            ],
+            'gossip': [
+                "Ходят слухи о сокровищах где-то здесь...",
+                "Говорят, в этом месте водятся опасные твари.",
+                "Я слышал странные звуки прошлой ночью."
             ]
-            
-            self.dialogue_templates["quest"] = [
-                DialogueNode(
-                    node_id="quest_offer",
-                    speaker_id="npc",
-                    text="У меня есть для тебя задание. Заинтересован?",
-                    emotion=EmotionType.NEUTRAL,
-                    options=[
-                        DialogueOption(
-                            option_id="accept_quest",
-                            text="Конечно, расскажи подробнее.",
-                            consequences={"relationship": 0.2, "quest_accept": True}
-                        ),
-                        DialogueOption(
-                            option_id="decline_quest",
-                            text="Извини, сейчас не время.",
-                            consequences={"relationship": -0.1, "quest_accept": False}
-                        )
-                    ]
-                )
-            ]
-            
-            self.logger.info("Шаблоны диалогов загружены")
-            
-        except Exception as e:
-            self.logger.error(f"Ошибка загрузки шаблонов диалогов: {e}")
+        }
     
-    def _initialize_base_personalities(self):
-        """Инициализация базовых личностей"""
-        # Дружелюбный торговец
-        self.character_personalities["merchant_friendly"] = CharacterPersonality(
-            character_id="merchant_friendly",
-            base_emotion=EmotionType.JOY,
-            personality_traits={
-                "friendliness": 0.8,
-                "honesty": 0.7,
-                "curiosity": 0.6,
-                "patience": 0.9
-            },
-            dialogue_style={
-                "formal": 0.3,
-                "casual": 0.7,
-                "enthusiastic": 0.8
-            }
+    def register_npc(self, npc_id: str, name: str, 
+                     personality: str = "friendly",
+                     knows_exit: bool = False,
+                     knowledge_level: float = 0.5,
+                     charisma_threshold: float = 0.3):
+        """Зарегистрировать NPC"""
+        profile = NPCProfile(
+            npc_id=npc_id,
+            name=name,
+            personality=personality,
+            knows_exit_location=knows_exit,
+            knowledge_level=knowledge_level,
+            exit_hint_accuracy=max(0.5, knowledge_level),
+            charisma_threshold=charisma_threshold,
+            gossip_topics=random.sample(['treasure', 'monsters', 'strange_sounds'], k=2)
         )
+        self.npc_profiles[npc_id] = profile
+    
+    def start_dialogue(self, npc_id: str, player_charisma: float = 0.5,
+                       player_reputation: float = 0.0,
+                       request_type: str = "exit_direction") -> DialogueResult:
+        """
+        Начать диалог с NPC
         
-        # Подозрительный стражник
-        self.character_personalities["guard_suspicious"] = CharacterPersonality(
-            character_id="guard_suspicious",
-            base_emotion=EmotionType.FEAR,
-            personality_traits={
-                "friendliness": 0.2,
-                "honesty": 0.8,
-                "suspicion": 0.9,
-                "loyalty": 0.9
-            },
-            dialogue_style={
-                "formal": 0.8,
-                "casual": 0.2,
-                "threatening": 0.6
-            }
-        )
+        Args:
+            npc_id: ID NPC
+            player_charisma: Харизма игрока (0.0 - 1.0)
+            player_reputation: Репутация игрока (-1.0 - 1.0)
+            request_type: Тип запроса (exit_direction, gossip, help)
         
-        # Мудрый наставник
-        self.character_personalities["mentor_wise"] = CharacterPersonality(
-            character_id="mentor_wise",
-            base_emotion=EmotionType.NEUTRAL,
-            personality_traits={
-                "wisdom": 0.9,
-                "patience": 0.8,
-                "kindness": 0.7,
-                "knowledge": 0.9
-            },
-            dialogue_style={
-                "formal": 0.6,
-                "casual": 0.4,
-                "philosophical": 0.8
-            }
-        )
-    
-    def register_character(self, character_id: str, personality: CharacterPersonality) -> bool:
-        """Регистрация персонажа в системе диалогов"""
-        try:
-            self.character_personalities[character_id] = personality
-            self.dialogue_memories[character_id] = []
-            
-            self.logger.info(f"Персонаж {character_id} зарегистрирован в системе диалогов")
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Ошибка регистрации персонажа {character_id}: {e}")
-            return False
-    
-    def start_dialogue(self, speaker_id: str, listener_id: str, 
-                      dialogue_type: DialogueType = DialogueType.CONVERSATION) -> str:
-        """Начало диалога"""
-        try:
-            dialogue_id = f"dialogue_{speaker_id}_{listener_id}_{int(time.time())}"
-            
-            # Создание контекста диалога
-            context = DialogueContext(
-                current_topic="greeting",
-                emotional_state=self._get_character_emotion(speaker_id),
-                relationship_level=self._get_relationship_level(speaker_id, listener_id),
-                trust_level=self._get_trust_level(speaker_id, listener_id)
+        Returns:
+            DialogueResult с результатом диалога
+        """
+        if npc_id not in self.npc_profiles:
+            return DialogueResult(
+                outcome=DialogueOutcome.FAILURE,
+                message="NPC не найден"
             )
-            
-            self.active_dialogues[dialogue_id] = context
-            
-            # Добавление в статистику
-            self.stats["total_dialogues"] += 1
-            
-            self.logger.info(f"Начат диалог {dialogue_id} между {speaker_id} и {listener_id}")
-            return dialogue_id
-            
-        except Exception as e:
-            self.logger.error(f"Ошибка начала диалога: {e}")
-            return ""
-    
-    def get_dialogue_options(self, dialogue_id: str, speaker_id: str, 
-                           current_text: str = "") -> List[DialogueOption]:
-        """Получение вариантов ответа для диалога"""
-        try:
-            if dialogue_id not in self.active_dialogues:
-                return []
-            
-            context = self.active_dialogues[dialogue_id]
-            
-            # Получение подходящих шаблонов
-            templates = self._get_relevant_templates(context.current_topic, speaker_id)
-            
-            # Фильтрация по условиям
-            available_options = []
-            for template in templates:
-                for option in template.options:
-                    if self._check_option_conditions(option, context, speaker_id):
-                        # Адаптация текста под контекст
-                        adapted_option = self._adapt_option_to_context(option, context)
-                        available_options.append(adapted_option)
-            
-            # Сортировка по приоритету
-            available_options.sort(key=lambda x: x.success_rate, reverse=True)
-            
-            return available_options
-            
-        except Exception as e:
-            self.logger.error(f"Ошибка получения вариантов диалога: {e}")
-            return []
-    
-    def _get_relevant_templates(self, topic: str, speaker_id: str) -> List[DialogueNode]:
-        """Получение релевантных шаблонов диалогов"""
-        templates = []
         
-        # Поиск по теме
-        if topic in self.dialogue_templates:
-            templates.extend(self.dialogue_templates[topic])
+        npc = self.npc_profiles[npc_id]
         
-        # Поиск по типу персонажа
-        personality = self.character_personalities.get(speaker_id)
-        if personality:
-            # Фильтрация по стилю диалога
-            for template_list in self.dialogue_templates.values():
-                for template in template_list:
-                    if self._matches_personality_style(template, personality):
-                        templates.append(template)
+        # Рассчитываем модификаторы
+        charisma_modifier = player_charisma / max(0.1, npc.charisma_threshold)
+        reputation_modifier = 1.0 + player_reputation * 0.5
+        personality_modifier = self._get_personality_modifier(npc.personality)
         
-        return templates
-    
-    def _matches_personality_style(self, template: DialogueNode, 
-                                 personality: CharacterPersonality) -> bool:
-        """Проверка соответствия шаблона стилю личности"""
-        # Проверка эмоционального соответствия
-        if template.emotion != personality.base_emotion:
-            return False
+        # Итоговый шанс успеха
+        success_chance = min(1.0, max(0.0, 
+            0.5 * charisma_modifier * reputation_modifier * personality_modifier
+        ))
         
-        # Проверка стиля диалога
-        for option in template.options:
-            if hasattr(option, 'dialogue_style'):
-                for style, value in option.dialogue_style.items():
-                    if style in personality.dialogue_style:
-                        if abs(value - personality.dialogue_style[style]) > 0.3:
-                            return False
+        # Проверка на враждебность
+        if npc.personality == "hostile" or success_chance < 0.2:
+            if random.random() < 0.3:  # 30% шанс враждебной реакции
+                return self._handle_hostile_encounter(npc)
         
-        return True
-    
-    def _check_option_conditions(self, option: DialogueOption, context: DialogueContext, 
-                               speaker_id: str) -> bool:
-        """Проверка условий для варианта ответа"""
-        try:
-            # Проверка эмоциональных требований
-            if option.emotion_requirement and context.emotional_state != option.emotion_requirement:
-                return False
-            
-            # Проверка требований к отношениям
-            if option.relationship_requirement and context.relationship_level != option.relationship_requirement:
-                return False
-            
-            # Проверка навыков
-            if option.skill_requirement:
-                # Здесь должна быть проверка навыков игрока
-                pass
-            
-            # Проверка других условий
-            for condition, value in option.conditions.items():
-                if condition == "trust_level" and context.trust_level < value:
-                    return False
-                elif condition == "previous_topics" and value not in context.previous_topics:
-                    return False
-            
-            return True
-            
-        except Exception as e:
-            self.logger.error(f"Ошибка проверки условий: {e}")
-            return False
-    
-    def _adapt_option_to_context(self, option: DialogueOption, 
-                                context: DialogueContext) -> DialogueOption:
-        """Адаптация варианта ответа под контекст"""
-        try:
-            # Создание копии опции
-            adapted_option = DialogueOption(
-                option_id=option.option_id,
-                text=option.text,
-                conditions=option.conditions.copy(),
-                consequences=option.consequences.copy(),
-                emotion_requirement=option.emotion_requirement,
-                relationship_requirement=option.relationship_requirement,
-                skill_requirement=option.skill_requirement,
-                skill_level=option.skill_level,
-                success_rate=option.success_rate,
-                learning_data=option.learning_data.copy()
-            )
-            
-            # Адаптация текста на основе эмоций
-            if context.emotional_state != EmotionType.NEUTRAL:
-                adapted_option.text = self._adapt_text_to_emotion(
-                    adapted_option.text, context.emotional_state
+        # Определение исхода
+        roll = random.random()
+        
+        if request_type == "exit_direction":
+            if not npc.knows_exit_location:
+                return DialogueResult(
+                    outcome=DialogueOutcome.FAILURE,
+                    message=f"{npc.name}: \"Я не знаю где выход.\""
                 )
             
-            # Адаптация на основе отношений
-            if context.relationship_level != RelationshipType.STRANGER:
-                adapted_option.text = self._adapt_text_to_relationship(
-                    adapted_option.text, context.relationship_level
+            if roll < success_chance * 0.7:  # Полный успех
+                return self._provide_exit_hint(npc, accuracy=1.0)
+            elif roll < success_chance:  # Частичный успех
+                return self._provide_exit_hint(npc, accuracy=npc.exit_hint_accuracy * 0.5)
+            else:  # Провал
+                return DialogueResult(
+                    outcome=DialogueOutcome.FAILURE,
+                    message=random.choice(self.response_templates['exit_hint_failure'])
                 )
-            
-            # Адаптация успешности на основе контекста
-            adapted_option.success_rate = self._calculate_context_success_rate(
-                option, context
-            )
-            
-            return adapted_option
-            
-        except Exception as e:
-            self.logger.error(f"Ошибка адаптации опции: {e}")
-            return option
+        
+        elif request_type == "gossip":
+            return self._provide_gossip(npc)
+        
+        return DialogueResult(
+            outcome=DialogueOutcome.NEUTRAL,
+            message="Диалог завершен"
+        )
     
-    def _adapt_text_to_emotion(self, text: str, emotion: EmotionType) -> str:
-        """Адаптация текста под эмоцию"""
-        emotion_modifiers = {
-            EmotionType.JOY: ["с радостью", "весело", "с улыбкой"],
-            EmotionType.SADNESS: ["грустно", "с вздохом", "печально"],
-            EmotionType.ANGER: ["сердито", "с раздражением", "гневно"],
-            EmotionType.FEAR: ["боязливо", "с тревогой", "нервно"],
-            EmotionType.SURPRISE: ["с удивлением", "пораженно", "изумленно"],
-            EmotionType.ANTICIPATION: ["с энтузиазмом", "воодушевленно", "с азартом"]
+    def _get_personality_modifier(self, personality: str) -> float:
+        """Получить модификатор для типа личности"""
+        modifiers = {
+            'friendly': 1.3,
+            'neutral': 1.0,
+            'suspicious': 0.7,
+            'hostile': 0.4
+        }
+        return modifiers.get(personality, 1.0)
+    
+    def _provide_exit_hint(self, npc: NPCProfile, accuracy: float = 1.0) -> DialogueResult:
+        """Предоставить подсказку о выходе"""
+        # Генерируем направление с учетом точности
+        true_direction = self._get_true_exit_direction()
+        
+        if accuracy >= 1.0:
+            direction = true_direction
+            templates = self.response_templates['exit_hint_success']
+            outcome = DialogueOutcome.SUCCESS
+        else:
+            # С некоторой вероятностью даем неточное направление
+            if random.random() > accuracy:
+                direction = self._get_random_wrong_direction(true_direction)
+                templates = self.response_templates['exit_hint_partial']
+                outcome = DialogueOutcome.PARTIAL
+            else:
+                direction = true_direction
+                templates = self.response_templates['exit_hint_success']
+                outcome = DialogueOutcome.SUCCESS
+        
+        # Расстояние (примерное)
+        distance = random.randint(50, 200)
+        
+        message = random.choice(templates).format(
+            direction=direction,
+            distance=distance
+        )
+        
+        return DialogueResult(
+            outcome=outcome,
+            information={
+                'direction': direction,
+                'distance_estimate': distance,
+                'accuracy': accuracy,
+                'true_direction': true_direction if accuracy >= 1.0 else None
+            },
+            message=f"{npc.name}: \"{message}\"",
+            reputation_change=0.1
+        )
+    
+    def _provide_gossip(self, npc: NPCProfile) -> DialogueResult:
+        """Предоставить сплетни"""
+        if not npc.gossip_topics:
+            return DialogueResult(
+                outcome=DialogueOutcome.NEUTRAL,
+                message=f"{npc.name}: \"Нечего рассказать.\""
+            )
+        
+        topic = random.choice(npc.gossip_topics)
+        gossip_texts = {
+            'treasure': "Ходят слухи о сокровищах где-то в этом месте...",
+            'monsters': "Говорят, здесь водятся опасные твари!",
+            'strange_sounds': "Я слышал странные звуки прошлой ночью..."
         }
         
-        if emotion in emotion_modifiers:
-            modifier = random.choice(emotion_modifiers[emotion])
-            return f"{text} ({modifier})"
-        
-        return text
+        return DialogueResult(
+            outcome=DialogueOutcome.SUCCESS,
+            information={'topic': topic, 'text': gossip_texts.get(topic, "")},
+            message=f"{npc.name}: \"{gossip_texts.get(topic, '')}\"",
+            reputation_change=0.05
+        )
     
-    def _adapt_text_to_relationship(self, text: str, relationship: RelationshipType) -> str:
-        """Адаптация текста под отношения"""
-        relationship_modifiers = {
-            RelationshipType.FRIEND: ["друг", "приятель"],
-            RelationshipType.CLOSE_FRIEND: ["старый друг", "близкий друг"],
-            RelationshipType.LOVER: ["любимый", "дорогой"],
-            RelationshipType.ENEMY: ["враг", "противник"],
-            RelationshipType.MENTOR: ["учитель", "наставник"]
+    def _handle_hostile_encounter(self, npc: NPCProfile) -> DialogueResult:
+        """Обработка враждебного энкантера"""
+        encounter_types = ['ambush', 'theft', 'chase']
+        encounter_type = random.choice(encounter_types)
+        
+        messages = {
+            'ambush': f"{npc.name} свистнул, и из засады выскочили бандиты!",
+            'theft': f"{npc.name} украл у вас предмет и убежал!",
+            'chase': f"{npc.name} начал преследование!"
         }
         
-        if relationship in relationship_modifiers:
-            modifier = random.choice(relationship_modifiers[relationship])
-            return text.replace("ты", f"ты, {modifier}")
-        
-        return text
+        return DialogueResult(
+            outcome=DialogueOutcome.HOSTILE,
+            message=messages.get(encounter_type, "Враждебная реакция!"),
+            triggered_encounter=True,
+            encounter_type=encounter_type,
+            reputation_change=-0.2
+        )
     
-    def _calculate_context_success_rate(self, option: DialogueOption, 
-                                      context: DialogueContext) -> float:
-        """Расчет успешности на основе контекста"""
-        base_rate = option.success_rate
-        
-        # Влияние эмоций
-        if context.emotional_state == EmotionType.JOY:
-            base_rate *= 1.1
-        elif context.emotional_state == EmotionType.ANGER:
-            base_rate *= 0.8
-        
-        # Влияние отношений
-        relationship_bonus = {
-            RelationshipType.FRIEND: 1.2,
-            RelationshipType.CLOSE_FRIEND: 1.4,
-            RelationshipType.LOVER: 1.5,
-            RelationshipType.ENEMY: 0.6,
-            RelationshipType.STRANGER: 1.0
-        }
-        
-        if context.relationship_level in relationship_bonus:
-            base_rate *= relationship_bonus[context.relationship_level]
-        
-        # Влияние доверия
-        base_rate *= (0.5 + context.trust_level * 0.5)
-        
-        return min(1.0, max(0.0, base_rate))
+    def _get_true_exit_direction(self) -> str:
+        """Получить истинное направление к выходу (заглушка)"""
+        # В реальной игре должно вычисляться относительно позиции игрока
+        directions = ['север', 'юг', 'восток', 'запад', 'северо-восток', 'юго-запад']
+        return random.choice(directions)
     
-    def make_dialogue_choice(self, dialogue_id: str, option_id: str, 
-                           speaker_id: str, listener_id: str) -> Dict[str, Any]:
-        """Выбор варианта в диалоге"""
-        try:
-            if dialogue_id not in self.active_dialogues:
-                return {"success": False, "error": "Диалог не найден"}
-            
-            context = self.active_dialogues[dialogue_id]
-            
-            # Поиск выбранной опции
-            selected_option = None
-            for template in self._get_relevant_templates(context.current_topic, speaker_id):
-                for option in template.options:
-                    if option.option_id == option_id:
-                        selected_option = option
-                        break
-                if selected_option:
-                    break
-            
-            if not selected_option:
-                return {"success": False, "error": "Вариант не найден"}
-            
-            # Применение последствий
-            consequences = self._apply_dialogue_consequences(
-                selected_option, context, speaker_id, listener_id
-            )
-            
-            # Обновление контекста
-            self._update_dialogue_context(dialogue_id, selected_option, consequences)
-            
-            # Сохранение в память
-            self._save_dialogue_memory(dialogue_id, speaker_id, listener_id, selected_option, consequences)
-            
-            # Уведомление о выборе
-            self._notify_dialogue_choice(dialogue_id, selected_option, consequences)
-            
-            self.stats["successful_dialogues"] += 1
-            
-            return {
-                "success": True,
-                "option": selected_option,
-                "consequences": consequences,
-                "context": context
-            }
-            
-        except Exception as e:
-            self.logger.error(f"Ошибка выбора в диалоге: {e}")
-            return {"success": False, "error": str(e)}
+    def _get_random_wrong_direction(self, true_direction: str) -> str:
+        """Получить неправильное направление"""
+        all_directions = ['север', 'юг', 'восток', 'запад', 'северо-восток', 'юго-запад']
+        wrong_directions = [d for d in all_directions if d != true_direction]
+        return random.choice(wrong_directions)
     
-    def _apply_dialogue_consequences(self, option: DialogueOption, context: DialogueContext,
-                                   speaker_id: str, listener_id: str) -> Dict[str, Any]:
-        """Применение последствий выбора"""
-        consequences = {}
-        
-        try:
-            # Изменение отношений
-            if "relationship" in option.consequences:
-                relationship_change = option.consequences["relationship"]
-                self._update_relationship(speaker_id, listener_id, relationship_change)
-                consequences["relationship_change"] = relationship_change
-                self.stats["relationship_changes"] += 1
-            
-            # Изменение эмоций
-            if "emotion" in option.consequences:
-                new_emotion = option.consequences["emotion"]
-                self._update_emotion(speaker_id, new_emotion)
-                consequences["emotion_change"] = new_emotion
-                self.stats["emotional_changes"] += 1
-            
-            # Изменение доверия
-            if "trust" in option.consequences:
-                trust_change = option.consequences["trust"]
-                self._update_trust(speaker_id, listener_id, trust_change)
-                consequences["trust_change"] = trust_change
-            
-            # Другие последствия
-            for key, value in option.consequences.items():
-                if key not in ["relationship", "emotion", "trust"]:
-                    consequences[key] = value
-            
-            return consequences
-            
-        except Exception as e:
-            self.logger.error(f"Ошибка применения последствий: {e}")
-            return consequences
+    def get_npc_info(self, npc_id: str) -> Optional[NPCProfile]:
+        """Получить информацию о NPC"""
+        return self.npc_profiles.get(npc_id)
     
-    def _update_dialogue_context(self, dialogue_id: str, option: DialogueOption, 
-                                consequences: Dict[str, Any]):
-        """Обновление контекста диалога"""
-        try:
-            context = self.active_dialogues[dialogue_id]
-            
-            # Обновление эмоций
-            if "emotion_change" in consequences:
-                context.emotional_state = consequences["emotion_change"]
-            
-            # Обновление отношений
-            if "relationship_change" in consequences:
-                # Логика обновления уровня отношений
-                pass
-            
-            # Обновление доверия
-            if "trust_change" in consequences:
-                context.trust_level = max(0.0, min(1.0, context.trust_level + consequences["trust_change"]))
-            
-            # Добавление в историю
-            context.conversation_history.append(option.text)
-            
-            # Ограничение длины истории
-            if len(context.conversation_history) > self.settings.max_conversation_length:
-                context.conversation_history.pop(0)
-            
-            # Обновление ключевых фраз
-            key_phrases = self._extract_key_phrases(option.text)
-            context.key_phrases.update(key_phrases)
-            
-        except Exception as e:
-            self.logger.error(f"Ошибка обновления контекста: {e}")
-    
-    def _save_dialogue_memory(self, dialogue_id: str, speaker_id: str, listener_id: str,
-                            option: DialogueOption, consequences: Dict[str, Any]):
-        """Сохранение диалога в память"""
-        try:
-            memory = DialogueMemory(
-                dialogue_id=dialogue_id,
-                timestamp=time.time(),
-                speaker_id=speaker_id,
-                listener_id=listener_id,
-                dialogue_type=DialogueType.CONVERSATION,  # Можно определить по контексту
-                topic="dialogue",
-                emotion=EmotionType.NEUTRAL,  # Можно определить по последствиям
-                relationship_change=consequences.get("relationship_change", 0.0),
-                key_phrases=self._extract_key_phrases(option.text),
-                important_info=consequences,
-                success=consequences.get("success", True)
-            )
-            
-            # Добавление в память обоих участников
-            for participant_id in [speaker_id, listener_id]:
-                if participant_id in self.dialogue_memories:
-                    self.dialogue_memories[participant_id].append(memory)
-                    
-                    # Ограничение размера памяти
-                    if len(self.dialogue_memories[participant_id]) > self.settings.max_memory_entries:
-                        self.dialogue_memories[participant_id].pop(0)
-            
-            self.stats["memory_entries"] += 1
-            
-        except Exception as e:
-            self.logger.error(f"Ошибка сохранения памяти диалога: {e}")
-    
-    def _extract_key_phrases(self, text: str) -> List[str]:
-        """Извлечение ключевых фраз из текста"""
-        # Простая реализация - можно улучшить с помощью NLP
-        words = text.lower().split()
-        key_words = [word for word in words if len(word) > 3]
-        return key_words[:5]  # Ограничиваем количество
-    
-    def _get_character_emotion(self, character_id: str) -> EmotionType:
-        """Получение текущей эмоции персонажа"""
-        personality = self.character_personalities.get(character_id)
-        if personality:
-            return personality.base_emotion
-        return EmotionType.NEUTRAL
-    
-    def _get_relationship_level(self, speaker_id: str, listener_id: str) -> RelationshipType:
-        """Получение уровня отношений между персонажами"""
-        # Простая реализация - можно улучшить
-        return RelationshipType.STRANGER
-    
-    def _get_trust_level(self, speaker_id: str, listener_id: str) -> float:
-        """Получение уровня доверия между персонажами"""
-        # Простая реализация - можно улучшить
-        return 0.5
-    
-    def _update_relationship(self, speaker_id: str, listener_id: str, change: float):
-        """Обновление отношений между персонажами"""
-        # Реализация обновления отношений
-        pass
-    
-    def _update_emotion(self, character_id: str, new_emotion: EmotionType):
-        """Обновление эмоции персонажа"""
-        personality = self.character_personalities.get(character_id)
-        if personality:
-            personality.base_emotion = new_emotion
-    
-    def _update_trust(self, speaker_id: str, listener_id: str, change: float):
-        """Обновление доверия между персонажами"""
-        # Реализация обновления доверия
-        pass
-    
-    def end_dialogue(self, dialogue_id: str) -> bool:
-        """Завершение диалога"""
-        try:
-            if dialogue_id in self.active_dialogues:
-                del self.active_dialogues[dialogue_id]
-                self.logger.info(f"Диалог {dialogue_id} завершен")
-                return True
-            return False
-            
-        except Exception as e:
-            self.logger.error(f"Ошибка завершения диалога: {e}")
-            return False
-    
-    def get_character_memories(self, character_id: str) -> List[DialogueMemory]:
-        """Получение воспоминаний персонажа"""
-        return self.dialogue_memories.get(character_id, [])
+    def add_dialogue_to_history(self, result: DialogueResult):
+        """Добавить результат диалога в историю"""
+        self.dialogue_history.append(result)
+        if len(self.dialogue_history) > 100:
+            self.dialogue_history.pop(0)
     
     def get_dialogue_statistics(self) -> Dict[str, Any]:
-        """Получение статистики диалогов"""
-        return {
-            "total_dialogues": self.stats["total_dialogues"],
-            "successful_dialogues": self.stats["successful_dialogues"],
-            "emotional_changes": self.stats["emotional_changes"],
-            "relationship_changes": self.stats["relationship_changes"],
-            "memory_entries": self.stats["memory_entries"],
-            "context_adaptations": self.stats["context_adaptations"],
-            "active_dialogues": len(self.active_dialogues),
-            "registered_characters": len(self.character_personalities),
-            "total_memories": sum(len(memories) for memories in self.dialogue_memories.values())
+        """Получить статистику диалогов"""
+        stats = {
+            'total_dialogues': len(self.dialogue_history),
+            'outcomes': {}
         }
-    
-    def add_dialogue_callback(self, callback: callable):
-        """Добавление callback для диалогов"""
-        self.dialogue_callbacks.append(callback)
-    
-    def add_emotion_callback(self, callback: callable):
-        """Добавление callback для эмоций"""
-        self.emotion_callbacks.append(callback)
-    
-    def add_relationship_callback(self, callback: callable):
-        """Добавление callback для отношений"""
-        self.relationship_callbacks.append(callback)
-    
-    def _notify_dialogue_choice(self, dialogue_id: str, option: DialogueOption, 
-                               consequences: Dict[str, Any]):
-        """Уведомление о выборе в диалоге"""
-        for callback in self.dialogue_callbacks:
-            try:
-                callback(dialogue_id, option, consequences)
-            except Exception as e:
-                self.logger.error(f"Ошибка в callback диалога: {e}")
-    
-    def _on_destroy(self):
-        """Уничтожение системы диалогов"""
-        self.character_personalities.clear()
-        self.dialogue_memories.clear()
-        self.dialogue_templates.clear()
-        self.active_dialogues.clear()
-        self.dialogue_callbacks.clear()
-        self.emotion_callbacks.clear()
-        self.relationship_callbacks.clear()
         
-        self.logger.info("DialogueSystem уничтожен")
+        for result in self.dialogue_history:
+            outcome_name = result.outcome.value
+            stats['outcomes'][outcome_name] = stats['outcomes'].get(outcome_name, 0) + 1
+        
+        return stats

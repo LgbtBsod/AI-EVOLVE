@@ -848,7 +848,7 @@ class TestSystem(BaseComponent):
         """Тест мастер-интегратора"""
         try:
             # Проверка импорта мастер-интегратора
-            from src.master_integrator import MasterIntegrator
+            from ...core.master_integrator import MasterIntegrator
             
             # Создание мастер-интегратора
             integrator = MasterIntegrator()

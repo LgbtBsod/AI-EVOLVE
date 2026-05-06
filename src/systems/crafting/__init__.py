@@ -1,18 +1,9 @@
-
-import logging
-
-import os
-
-import sys
-
-from pathlib import Path
-
-from typing import *
-
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
-    Crafting System Package
-    Система крафтинга
+Пакет системы крафта
 """
 
+from .crafting_system import CraftingSystem, CraftResult, Recipe, CraftResultData
 
-__all__= ['CraftingSystem']
+__all__ = ['CraftingSystem', 'CraftResult', 'Recipe', 'CraftResultData']
