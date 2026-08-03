@@ -1,8 +1,0 @@
-# Core runtime dependencies
-panda3d>=1.10.13
-numpy>=1.21.0
-
-# Optional runtime helpers
-pillow>=8.3.0
-opencv-python>=4.5.0
-matplotlib>=3.4.0

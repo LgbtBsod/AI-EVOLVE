@@ -5,6 +5,9 @@ import time
 import math
 from typing import Dict, List, Optional, Tuple
 from direct.task import Task
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Пробуем импортировать компоненты Panda3D с обработкой ошибок
 try:
@@ -56,11 +59,11 @@ class PerformanceOptimizer:
             # Запускаем мониторинг производительности
             self._start_performance_monitoring()
             
-            print("✅ Система оптимизации инициализирована")
+            logger.info("✅ Система оптимизации инициализирована")
             return True
             
         except Exception as e:
-            print(f"❌ Ошибка инициализации системы оптимизации: {e}")
+            logger.error(" Ошибка инициализации системы оптимизации: {e}")
             return False
             
     def _setup_lod_system(self):
@@ -69,22 +72,22 @@ class PerformanceOptimizer:
             try:
                 from panda3d.core import LODManager
                 self.lod_manager = LODManager()
-                print("✅ LOD система настроена")
+                logger.info("✅ LOD система настроена")
             except Exception as e:
-                print(f"⚠️  LOD система недоступна: {e}")
+                logger.warning(" LOD система недоступна: {e}")
         else:
-            print("⚠️  LOD система недоступна в данной версии Panda3D")
+            logger.info("⚠️  LOD система недоступна в данной версии Panda3D")
             
     def _setup_occlusion_culling(self):
         """Настройка окклюзионного отсечения"""
         if OCCLUSION_AVAILABLE:
             try:
                 self.occlusion_culler = OcclusionCuller()
-                print("✅ Окклюзионное отсечение настроено")
+                logger.info("✅ Окклюзионное отсечение настроено")
             except Exception as e:
-                print(f"⚠️  Окклюзионное отсечение недоступно: {e}")
+                logger.warning(" Окклюзионное отсечение недоступно: {e}")
         else:
-            print("⚠️  Окклюзионное отсечение недоступно в данной версии Panda3D")
+            logger.info("⚠️  Окклюзионное отсечение недоступно в данной версии Panda3D")
             
     def _setup_render_bins(self):
         """Настройка бинов рендеринга для оптимизации"""
@@ -102,11 +105,11 @@ class PerformanceOptimizer:
                 # Бин для UI элементов
                 cull_bin_manager.addBin("ui", CullBinManager.BTStateSorted, 20)
                 
-                print("✅ Бины рендеринга настроены")
+                logger.info("✅ Бины рендеринга настроены")
             except Exception as e:
-                print(f"⚠️  Ошибка настройки бинов рендеринга: {e}")
+                logger.warning(" Ошибка настройки бинов рендеринга: {e}")
         else:
-            print("⚠️  Бины рендеринга недоступны в данной версии Panda3D")
+            logger.info("⚠️  Бины рендеринга недоступны в данной версии Panda3D")
             
     def _start_performance_monitoring(self):
         """Запуск мониторинга производительности"""
@@ -209,7 +212,7 @@ class PerformanceOptimizer:
                 render_system.cam.setFar(100)
                 
         except Exception as e:
-            print(f"⚠️  Ошибка настройки низкого качества: {e}")
+            logger.warning(" Ошибка настройки низкого качества: {e}")
             
     def _set_medium_quality(self, render_system):
         """Настройка среднего качества"""
@@ -226,7 +229,7 @@ class PerformanceOptimizer:
                 render_system.cam.setFar(500)
                 
         except Exception as e:
-            print(f"⚠️  Ошибка настройки среднего качества: {e}")
+            logger.warning(" Ошибка настройки среднего качества: {e}")
             
     def _set_high_quality(self, render_system):
         """Настройка высокого качества"""
@@ -244,7 +247,7 @@ class PerformanceOptimizer:
                 render_system.cam.setFar(1000)
                 
         except Exception as e:
-            print(f"⚠️  Ошибка настройки высокого качества: {e}")
+            logger.warning(" Ошибка настройки высокого качества: {e}")
             
     def _set_ultra_quality(self, render_system):
         """Настройка ультра качества"""
@@ -264,7 +267,7 @@ class PerformanceOptimizer:
                 render_system.cam.setFar(2000)
                 
         except Exception as e:
-            print(f"⚠️  Ошибка настройки ультра качества: {e}")
+            logger.warning(" Ошибка настройки ультра качества: {e}")
             
     def create_lod_object(self, name, high_detail, medium_detail, low_detail, 
                          high_distance=50, medium_distance=100):
@@ -290,7 +293,7 @@ class PerformanceOptimizer:
             return lod_np
             
         except Exception as e:
-            print(f"❌ Ошибка создания LOD объекта: {e}")
+            logger.error(" Ошибка создания LOD объекта: {e}")
             return high_detail
             
     def optimize_scene(self, scene_objects):
@@ -303,10 +306,10 @@ class PerformanceOptimizer:
             for group_type, objects in object_groups.items():
                 self._optimize_object_group(group_type, objects)
                 
-            print(f"✅ Сцена оптимизирована: {len(scene_objects)} объектов")
+            logger.info(" Сцена оптимизирована: {len(scene_objects)} объектов")
             
         except Exception as e:
-            print(f"❌ Ошибка оптимизации сцены: {e}")
+            logger.error(" Ошибка оптимизации сцены: {e}")
             
     def _group_objects(self, objects):
         """Группировка объектов по типу"""

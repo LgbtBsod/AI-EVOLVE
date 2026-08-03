@@ -225,8 +225,8 @@ class CombatSystem(BaseComponent):
             self.system_state = LifecycleState.ERROR
             return False
     
-    def update(self, delta_time: float):
-        """Обновление системы боя"""
+    def _on_update(self, delta_time: float):
+        """Переопределяемый метод обновления (вызывается из BaseComponent.update)"""
         if self.system_state != LifecycleState.RUNNING:
             return
         
@@ -251,6 +251,11 @@ class CombatSystem(BaseComponent):
                 
         except Exception as e:
             logger.error(f"Ошибка обновления CombatSystem: {e}")
+            raise  # Пробрасываем исключение вверх для обработки в BaseComponent
+    
+    def update(self, delta_time: float):
+        """Публичный метод обновления (вызывается извне, делегирует _on_update)"""
+        super().update(delta_time)
     
     def stop(self) -> bool:
         """Остановка системы боя"""

@@ -6,6 +6,9 @@ import time
 import random
 from typing import Dict, List, Optional, Any
 from panda3d.core import CardMaker, Vec3, Vec4, TransparencyAttrib
+import logging
+
+logger = logging.getLogger(__name__)
 
 class EnhancedEnemy:
     """Улучшенный класс врага с правильным рендерингом"""
@@ -248,7 +251,7 @@ class EnhancedEnemy:
         # Проверяем уклонение
         if damage_type == "physical" and self.dodge_chance > 0:
             if random.random() * 100 < self.dodge_chance:
-                print("Enemy dodged!")
+                logger.info("Enemy dodged!")
                 return False
         
         self.health = max(0, self.health - actual_damage)
@@ -275,12 +278,12 @@ class EnhancedEnemy:
                 is_critical = random.random() * 100 < self.critical_chance
                 if is_critical:
                     base_damage *= (self.critical_damage / 100)
-                    print("Enemy critical hit!")
+                    logger.info("Enemy critical hit!")
                 
                 # Атакуем цель
                 target.take_damage(base_damage, "physical")
                 self.last_attack_time = current_time
-                print(f"Enemy attacked player for {base_damage:.1f} damage!")
+                logger.info(f"Enemy attacked player for {base_damage:.1f} damage!")
                 return True
         return False
     
