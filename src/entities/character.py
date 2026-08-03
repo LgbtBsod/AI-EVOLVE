@@ -9,6 +9,9 @@ from panda3d.core import CardMaker, Vec3, Vec4, TransparencyAttrib, LODNode
 
 from .base_entity import BaseEntity
 from ..core.constants import EntityType
+import logging
+
+logger = logging.getLogger(__name__)
 
 class Character(BaseEntity):
     """Класс персонажа с улучшенной графикой - наследуется от BaseEntity"""
@@ -541,12 +544,12 @@ class Character(BaseEntity):
                 is_critical = random.random() * 100 < self.critical_chance
                 if is_critical:
                     base_damage *= (self.critical_damage / 100)
-                    print("Critical hit!")
+                    logger.info("Critical hit!")
                 
                 # Атакуем цель
                 target.take_damage(base_damage, "physical")
                 self.attack_cooldown = self.attack_cooldown_time
-                print(f"Player attacked enemy for {base_damage:.1f} damage!")
+                logger.info(f"Player attacked enemy for {base_damage:.1f} damage!")
                 return True
         return False
         
@@ -893,7 +896,7 @@ class Character(BaseEntity):
             self.mana -= 10
             damage = self.magical_damage
             target.take_damage(damage, "magical")
-            print(f"Маг атаковал врага магией на {damage} урона!")
+            logger.info(f"Маг атаковал врага магией на {damage} урона!")
     
     def _stealth_attack(self, target):
         """Скрытная атака"""
@@ -901,7 +904,7 @@ class Character(BaseEntity):
             self.stamina -= 20
             damage = self.physical_damage * 1.5  # Увеличенный урон
             target.take_damage(damage, "physical")
-            print(f"Разбойник атаковал врага скрытно на {damage} урона!")
+            logger.info(f"Разбойник атаковал врага скрытно на {damage} урона!")
     
     def destroy(self):
         """Уничтожение персонажа"""
@@ -914,26 +917,26 @@ class Character(BaseEntity):
         """Добавление достижения"""
         if self.is_player and achievement not in self.achievements:
             self.achievements.append(achievement)
-            print(f"Достижение получено: {achievement}")
+            logger.info(f"Достижение получено: {achievement}")
     
     def complete_quest(self, quest_id: str):
         """Завершение квеста"""
         if self.is_player and quest_id not in self.quests_completed:
             self.quests_completed.append(quest_id)
             self.experience += 100  # Награда за квест
-            print(f"Квест завершен: {quest_id}")
+            logger.info(f"Квест завершен: {quest_id}")
     
     def visit_location(self, location: str):
         """Посещение локации"""
         if self.is_player and location not in self.locations_visited:
             self.locations_visited.append(location)
-            print(f"Локация посещена: {location}")
+            logger.info(f"Локация посещена: {location}")
     
     def meet_npc(self, npc_id: str):
         """Встреча с NPC"""
         if self.is_player and npc_id not in self.npcs_met:
             self.npcs_met.append(npc_id)
-            print(f"Встречен NPC: {npc_id}")
+            logger.info(f"Встречен NPC: {npc_id}")
     
     def update_playtime(self, dt: float):
         """Обновление времени игры"""
@@ -944,7 +947,7 @@ class Character(BaseEntity):
         """Сохранение игры"""
         if self.is_player:
             self.last_save = time.time()
-            print("Игра сохранена")
+            logger.info("Игра сохранена")
     
     def get_player_stats(self):
         """Получение статистики игрока"""

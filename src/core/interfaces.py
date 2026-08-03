@@ -1,424 +1,274 @@
-#!/usr/bin/env python3
-"""Интерфейсы для архитектуры системы"""
-
+"""
+ISP (Interface Segregation Principle) Interfaces
+Разделение больших интерфейсов на меньшие, специфичные для клиента.
+Позволяет классам реализовывать только те методы, которые им действительно нужны.
+"""
 from abc import ABC, abstractmethod
+from typing import Any, Dict, Optional, Callable, List
 from enum import Enum
-from typing import Dict, List, Optional, Any, Type, TypeVar, Generic, Callable
-from dataclasses import dataclass, field
 
-# = БАЗОВЫЕ ТИПЫ
 
-class SystemPriority(Enum):
-    """Приоритеты систем"""
-    CRITICAL = 0
-    HIGH = 1
-    NORMAL = 2
-    LOW = 3
-    BACKGROUND = 4
+# === Lifecycle Interfaces ===
 
-class SystemState(Enum):
-    """Состояния систем"""
-    UNINITIALIZED = "uninitialized"
-    INITIALIZING = "initializing"
-    READY = "ready"
-    RUNNING = "running"
-    PAUSED = "paused"
-    STOPPING = "stopping"
-    STOPPED = "stopped"
-    ERROR = "error"
-    DESTROYED = "destroyed"
+class IInitializable(ABC):
+    """Интерфейс для инициализируемых компонентов."""
+    @abstractmethod
+    def on_init(self) -> None:
+        """Инициализация компонента."""
+        pass
 
-class ComponentType(Enum):
-    """Типы компонентов"""
-    SYSTEM = "system"
-    MANAGER = "manager"
-    SERVICE = "service"
-    REPOSITORY = "repository"
-    FACTORY = "factory"
-    CONTROLLER = "controller"
-    UTILITY = "utility"
-    ADAPTER = "adapter"
 
-# = БАЗОВЫЕ ИНТЕРФЕЙСЫ
+class IStartable(ABC):
+    """Интерфейс для запускаемых компонентов."""
+    @abstractmethod
+    def on_start(self) -> None:
+        """Запуск компонента."""
+        pass
 
-class ISystem(ABC):
-    """Базовый интерфейс для всех систем"""
+
+class IPausable(ABC):
+    """Интерфейс для приостанавливаемых компонентов."""
+    @abstractmethod
+    def on_pause(self) -> None:
+        """Пауза."""
+        pass
     
+    @abstractmethod
+    def on_resume(self) -> None:
+        """Возобновление."""
+        pass
+
+
+class IStoppable(ABC):
+    """Интерфейс для останавливаемых компонентов."""
+    @abstractmethod
+    def on_stop(self) -> None:
+        """Остановка."""
+        pass
+
+
+class IDestroyable(ABC):
+    """Интерфейс для уничтожаемых компонентов."""
+    @abstractmethod
+    def on_destroy(self) -> None:
+        """Очистка ресурсов."""
+        pass
+
+
+# === Event Interfaces ===
+
+class IEventListener(ABC):
+    """Интерфейс для слушателя событий."""
+    @abstractmethod
+    def handle_event(self, event_type: str, data: Any) -> None:
+        """Обработка события."""
+        pass
+
+
+class IEventEmitter(ABC):
+    """Интерфейс для эмиттера событий."""
+    @abstractmethod
+    def emit(self, event_type: str, data: Any) -> None:
+        """Отправка события."""
+        pass
+    
+    @abstractmethod
+    def subscribe(self, event_type: str, callback: Callable) -> None:
+        """Подписка на событие."""
+        pass
+    
+    @abstractmethod
+    def unsubscribe(self, event_type: str, callback: Callable) -> None:
+        """Отписка от события."""
+        pass
+
+
+# === State Interfaces ===
+
+class IStateGetter(ABC):
+    """Интерфейс только для чтения состояний."""
+    @abstractmethod
+    def get_state(self, key: str) -> Optional[Any]:
+        """Получение состояния."""
+        pass
+    
+    @abstractmethod
+    def has_state(self, key: str) -> bool:
+        """Проверка наличия состояния."""
+        pass
+
+
+class IStateSetter(ABC):
+    """Интерфейс только для записи состояний."""
+    @abstractmethod
+    def set_state(self, key: str, value: Any, ttl: Optional[float] = None) -> None:
+        """Установка состояния."""
+        pass
+    
+    @abstractmethod
+    def delete_state(self, key: str) -> bool:
+        """Удаление состояния."""
+        pass
+
+
+class IStateObserver(ABC):
+    """Интерфейс для наблюдателя за изменениями состояний."""
+    @abstractmethod
+    def on_state_changed(self, key: str, old_value: Any, new_value: Any) -> None:
+        """Вызывается при изменении состояния."""
+        pass
+
+
+# === Component Interfaces ===
+
+class IComponentInfo(ABC):
+    """Интерфейс для получения информации о компоненте."""
     @property
     @abstractmethod
-    def system_id(self) -> str:
-        """Уникальный идентификатор системы"""
-        pass
-    
-    @property
-    @abstractmethod
-    def system_name(self) -> str:
-        """Название системы"""
-        pass
-    
-    @property
-    @abstractmethod
-    def system_priority(self) -> SystemPriority:
-        """Приоритет системы"""
-        pass
-    
-    @property
-    @abstractmethod
-    def system_state(self) -> SystemState:
-        """Текущее состояние системы"""
-        pass
-    
-    @abstractmethod
-    def initialize(self) -> bool:
-        """Инициализация системы"""
-        pass
-    
-    @abstractmethod
-    def start(self) -> bool:
-        """Запуск системы"""
-        pass
-    
-    @abstractmethod
-    def pause(self) -> bool:
-        """Приостановка системы"""
-        pass
-    
-    @abstractmethod
-    def resume(self) -> bool:
-        """Возобновление системы"""
-        pass
-    
-    @abstractmethod
-    def stop(self) -> bool:
-        """Остановка системы"""
-        pass
-    
-    @abstractmethod
-    def destroy(self) -> bool:
-        """Уничтожение системы"""
-        pass
-    
-    @abstractmethod
-    def update(self, delta_time: float) -> None:
-        """Обновление системы"""
-        pass
-    
-    @abstractmethod
-    def get_system_info(self) -> Dict[str, Any]:
-        """Получение диагностической информации о системе."""
-        pass
-
-class IManager(ABC):
-    """Базовый интерфейс для всех менеджеров"""
-    
-    @property
-    @abstractmethod
-    def manager_id(self) -> str:
-        """Уникальный идентификатор менеджера"""
-        pass
-    
-    @property
-    @abstractmethod
-    def managed_components(self) -> List[str]:
-        """Список управляемых компонентов"""
-        pass
-    
-    @abstractmethod
-    def register_component(self, component_id: str, component: Any) -> bool:
-        """Регистрация компонента"""
-        pass
-    
-    @abstractmethod
-    def unregister_component(self, component_id: str) -> bool:
-        """Отмена регистрации компонента"""
-        pass
-    
-    @abstractmethod
-    def get_component(self, component_id: str) -> Optional[Any]:
-        """Получение компонента"""
-        pass
-
-class IService(ABC):
-    """Базовый интерфейс для всех сервисов"""
-    
-    @property
-    @abstractmethod
-    def service_id(self) -> str:
-        """Уникальный идентификатор сервиса"""
+    def name(self) -> str:
+        """Имя компонента."""
         pass
     
     @property
     @abstractmethod
-    def service_type(self) -> str:
-        """Тип сервиса"""
-        pass
-    
-    @abstractmethod
-    def is_available(self) -> bool:
-        """Проверка доступности сервиса"""
-        pass
-    
-    @abstractmethod
-    def get_service_info(self) -> Dict[str, Any]:
-        """Получение информации о сервисе"""
-        pass
-
-class IRepository(ABC):
-    """Базовый интерфейс для всех репозиториев"""
-    
-    @property
-    @abstractmethod
-    def repository_id(self) -> str:
-        """Уникальный идентификатор репозитория"""
+    def component_id(self) -> str:
+        """Уникальный ID."""
         pass
     
     @property
     @abstractmethod
-    def data_type(self) -> str:
-        """Тип данных"""
-        pass
-    
-    @abstractmethod
-    def store(self, key: str, data: Any) -> bool:
-        """Сохранение данных"""
-        pass
-    
-    @abstractmethod
-    def retrieve(self, key: str) -> Optional[Any]:
-        """Получение данных"""
-        pass
-    
-    @abstractmethod
-    def delete(self, key: str) -> bool:
-        """Удаление данных"""
-        pass
-    
-    @abstractmethod
-    def exists(self, key: str) -> bool:
-        """Проверка существования данных"""
-        pass
-    
-    @abstractmethod
-    def clear(self) -> bool:
-        """Очистка репозитория"""
+    def is_enabled(self) -> bool:
+        """Флаг активности."""
         pass
 
-class IFactory(ABC):
-    """Базовый интерфейс для всех фабрик"""
-    
-    @property
+
+class IComponentMetrics(ABC):
+    """Интерфейс для получения метрик компонента."""
     @abstractmethod
-    def factory_id(self) -> str:
-        """Уникальный идентификатор фабрики"""
+    def get_metrics(self) -> Dict[str, Any]:
+        """Получение метрик производительности."""
+        pass
+    
+    @abstractmethod
+    def reset_metrics(self) -> None:
+        """Сброс метрик."""
+        pass
+
+
+# === Combat Interfaces (для рефакторинга CombatSystem) ===
+
+class IHealthComponent(ABC):
+    """Интерфейс компонента здоровья."""
+    @abstractmethod
+    def take_damage(self, amount: float) -> float:
+        """Получение урона. Возвращает фактический урон."""
+        pass
+    
+    @abstractmethod
+    def heal(self, amount: float) -> float:
+        """Лечение. Возвращает фактическое лечение."""
         pass
     
     @property
     @abstractmethod
-    def product_type(self) -> str:
-        """Тип производимого продукта"""
-        pass
-    
-    @abstractmethod
-    def create(self, **kwargs) -> Any:
-        """Создание продукта"""
-        pass
-    
-    @abstractmethod
-    def can_create(self, **kwargs) -> bool:
-        """Проверка возможности создания"""
-        pass
-
-class IController(ABC):
-    """Базовый интерфейс для всех контроллеров"""
-    
-    @property
-    @abstractmethod
-    def controller_id(self) -> str:
-        """Уникальный идентификатор контроллера"""
+    def current_health(self) -> float:
+        """Текущее здоровье."""
         pass
     
     @property
     @abstractmethod
-    def controlled_systems(self) -> List[str]:
-        """Список управляемых систем"""
-        pass
-    
-    @abstractmethod
-    def control_system(self, system_id: str, command: str, **kwargs) -> bool:
-        """Управление системой"""
-        pass
-    
-    @abstractmethod
-    def get_control_status(self, system_id: str) -> Dict[str, Any]:
-        """Получение статуса управления"""
-        pass
-
-class IUtility(ABC):
-    """Базовый интерфейс для всех утилит"""
-    
-    @property
-    @abstractmethod
-    def utility_id(self) -> str:
-        """Уникальный идентификатор утилиты"""
+    def max_health(self) -> float:
+        """Максимальное здоровье."""
         pass
     
     @property
     @abstractmethod
-    def utility_type(self) -> str:
-        """Тип утилиты"""
-        pass
-    
-    @abstractmethod
-    def execute(self, **kwargs) -> Any:
-        """Выполнение утилиты"""
-        pass
-    
-    @abstractmethod
-    def is_available(self) -> bool:
-        """Проверка доступности утилиты"""
+    def is_alive(self) -> bool:
+        """Жив ли объект."""
         pass
 
-class IAdapter(ABC):
-    """Базовый интерфейс для всех адаптеров"""
-    
-    @property
+
+class IDamageDealer(ABC):
+    """Интерфейс для наносящего урон."""
     @abstractmethod
-    def adapter_id(self) -> str:
-        """Уникальный идентификатор адаптера"""
+    def calculate_damage(self, target: IHealthComponent) -> float:
+        """Расчет урона по цели."""
         pass
     
+    @abstractmethod
+    def attack(self, target: IHealthComponent) -> float:
+        """Атака цели. Возвращает нанесенный урон."""
+        pass
+
+
+class ICombatStats(ABC):
+    """Интерфейс боевых характеристик."""
     @property
     @abstractmethod
-    def source_type(self) -> str:
-        """Тип источника"""
+    def damage(self) -> float:
+        """Базовый урон."""
         pass
     
     @property
     @abstractmethod
-    def target_type(self) -> str:
-        """Тип цели"""
+    def defense(self) -> float:
+        """Защита."""
         pass
     
+    @property
     @abstractmethod
-    def adapt(self, source: Any) -> Any:
-        """Адаптация данных"""
-        pass
-    
-    @abstractmethod
-    def can_adapt(self, source: Any) -> bool:
-        """Проверка возможности адаптации"""
+    def speed(self) -> float:
+        """Скорость/инициатива."""
         pass
 
-# = СПЕЦИАЛИЗИРОВАННЫЕ ИНТЕРФЕЙСЫ
 
-class IGameSystem(ISystem):
-    """Интерфейс для игровых систем"""
-    
-    @abstractmethod
-    def get_game_data(self) -> Dict[str, Any]:
-        """Получение игровых данных"""
-        pass
-    
-    @abstractmethod
-    def set_game_data(self, data: Dict[str, Any]) -> bool:
-        """Установка игровых данных"""
-        pass
+# === Cache Interfaces ===
 
-class IAudioSystem(ISystem):
-    """Интерфейс для аудио систем"""
-    
+class ICacheable(ABC):
+    """Интерфейс для кэшируемых данных."""
     @abstractmethod
-    def play_sound(self, sound_id: str, volume: float = 1.0) -> bool:
-        """Воспроизведение звука"""
+    def get_cache_key(self) -> str:
+        """Ключ для кэширования."""
         pass
     
     @abstractmethod
-    def stop_sound(self, sound_id: str) -> bool:
-        """Остановка звука"""
-        pass
-    
-    @abstractmethod
-    def set_volume(self, volume: float) -> bool:
-        """Установка громкости"""
+    def get_ttl(self) -> Optional[float]:
+        """Время жизни в кэше."""
         pass
 
-class IVisualSystem(ISystem):
-    """Интерфейс для визуальных систем"""
-    
+
+# === Asset/Load Interfaces ===
+
+class ILoadable(ABC):
+    """Интерфейс для загружаемых ресурсов."""
     @abstractmethod
-    def render(self, scene_data: Dict[str, Any]) -> bool:
-        """Рендеринг сцены"""
+    def save_state(self) -> Dict[str, Any]:
+        """Сохранение состояния."""
         pass
     
     @abstractmethod
-    def update_camera(self, camera_data: Dict[str, Any]) -> bool:
-        """Обновление камеры"""
-        pass
-    
-    @abstractmethod
-    def add_visual_effect(self, effect_data: Dict[str, Any]) -> bool:
-        """Добавление визуального эффекта"""
+    def load_state(self, state: Dict[str, Any]) -> None:
+        """Загрузка состояния."""
         pass
 
-class IInputSystem(ISystem):
-    """Интерфейс для систем ввода"""
-    
-    @abstractmethod
-    def get_input_state(self) -> Dict[str, Any]:
-        """Получение состояния ввода"""
-        pass
-    
-    @abstractmethod
-    def register_input_handler(self, input_type: str, handler: Callable) -> bool:
-        """Регистрация обработчика ввода"""
-        pass
-    
-    @abstractmethod
-    def unregister_input_handler(self, input_type: str) -> bool:
-        """Отмена регистрации обработчика ввода"""
-        pass
 
-class INetworkSystem(ISystem):
-    """Интерфейс для сетевых систем"""
-    
-    @abstractmethod
-    def connect(self, address: str, port: int) -> bool:
-        """Подключение к серверу"""
-        pass
-    
-    @abstractmethod
-    def disconnect(self) -> bool:
-        """Отключение от сервера"""
-        pass
-    
-    @abstractmethod
-    def send_data(self, data: Any) -> bool:
-        """Отправка данных"""
-        pass
-    
-    @abstractmethod
-    def receive_data(self) -> Optional[Any]:
-        """Получение данных"""
-        pass
+# === Composite Interfaces (удобные комбинации) ===
 
-# = ДЕКОРАТОРЫ И УТИЛИТЫ
+class IFullLifecycle(IInitializable, IStartable, IPausable, IStoppable, IDestroyable):
+    """Полный жизненный цикл компонента."""
+    pass
 
-def implements_interface(interface_class):
-    """Декоратор для проверки реализации интерфейса"""
-    def decorator(cls):
-        if not issubclass(cls, interface_class):
-            raise TypeError(f"Класс {cls.__name__} должен реализовывать интерфейс {interface_class.__name__}")
-        return cls
-    return decorator
 
-def validate_interface_implementation(obj: Any, interface_class: Type) -> bool:
-    """Проверка реализации интерфейса объектом"""
-    if not isinstance(obj, interface_class):
-        return False
-    
-    # Проверяем наличие всех абстрактных методов
-    for method_name in interface_class.__abstractmethods__:
-        if not hasattr(obj, method_name):
-            return False
-    
-    return True
+class IReadWriteState(IStateGetter, IStateSetter):
+    """Полный доступ к состоянию (чтение + запись)."""
+    pass
+
+
+class IGameComponent(IComponentInfo, IFullLifecycle, IComponentMetrics):
+    """Полноценный игровой компонент."""
+    pass
+
+
+class ICombatEntity(IHealthComponent, ICombatStats):
+    """Боевая сущность с здоровьем и статами."""
+    pass

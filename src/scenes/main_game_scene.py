@@ -4,8 +4,11 @@
 import math
 import time
 import random
+import logging
 from typing import Dict, List, Optional, Any
 from panda3d.core import CardMaker, Vec3, Vec4, TransparencyAttrib
+
+logger = logging.getLogger(__name__)
 
 class EnhancedGameScene:
     """Улучшенная игровая сцена с правильным рендерингом"""
@@ -56,7 +59,7 @@ class EnhancedGameScene:
         
     def enter(self):
         """Вход в игровую сцену"""
-        print("Entering enhanced game scene...")
+        logger.info("Entering enhanced game scene...")
         
         # Создаем игровой мир
         self._create_world()
@@ -78,7 +81,7 @@ class EnhancedGameScene:
         # Настраиваем камеру
         self._setup_camera()
         
-        print("Enhanced game scene initialized!")
+        logger.info("Enhanced game scene initialized!")
         
     def _create_world(self):
         """Создание игрового мира"""
@@ -878,7 +881,7 @@ class EnhancedGameScene:
         self._clear_exit_hints()
         self._opened_chest_ids.clear()
 
-        print("Enhanced game scene exited!")
+        logger.info("Enhanced game scene exited!")
     
     def _create_object_at_player(self):
         """Создание объекта рядом с игроком"""
@@ -902,7 +905,7 @@ class EnhancedGameScene:
         elif self.creation_mode == "chest":
             self._create_chest_at(x, y, z)
             
-        print(f"Создан {self.creation_mode} в позиции ({x:.1f}, {y:.1f})")
+        logger.debug(f"Created {self.creation_mode} at position ({x:.1f}, {y:.1f})")
     
     def _create_enemy_at(self, x, y, z):
         """Создание врага в указанной позиции"""
@@ -963,7 +966,7 @@ class EnhancedGameScene:
                 if distance <= 1.5:  # Радиус срабатывания
                     # Ловушка срабатывает
                     self.player.take_damage(20, "physical")
-                    print("Ловушка сработала!")
+                    logger.info("Trap triggered!")
                     # Удаляем ловушку после срабатывания
                     trap.removeNode()
                     if trap in self.world_objects:
@@ -1006,7 +1009,7 @@ class EnhancedGameScene:
         if self.player:
             self.player.experience += 50
             self.player.health = min(self.player.max_health, self.player.health + 25)
-            print("Сундук открыт! Получено: 50 опыта, 25 здоровья")
+            logger.info("Chest opened! Received: 50 XP, 25 HP")
         
         # Анимация открытия
         chest.setHpr(0, 0, 45)  # Поворачиваем крышку
@@ -1062,10 +1065,10 @@ class EnhancedGameScene:
             # Анимация маяка
             self._animate_death_beacon()
             
-            print(f"Маяк смерти создан в позиции {self.death_position}")
+            logger.info(f"Death beacon created at position {self.death_position}")
             
         except Exception as e:
-            print(f"Ошибка создания маяка смерти: {e}")
+            logger.error(f"Error creating death beacon: {e}", exc_info=True)
     
     def _animate_death_beacon(self):
         """Анимация маяка смерти"""
@@ -1097,4 +1100,4 @@ class EnhancedGameScene:
             self.death_beacon.removeNode()
             self.death_beacon = None
             self.death_position = None
-            print("Маяк смерти удален")
+            logger.info("Death beacon removed")

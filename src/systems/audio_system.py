@@ -3,8 +3,11 @@
 
 import os
 import time
+import logging
 from typing import Dict, List, Optional
 from panda3d.core import AudioSound, AudioManager
+
+logger = logging.getLogger(__name__)
 
 class AudioSystem:
     """Система звука и музыки"""
@@ -28,39 +31,39 @@ class AudioSystem:
             if not self.audio_manager:
                 self.audio_manager = self.game.showbase.sfxManager
                 
-            print("✅ Аудио система инициализирована")
+            logger.info("Audio system initialized")
             return True
             
         except Exception as e:
-            print(f"❌ Ошибка инициализации аудио системы: {e}")
+            logger.error(f"Error initializing audio system: {e}", exc_info=True)
             return False
             
     def load_sound(self, name, file_path, volume=1.0):
         """Загрузка звукового эффекта"""
         try:
             if not os.path.exists(file_path):
-                print(f"⚠️  Файл звука не найден: {file_path}")
+                logger.warning(f"Sound file not found: {file_path}")
                 return False
                 
             sound = self.audio_manager.getSound(file_path)
             if sound:
                 sound.setVolume(volume * self.sfx_volume * self.master_volume)
                 self.sounds[name] = sound
-                print(f"✅ Звук загружен: {name}")
+                logger.debug(f"Sound loaded: {name}")
                 return True
             else:
-                print(f"❌ Не удалось загрузить звук: {name}")
+                logger.warning(f"Failed to load sound: {name}")
                 return False
                 
         except Exception as e:
-            print(f"❌ Ошибка загрузки звука {name}: {e}")
+            logger.error(f"Error loading sound {name}: {e}", exc_info=True)
             return False
             
     def load_music(self, name, file_path, volume=0.7):
         """Загрузка музыкального файла"""
         try:
             if not os.path.exists(file_path):
-                print(f"⚠️  Файл музыки не найден: {file_path}")
+                logger.warning(f"Music file not found: {file_path}")
                 return False
                 
             music = self.audio_manager.getSound(file_path)
@@ -68,20 +71,20 @@ class AudioSystem:
                 music.setVolume(volume * self.music_volume * self.master_volume)
                 music.setLoop(True)
                 self.music[name] = music
-                print(f"✅ Музыка загружена: {name}")
+                logger.debug(f"Music loaded: {name}")
                 return True
             else:
-                print(f"❌ Не удалось загрузить музыку: {name}")
+                logger.warning(f"Failed to load music: {name}")
                 return False
                 
         except Exception as e:
-            print(f"❌ Ошибка загрузки музыки {name}: {e}")
+            logger.error(f"Error loading music {name}: {e}", exc_info=True)
             return False
             
     def play_sound(self, name, volume=None):
         """Воспроизведение звукового эффекта"""
         if name not in self.sounds:
-            print(f"⚠️  Звук не найден: {name}")
+            logger.warning(f"Sound not found: {name}")
             return False
             
         try:
@@ -95,13 +98,13 @@ class AudioSystem:
             return True
             
         except Exception as e:
-            print(f"❌ Ошибка воспроизведения звука {name}: {e}")
+            logger.error(f"Error playing sound {name}: {e}", exc_info=True)
             return False
             
     def play_music(self, name, fade_in=True):
         """Воспроизведение музыки"""
         if name not in self.music:
-            print(f"⚠️  Музыка не найдена: {name}")
+            logger.warning(f"Music not found: {name}")
             return False
             
         try:
@@ -123,7 +126,7 @@ class AudioSystem:
             return True
             
         except Exception as e:
-            print(f"❌ Ошибка воспроизведения музыки {name}: {e}")
+            logger.error(f"Error playing music {name}: {e}", exc_info=True)
             return False
             
     def stop_music(self, fade_out=True):
@@ -141,7 +144,7 @@ class AudioSystem:
             return True
             
         except Exception as e:
-            print(f"❌ Ошибка остановки музыки: {e}")
+            logger.error(f"Error stopping music: {e}", exc_info=True)
             return False
             
     def _fade_music_in(self, music):
@@ -208,7 +211,7 @@ class AudioSystem:
         """Создание 3D звука"""
         try:
             if not os.path.exists(file_path):
-                print(f"⚠️  Файл 3D звука не найден: {file_path}")
+                logger.warning(f"3D sound file not found: {file_path}")
                 return False
                 
             sound = self.audio_manager.getSound(file_path)
@@ -219,14 +222,14 @@ class AudioSystem:
                 sound.set3dMaxDistance(max_distance)
                 
                 self.sounds[name] = sound
-                print(f"✅ 3D звук загружен: {name}")
+                logger.debug(f"3D sound loaded: {name}")
                 return True
             else:
-                print(f"❌ Не удалось загрузить 3D звук: {name}")
+                logger.warning(f"Failed to load 3D sound: {name}")
                 return False
                 
         except Exception as e:
-            print(f"❌ Ошибка загрузки 3D звука {name}: {e}")
+            logger.error(f"Error loading 3D sound {name}: {e}", exc_info=True)
             return False
             
     def update_3d_sound(self, name, x, y, z):
@@ -236,7 +239,7 @@ class AudioSystem:
                 self.sounds[name].set3dAttributes(x, y, z, 0, 0, 0)
                 return True
             except Exception as e:
-                print(f"❌ Ошибка обновления 3D звука {name}: {e}")
+                logger.error(f"Error updating 3D sound {name}: {e}", exc_info=True)
                 return False
         return False
         
@@ -270,25 +273,25 @@ class AudioSystem:
         elif effect_type == "magic":
             return self._create_magic_sound(**kwargs)
         else:
-            print(f"⚠️  Неизвестный тип звукового эффекта: {effect_type}")
+            logger.warning(f"Unknown sound effect type: {effect_type}")
             return False
             
     def _create_explosion_sound(self, intensity=1.0):
         """Создание звука взрыва"""
         # В реальной игре здесь была бы генерация звука
-        print(f"💥 Звук взрыва (интенсивность: {intensity})")
+        logger.info(f"Explosion sound (intensity: {intensity})")
         return True
         
     def _create_footstep_sound(self, surface="stone"):
         """Создание звука шагов"""
         # В реальной игре здесь была бы генерация звука
-        print(f"👣 Звук шагов по {surface}")
+        logger.debug(f"Footstep sound on {surface}")
         return True
         
     def _create_magic_sound(self, spell_type="heal"):
         """Создание магического звука"""
         # В реальной игре здесь была бы генерация звука
-        print(f"✨ Магический звук: {spell_type}")
+        logger.debug(f"Magic sound: {spell_type}")
         return True
         
     def get_audio_info(self):
