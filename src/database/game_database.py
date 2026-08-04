@@ -16,7 +16,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(slots=True)
 class GameSession:
     """Данные игровой сессии"""
     session_id: str
@@ -38,7 +38,7 @@ class GameSession:
             self.session_data = {}
 
 
-@dataclass
+@dataclass(slots=True)
 class MLTrainingData:
     """Данные для обучения ML-агента"""
     record_id: int

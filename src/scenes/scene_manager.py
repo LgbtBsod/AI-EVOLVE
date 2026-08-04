@@ -51,7 +51,7 @@ class Scene:
 
 """Используются централизованные перечисления SceneType и SceneState из src.core.constants"""
 
-@dataclass
+@dataclass(slots=True)
 class SceneData:
     """Данные сцены"""
     scene_id: str
@@ -65,7 +65,7 @@ class SceneData:
     ambient_sounds: List[str] = field(default_factory=list)
     instance: Optional["Scene"] = None
 
-@dataclass
+@dataclass(slots=True)
 class SceneTransition:
     """Переход между сценами"""
     from_scene: str
@@ -197,7 +197,7 @@ class SceneManager(BaseComponent):
             return
         
         try:
-            start_time = time.time()
+            start_time = time.perf_counter()
             
             # Обновляем активную сцену
             self._update_active_scene(delta_time)
@@ -208,7 +208,7 @@ class SceneManager(BaseComponent):
             # Обновляем статистику
             self.scene_stats['current_scene_time'] += delta_time
             self.scene_stats['total_scene_time'] += delta_time
-            self.scene_stats['update_time'] = time.time() - start_time
+            self.scene_stats['update_time'] = time.perf_counter() - start_time
             
             # Обновляем состояние в менеджере состояний
             if self.state_manager:

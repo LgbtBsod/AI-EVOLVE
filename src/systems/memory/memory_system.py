@@ -1,22 +1,30 @@
 #!/usr/bin/env python3
 """Система памяти - расширенная память с AI и эволюцией
-Управление памятью сущностей, обучением и эволюционными изменениями"""
+
+Refactored:
+- Убран wildcard import from typing import *
+- Добавлены type hints (Python 3.10+)
+- Заменён time.time() на time.perf_counter()
+- Внедрён RNGManager для воспроизводимости
+- @dataclass(slots=True) для оптимизации памяти
+"""
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import *
-from typing import Dict, List, Optional, Any, Tuple, Callable
+from typing import Dict, List, Optional, Any, Tuple, Callable, Set
 import logging
 import math
 import time
-import random
 import json
 import pickle
 
 from src.core.architecture import BaseComponent, ComponentType, Priority, LifecycleState
 from src.core.constants import MemoryType
 from src.core.state_manager import StateManager, StateType
+from src.core.rng_manager import RNGManager
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +48,7 @@ class MemoryStrength(Enum):
 
 # = СТРУКТУРЫ ДАННЫХ
 
-@dataclass
+@dataclass(slots=True)
 class Memory:
     """Воспоминание"""
     memory_id: str
@@ -51,15 +59,15 @@ class Memory:
     description: str
     data: Dict[str, Any] = field(default_factory=dict)
     strength: MemoryStrength = MemoryStrength.NORMAL
-    created_at: float = field(default_factory=time.time)
-    last_accessed: float = field(default_factory=time.time)
+    created_at: float = field(default_factory=lambda: time.perf_counter())
+    last_accessed: float = field(default_factory=lambda: time.perf_counter())
     access_count: int = 0
     emotional_value: float = 0.0
     importance: float = 0.5
     decay_rate: float = 0.01
     is_consolidated: bool = False
 
-@dataclass
+@dataclass(slots=True)
 class MemoryPattern:
     """Паттерн памяти"""
     pattern_id: str
@@ -70,7 +78,7 @@ class MemoryPattern:
     triggers: List[str] = field(default_factory=list)
     effects: Dict[str, Any] = field(default_factory=dict)
 
-@dataclass
+@dataclass(slots=True)
 class EntityMemory:
     """Память сущности"""
     entity_id: str
@@ -80,9 +88,9 @@ class EntityMemory:
     learning_rate: float = 1.0
     memory_capacity: int = 1000
     consolidation_threshold: float = 0.7
-    last_consolidation: float = field(default_factory=time.time)
+    last_consolidation: float = field(default_factory=lambda: time.perf_counter())
 
-@dataclass
+@dataclass(slots=True)
 class SharedMemory:
     """Общая память"""
     memory_id: str
@@ -92,11 +100,11 @@ class SharedMemory:
     memory_type: MemoryType = MemoryType.SEMANTIC
     category: MemoryCategory = MemoryCategory.LEARNING
     data: Dict[str, Any] = field(default_factory=dict)
-    created_at: float = field(default_factory=time.time)
-    last_updated: float = field(default_factory=time.time)
+    created_at: float = field(default_factory=lambda: time.perf_counter())
+    last_updated: float = field(default_factory=lambda: time.perf_counter())
     access_count: int = 0
 
-@dataclass
+@dataclass(slots=True)
 class EvolutionMemory:
     """Эволюционная память"""
     memory_id: str
@@ -105,18 +113,42 @@ class EvolutionMemory:
     evolution_type: str
     changes: Dict[str, Any] = field(default_factory=dict)
     success_rate: float = 0.0
-    created_at: float = field(default_factory=time.time)
+    created_at: float = field(default_factory=lambda: time.perf_counter())
     inherited_by: List[str] = field(default_factory=list)
 
 class MemorySystem(BaseComponent):
     """Система памяти"""
     
-    def __init__(self):
+    __slots__ = (
+        'entity_memories',
+        'shared_memories',
+        'evolution_memories',
+        'memory_patterns',
+        'ai_system',
+        'evolution_system',
+        'social_system',
+        'max_short_term_memories',
+        'max_long_term_memories',
+        'consolidation_interval',
+        'decay_interval',
+        'total_memories_created',
+        'total_memories_consolidated',
+        'total_memories_decayed',
+        'on_memory_created',
+        'on_memory_consolidated',
+        'on_memory_decayed',
+        '_rng'
+    )
+    
+    def __init__(self) -> None:
         super().__init__(
             component_id="memory_system",
             component_type=ComponentType.SYSTEM,
             priority=Priority.NORMAL
         )
+        
+        # RNG для воспроизводимости
+        self._rng = RNGManager()
         
         # Память сущностей
         self.entity_memories: Dict[str, EntityMemory] = {}
@@ -307,7 +339,8 @@ class MemorySystem(BaseComponent):
             entity_memory = self.entity_memories[entity_id]
             
             # Создание воспоминания
-            memory_id = f"memory_{entity_id}_{int(time.time())}_{random.randint(1000, 9999)}"
+            current_time = time.perf_counter()
+            memory_id = f"memory_{entity_id}_{int(current_time)}_{self._rng.randint(1000, 9999)}"
             
             memory = Memory(
                 memory_id=memory_id,
@@ -512,11 +545,12 @@ class MemorySystem(BaseComponent):
             consolidated_count = 0
             
             # Фильтрация воспоминаний для консолидации
+            current_time = time.perf_counter()
             memories_to_consolidate = [
                 memory for memory in entity_memory.short_term_memories
                 if (memory.importance >= entity_memory.consolidation_threshold and
                     not memory.is_consolidated and
-                    time.time() - memory.created_at >= self.consolidation_interval)
+                    current_time - memory.created_at >= self.consolidation_interval)
             ]
             
             for memory in memories_to_consolidate:
@@ -535,9 +569,9 @@ class MemorySystem(BaseComponent):
                 self._cleanup_long_term_memory(entity_id)
             
             self.total_memories_consolidated += consolidated_count
-            entity_memory.last_consolidation = time.time()
+            entity_memory.last_consolidation = current_time
             
-            logger.debug(f"Консолидировано {consolidated_count} воспоминаний для {entity_id}")
+            logger.debug("Консолидировано %d воспоминаний для %s", consolidated_count, entity_id)
             return consolidated_count
             
         except Exception as e:
@@ -579,7 +613,8 @@ class MemorySystem(BaseComponent):
                            data: Dict[str, Any] = None) -> Optional[str]:
         """Создание общей памяти"""
         try:
-            memory_id = f"shared_memory_{int(time.time())}_{random.randint(1000, 9999)}"
+            current_time = time.perf_counter()
+            memory_id = f"shared_memory_{int(current_time)}_{self._rng.randint(1000, 9999)}"
             
             shared_memory = SharedMemory(
                 memory_id=memory_id,
@@ -593,11 +628,11 @@ class MemorySystem(BaseComponent):
             
             self.shared_memories[memory_id] = shared_memory
             
-            logger.info(f"Создана общая память {memory_id}: {title}")
+            logger.info("Создана общая память %s: %s", memory_id, title)
             return memory_id
             
         except Exception as e:
-            logger.error(f"Ошибка создания общей памяти: {e}")
+            logger.exception("Ошибка создания общей памяти: %s", e)
             return None
     
     def create_evolution_memory(self, species_id: str, generation: int, 
@@ -605,7 +640,8 @@ class MemorySystem(BaseComponent):
                               success_rate: float = 0.0) -> Optional[str]:
         """Создание эволюционной памяти"""
         try:
-            memory_id = f"evolution_memory_{species_id}_{generation}_{int(time.time())}"
+            current_time = time.perf_counter()
+            memory_id = f"evolution_memory_{species_id}_{generation}_{int(current_time)}"
             
             evolution_memory = EvolutionMemory(
                 memory_id=memory_id,
@@ -618,11 +654,11 @@ class MemorySystem(BaseComponent):
             
             self.evolution_memories[memory_id] = evolution_memory
             
-            logger.info(f"Создана эволюционная память {memory_id} для вида {species_id}")
+            logger.info("Создана эволюционная память %s для вида %s", memory_id, species_id)
             return memory_id
             
         except Exception as e:
-            logger.error(f"Ошибка создания эволюционной памяти: {e}")
+            logger.exception("Ошибка создания эволюционной памяти: %s", e)
             return None
     
     def get_memories(self, entity_id: str, memory_type: Optional[MemoryType] = None,
@@ -646,17 +682,18 @@ class MemorySystem(BaseComponent):
             all_memories.sort(key=lambda m: (m.importance, m.last_accessed), reverse=True)
             
             # Обновление времени доступа
+            current_time = time.perf_counter()
             for memory in all_memories[:limit]:
-                memory.last_accessed = time.time()
+                memory.last_accessed = current_time
                 memory.access_count += 1
             
             return all_memories[:limit]
             
         except Exception as e:
-            logger.error(f"Ошибка получения воспоминаний: {e}")
+            logger.exception("Ошибка получения воспоминаний: %s", e)
             return []
     
-    def _consolidation_process(self):
+    def _consolidation_process(self) -> None:
         """Процесс консолидации памяти"""
         try:
             while self.state == LifecycleState.READY:

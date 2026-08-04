@@ -51,7 +51,7 @@ class LRUCache:
             value, expiry = self._cache[key]
             
             # Проверка TTL
-            if expiry is not None and time.time() > expiry:
+            if expiry is not None and time.perf_counter() > expiry:
                 del self._cache[key]
                 self._misses += 1
                 return None
@@ -73,7 +73,7 @@ class LRUCache:
             # Вычисляем время истечения
             expiry = None
             if ttl is not None or self.default_ttl is not None:
-                expiry = time.time() + (ttl if ttl is not None else self.default_ttl)
+                expiry = time.perf_counter() + (ttl if ttl is not None else self.default_ttl)
             
             self._cache[key] = (value, expiry)
             
@@ -101,7 +101,7 @@ class LRUCache:
         Возвращает количество удаленных элементов.
         """
         with self._lock:
-            now = time.time()
+            now = time.perf_counter()
             expired_keys = [
                 k for k, (_, expiry) in self._cache.items()
                 if expiry is not None and now > expiry

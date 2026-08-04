@@ -25,7 +25,7 @@ class ContractStatus(Enum):
     ROLLED_BACK = auto()
 
 
-@dataclass
+@dataclass(slots=True)
 class ContractResult(Generic[T]):
     """Результат выполнения контракта."""
     success: bool
@@ -40,7 +40,7 @@ class ContractResult(Generic[T]):
         return self.success
 
 
-@dataclass
+@dataclass(slots=True)
 class ContractCondition:
     """Условие контракта."""
     name: str
@@ -141,12 +141,12 @@ class SmartContract(ABC):
     def run(self) -> ContractResult[Any]:
         """Запустить контракт (валидация + выполнение)."""
         import time
-        start_time = time.time()
+        start_time = time.perf_counter()
         
         # Валидация
         validation_result = self.validate()
         if not validation_result.success:
-            validation_result.execution_time = time.time() - start_time
+            validation_result.execution_time = time.perf_counter() - start_time
             return validation_result
         
         # Пре-хуки
@@ -166,7 +166,7 @@ class SmartContract(ABC):
         # Выполнение
         try:
             result = self.execute()
-            result.execution_time = time.time() - start_time
+            result.execution_time = time.perf_counter() - start_time
             
             if result.success:
                 # Пост-хуки

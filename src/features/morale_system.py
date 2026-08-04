@@ -18,7 +18,7 @@ class MoraleState(Enum):
     PANICKED = "panicked"  # -40%, may flee
     BROKEN = "broken"      # -70%, will flee
 
-@dataclass
+@dataclass(slots=True)
 class MoraleStats:
     current_morale: float  # 0.0 to 100.0
     max_morale: float

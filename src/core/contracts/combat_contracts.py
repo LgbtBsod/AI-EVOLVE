@@ -16,7 +16,7 @@ from src.ml_agents.adaptive_agent import (
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(slots=True)
 class CombatAction:
     """Действие в бою."""
     action_type: ActionType

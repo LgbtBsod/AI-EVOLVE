@@ -1,20 +1,27 @@
 #!/usr/bin/env python3
 """Система предметов - управление предметами, экипировкой и инвентарем
-Интеграция с системой атрибутов для предоставления модификаторов"""
+
+Refactored:
+- Убран wildcard import from typing import *
+- Добавлены type hints (Python 3.10+)
+- dataclass добавлен slots=True для оптимизации памяти
+- time.perf_counter() заменен на time.perf_counter() для точности
+"""
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import *
-from typing import Dict, List, Optional, Any, Tuple, Callable
+from typing import Dict, List, Optional, Any, Tuple, Callable, Set
 import logging
 import math
 import time
-import random
 import json
 
 from src.core.architecture import BaseComponent, ComponentType, Priority, LifecycleState
 from src.core.constants import DamageType, constants_manager
+from src.core.rng_manager import RNGManager
 from src.core.state_manager import StateManager, StateType
 from src.systems.attributes.attribute_system import AttributeSystem, AttributeSet, AttributeModifier, StatModifier, BaseAttribute, DerivedStat
 
@@ -71,7 +78,7 @@ class ItemEffect(Enum):
 
 # = СТРУКТУРЫ ДАННЫХ
 
-@dataclass
+@dataclass(slots=True)
 class ItemModifier:
     """Модификатор предмета (интеграция с системой атрибутов)"""
     modifier_type: str  # attribute, stat, temporary
@@ -82,7 +89,7 @@ class ItemModifier:
     condition: Optional[str] = None
     source: str = "item"
 
-@dataclass
+@dataclass(slots=True)
 class ItemRequirement:
     """Требование для использования предмета"""
     requirement_type: str  # level, attribute, skill, class
@@ -90,7 +97,7 @@ class ItemRequirement:
     value: int
     description: str
 
-@dataclass
+@dataclass(slots=True)
 class ItemEffect:
     """Эффект предмета"""
     effect_type: str  # damage, heal, buff, debuff, movement
@@ -100,7 +107,7 @@ class ItemEffect:
     radius: float = 0.0
     condition: Optional[str] = None
 
-@dataclass
+@dataclass(slots=True)
 class ItemTemplate:
     """Шаблон предмета"""
     item_id: str
@@ -132,7 +139,7 @@ class ItemTemplate:
     rotation: Tuple[float, float, float] = (0.0, 0.0, 0.0)
     position_offset: Tuple[float, float, float] = (0.0, 0.0, 0.0)
 
-@dataclass
+@dataclass(slots=True)
 class ItemInstance:
     """Экземпляр предмета"""
     instance_id: str
@@ -144,7 +151,7 @@ class ItemInstance:
     experience: int = 0
     is_equipped: bool = False
     equipped_slot: Optional[ItemSlot] = None
-    created_at: float = field(default_factory=time.time)
+    created_at: float = field(default_factory=time.perf_counter)
     last_used: float = 0.0
     
     # Интеграция с системой атрибутов
@@ -155,7 +162,7 @@ class ItemInstance:
     custom_properties: Dict[str, Any] = field(default_factory=dict)
     enchantments: List[str] = field(default_factory=list)
 
-@dataclass
+@dataclass(slots=True)
 class Inventory:
     """Инвентарь сущности"""
     entity_id: str
@@ -165,7 +172,7 @@ class Inventory:
     items: Dict[str, ItemInstance] = field(default_factory=dict)  # instance_id -> item
     equipped_items: Dict[ItemSlot, str] = field(default_factory=dict)  # slot -> instance_id
 
-@dataclass
+@dataclass(slots=True)
 class EquipmentSet:
     """Набор экипировки"""
     set_id: str
@@ -179,6 +186,8 @@ class ItemSystem(BaseComponent):
     """Система предметов"""
     
     def __init__(self):
+        # RNG Manager для воспроизводимости
+        self._rng = RNGManager()
         super().__init__(
             component_id="item_system",
             component_type=ComponentType.SYSTEM,
@@ -299,7 +308,7 @@ class ItemSystem(BaseComponent):
             return
         
         try:
-            start_time = time.time()
+            start_time = time.perf_counter()
             
             # Обновление активных модификаторов предметов
             self._update_item_modifiers(delta_time)
@@ -308,7 +317,7 @@ class ItemSystem(BaseComponent):
             if self.system_settings['enable_item_durability']:
                 self._update_item_durability(delta_time)
             
-            self.system_stats['update_time'] = time.time() - start_time
+            self.system_stats['update_time'] = time.perf_counter() - start_time
             
             # Обновляем состояние в менеджере состояний
             if self.state_manager:
@@ -356,7 +365,7 @@ class ItemSystem(BaseComponent):
     
     def _update_item_modifiers(self, delta_time: float):
         """Обновление модификаторов предметов"""
-        current_time = time.time()
+        current_time = time.perf_counter()
         
         for inventory in self.inventories.values():
             for item in inventory.items.values():
@@ -522,7 +531,7 @@ class ItemSystem(BaseComponent):
                 return None
             
             template = self.item_templates[template_id]
-            instance_id = f"{template_id}_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
+            instance_id = f"{template_id}_{int(time.perf_counter() * 1000)}_{self._rng.randint(1000, 9999)}"
             
             item_instance = ItemInstance(
                 instance_id=instance_id,
@@ -697,7 +706,7 @@ class ItemSystem(BaseComponent):
             
             # Уменьшаем количество
             item_instance.quantity -= 1
-            item_instance.last_used = time.time()
+            item_instance.last_used = time.perf_counter()
             
             # Удаляем предмет, если количество стало 0
             if item_instance.quantity <= 0:
@@ -772,7 +781,7 @@ class ItemSystem(BaseComponent):
     def _apply_item_modifiers(self, item_instance: ItemInstance, template: ItemTemplate):
         """Применение модификаторов предмета"""
         try:
-            current_time = time.time()
+            current_time = time.perf_counter()
             
             # Применяем модификаторы атрибутов
             for modifier in template.attribute_modifiers:
@@ -874,7 +883,7 @@ class ItemSystem(BaseComponent):
                 
                 # Если все предметы набора экипированы, применяем бонусы
                 if equipped_pieces == len(equipment_set.pieces):
-                    current_time = time.time()
+                    current_time = time.perf_counter()
                     
                     for modifier in equipment_set.bonus_modifiers:
                         if modifier.modifier_type == "attribute":

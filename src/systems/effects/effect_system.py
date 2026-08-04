@@ -1,20 +1,28 @@
 #!/usr/bin/env python3
 """Система эффектов - баффы, дебаффы и визуальные эффекты
-Управление временными и постоянными эффектами для сущностей"""
+
+Refactored:
+- Убран wildcard import from typing import *
+- Добавлены type hints (Python 3.10+)
+- Заменён time.time() на time.perf_counter()
+- Внедрён RNGManager для воспроизводимости
+- @dataclass(slots=True) для оптимизации памяти
+"""
+
+from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import *
-from typing import Dict, List, Optional, Any, Tuple, Callable
+from typing import Dict, List, Optional, Any, Tuple, Callable, Set
 import logging
 import math
 import time
-import random
 
 from src.core.architecture import BaseComponent, ComponentType, Priority, LifecycleState
 from src.core.constants import EffectType, EffectCategory
 from src.core.state_manager import StateManager, StateType
+from src.core.rng_manager import RNGManager
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +37,7 @@ class EffectStackType(Enum):
 
 # = СТРУКТУРЫ ДАННЫХ
 
-@dataclass
+@dataclass(slots=True)
 class EffectModifier:
     """Модификатор эффекта"""
     stat_type: str
@@ -37,16 +45,16 @@ class EffectModifier:
     modifier_type: str = "additive"  # additive, multiplicative, override
     condition: Optional[str] = None
 
-@dataclass
+@dataclass(slots=True)
 class EffectTrigger:
     """Триггер эффекта"""
     trigger_type: str
     condition: str
     chance: float = 1.0
     cooldown: float = 0.0
-    last_trigger: float = field(default_factory=time.time)
+    last_trigger: float = field(default_factory=lambda: time.perf_counter())
 
-@dataclass
+@dataclass(slots=True)
 class Effect:
     """Эффект"""
     effect_id: str
@@ -63,24 +71,24 @@ class Effect:
     visual_effects: List[str] = field(default_factory=list)
     sound_effects: List[str] = field(default_factory=list)
     icon_path: Optional[str] = None
-    created_at: float = field(default_factory=time.time)
+    created_at: float = field(default_factory=lambda: time.perf_counter())
     source: Optional[str] = None
     removable: bool = True
     dispellable: bool = True
 
-@dataclass
+@dataclass(slots=True)
 class ActiveEffect:
     """Активный эффект на сущности"""
     effect: Effect
     entity_id: str
-    applied_at: float = field(default_factory=time.time)
+    applied_at: float = field(default_factory=lambda: time.perf_counter())
     expires_at: Optional[float] = None
     current_stacks: int = 1
     is_active: bool = True
-    last_tick: float = field(default_factory=time.time)
+    last_tick: float = field(default_factory=lambda: time.perf_counter())
     tick_interval: float = 1.0
 
-@dataclass
+@dataclass(slots=True)
 class EffectTemplate:
     """Шаблон эффекта"""
     template_id: str
@@ -99,12 +107,27 @@ class EffectTemplate:
 class EffectSystem(BaseComponent):
     """Система эффектов"""
     
-    def __init__(self):
+    __slots__ = (
+        'effect_templates',
+        'active_effects',
+        'total_effects_applied',
+        'total_effects_removed',
+        'effect_statistics',
+        'on_effect_applied',
+        'on_effect_removed',
+        'on_effect_tick',
+        '_rng'
+    )
+    
+    def __init__(self) -> None:
         super().__init__(
             component_id="effect_system",
             component_type=ComponentType.SYSTEM,
             priority=Priority.NORMAL
         )
+        
+        # RNG для воспроизводимости
+        self._rng = RNGManager()
         
         # Эффекты
         self.effect_templates: Dict[str, EffectTemplate] = {}
@@ -281,14 +304,15 @@ class EffectSystem(BaseComponent):
         """Применение эффекта к сущности"""
         try:
             if template_id not in self.effect_templates:
-                logger.error(f"Шаблон эффекта {template_id} не найден")
+                logger.error("Шаблон эффекта %s не найден", template_id)
                 return None
             
             template = self.effect_templates[template_id]
             
             # Создание эффекта
+            current_time = time.perf_counter()
             effect = Effect(
-                effect_id=f"{template_id}_{entity_id}_{int(time.time())}",
+                effect_id=f"{template_id}_{entity_id}_{int(current_time)}",
                 name=template.name,
                 description=template.description,
                 effect_type=template.effect_type,
@@ -311,7 +335,7 @@ class EffectSystem(BaseComponent):
             
             # Установка времени истечения
             if effect.duration > 0:
-                active_effect.expires_at = time.time() + effect.duration
+                active_effect.expires_at = current_time + effect.duration
             
             # Проверка стаков
             if not self._can_apply_effect(entity_id, effect):
@@ -481,10 +505,14 @@ class EffectSystem(BaseComponent):
             logger.error(f"Ошибка получения модификаторов эффектов: {e}")
             return []
     
-    def update(self, delta_time: float):
-        """Обновление системы эффектов"""
+    def update(self, delta_time: float) -> None:
+        """Обновление системы эффектов - делегирует _on_update"""
+        super().update(delta_time)
+    
+    def _on_update(self, delta_time: float) -> None:
+        """Внутренняя логика обновления системы эффектов"""
         try:
-            current_time = time.time()
+            current_time = time.perf_counter()
             
             # Обновление всех активных эффектов
             for entity_id, effects in list(self.active_effects.items()):
@@ -507,7 +535,7 @@ class EffectSystem(BaseComponent):
                     self.remove_effect(entity_id, effect_to_remove.effect.effect_id)
             
         except Exception as e:
-            logger.error(f"Ошибка обновления системы эффектов: {e}")
+            logger.exception("Ошибка обновления системы эффектов: %s", e)
     
     def _process_effect_triggers(self, active_effect: ActiveEffect, current_time: float):
         """Обработка триггеров эффекта"""
@@ -548,8 +576,9 @@ class EffectSystem(BaseComponent):
             
             template = self.effect_templates[template_id]
             
+            current_time = time.perf_counter()
             effect = Effect(
-                effect_id=f"custom_{template_id}_{int(time.time())}",
+                effect_id=f"custom_{template_id}_{int(current_time)}",
                 name=name or template.name,
                 description=template.description,
                 effect_type=template.effect_type,
@@ -565,7 +594,7 @@ class EffectSystem(BaseComponent):
             return effect.effect_id
             
         except Exception as e:
-            logger.error(f"Ошибка создания пользовательского эффекта: {e}")
+            logger.exception("Ошибка создания пользовательского эффекта: %s", e)
             return None
     
     def get_effect_statistics(self) -> Dict[str, Any]:
@@ -580,10 +609,10 @@ class EffectSystem(BaseComponent):
             }
             
         except Exception as e:
-            logger.error(f"Ошибка получения статистики эффектов: {e}")
+            logger.exception("Ошибка получения статистики эффектов: %s", e)
             return {}
     
-    def cleanup(self):
+    def cleanup(self) -> None:
         """Очистка системы эффектов"""
         try:
             # Удаление всех эффектов

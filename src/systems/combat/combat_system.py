@@ -2,20 +2,22 @@
 """Система боя - интеграция всех боевых механик
 Управление боем, атаками, защитой, инициативой и комбо"""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
-from typing import *
-from typing import Dict, List, Optional, Any, Tuple, Callable
 import logging
 import math
 import time
-import random
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple
 
 from src.core.architecture import BaseComponent, ComponentType, Priority, LifecycleState
 from src.core.constants import DamageType, constants_manager, PROBABILITY_CONSTANTS, ToughnessType
+from src.core.rng_manager import RNGManager
 from src.core.state_manager import StateManager, StateType
-from src.systems.attributes.attribute_system import AttributeSystem, AttributeSet, AttributeModifier, StatModifier, BaseAttribute, DerivedStat
+
+if TYPE_CHECKING:
+    from src.systems.attributes.attribute_system import AttributeSystem, AttributeSet, AttributeModifier, StatModifier, BaseAttribute, DerivedStat
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +45,7 @@ class DefenseType(Enum):
 
 # = СТРУКТУРЫ ДАННЫХ
 
-@dataclass
+@dataclass(slots=True)
 class CombatStats:
     """Боевые характеристики (теперь получаются из системы атрибутов)"""
     # Основные характеристики из атрибутов
@@ -67,7 +69,7 @@ class CombatStats:
     defense_modifier: float = 1.0
     speed_modifier: float = 1.0
 
-@dataclass
+@dataclass(slots=True)
 class DamageInfo:
     """Информация об уроне"""
     damage: float
@@ -81,13 +83,13 @@ class DamageInfo:
     source: str = ""
     target: str = ""
 
-@dataclass
+@dataclass(slots=True)
 class CombatSession:
     """Сессия боя"""
     session_id: str
     participants: List[str]
     combat_type: CombatType
-    start_time: float = field(default_factory=time.time)
+    start_time: float = field(default_factory=time.perf_counter)
     end_time: float = 0.0
     current_turn: int = 0
     turn_order: List[str] = field(default_factory=list)
@@ -95,7 +97,7 @@ class CombatSession:
     combat_log: List[str] = field(default_factory=list)
     is_active: bool = True
 
-@dataclass
+@dataclass(slots=True)
 class CombatResult:
     """Результат боя"""
     winner: str
@@ -116,6 +118,9 @@ class CombatSystem(BaseComponent):
             component_type=ComponentType.SYSTEM,
             priority=Priority.HIGH
         )
+        
+        # RNG Manager для воспроизводимости
+        self._rng = RNGManager()
         
         # Архитектурные компоненты
         self.state_manager: Optional[StateManager] = None
@@ -196,42 +201,42 @@ class CombatSystem(BaseComponent):
         try:
             logger.info("Инициализация CombatSystem...")
             
+            if not super().initialize():
+                return False
+            
             self._register_system_states()
             
-            self.system_state = LifecycleState.READY
             logger.info("CombatSystem инициализирован успешно")
             return True
             
         except Exception as e:
             logger.error(f"Ошибка инициализации CombatSystem: {e}")
-            self.system_state = LifecycleState.ERROR
             return False
+    
+    def _on_initialize(self) -> bool:
+        """Переопределяемый метод инициализации"""
+        return True
     
     def start(self) -> bool:
         """Запуск системы боя"""
         try:
             logger.info("Запуск CombatSystem...")
             
-            if self.system_state != LifecycleState.READY:
-                logger.error("CombatSystem не готов к запуску")
+            if not super().start():
                 return False
             
-            self.system_state = LifecycleState.RUNNING
+            self._register_system_states()
             logger.info("CombatSystem запущен успешно")
             return True
             
         except Exception as e:
             logger.error(f"Ошибка запуска CombatSystem: {e}")
-            self.system_state = LifecycleState.ERROR
             return False
     
-    def _on_update(self, delta_time: float):
+    def _on_update(self, delta_time: float) -> None:
         """Переопределяемый метод обновления (вызывается из BaseComponent.update)"""
-        if self.system_state != LifecycleState.RUNNING:
-            return
-        
         try:
-            start_time = time.time()
+            start_time = time.perf_counter()
             
             # Обновление активных сессий боя
             self._update_combat_sessions(delta_time)
@@ -239,7 +244,7 @@ class CombatSystem(BaseComponent):
             # Очистка завершенных сессий
             self._cleanup_finished_sessions()
             
-            self.system_stats['update_time'] = time.time() - start_time
+            self.system_stats['update_time'] = time.perf_counter() - start_time
             
             # Обновляем состояние в менеджере состояний
             if self.state_manager:
@@ -253,16 +258,14 @@ class CombatSystem(BaseComponent):
             logger.error(f"Ошибка обновления CombatSystem: {e}")
             raise  # Пробрасываем исключение вверх для обработки в BaseComponent
     
-    def update(self, delta_time: float):
-        """Публичный метод обновления (вызывается извне, делегирует _on_update)"""
-        super().update(delta_time)
-    
     def stop(self) -> bool:
         """Остановка системы боя"""
         try:
             logger.info("Остановка CombatSystem...")
             
-            self.system_state = LifecycleState.STOPPED
+            if not super().stop():
+                return False
+            
             logger.info("CombatSystem остановлен успешно")
             return True
             
@@ -276,13 +279,15 @@ class CombatSystem(BaseComponent):
             logger.info("Уничтожение CombatSystem...")
             
             # Завершаем все активные сессии
-            for session in self.active_sessions.values():
+            for session in list(self.active_sessions.values()):
                 self._end_combat_session(session.session_id)
             
             self.active_sessions.clear()
             self.combat_stats.clear()
             
-            self.system_state = LifecycleState.DESTROYED
+            if not super().destroy():
+                return False
+            
             logger.info("CombatSystem уничтожен успешно")
             return True
             
@@ -297,7 +302,7 @@ class CombatSystem(BaseComponent):
                 continue
             
             # Проверяем максимальную длительность боя
-            if time.time() - session.start_time > self.system_settings['max_combat_duration']:
+            if time.perf_counter() - session.start_time > self.system_settings['max_combat_duration']:
                 self._end_combat_session(session.session_id, reason="timeout")
                 continue
             
@@ -467,7 +472,7 @@ class CombatSystem(BaseComponent):
             return False
         
         dodge_chance = target_stats.dodge_chance
-        return random.random() < dodge_chance
+        return self._rng.random() < dodge_chance
     
     def _check_block(self, target_stats: CombatStats) -> bool:
         """Проверка блока"""
@@ -475,7 +480,7 @@ class CombatSystem(BaseComponent):
             return False
         
         block_chance = target_stats.block_chance
-        return random.random() < block_chance
+        return self._rng.random() < block_chance
     
     def _check_critical_hit(self, attacker_stats: CombatStats) -> bool:
         """Проверка критического удара"""
@@ -483,7 +488,7 @@ class CombatSystem(BaseComponent):
             return False
         
         critical_chance = attacker_stats.critical_chance
-        return random.random() < critical_chance
+        return self._rng.random() < critical_chance
     
     def _calculate_base_damage(self, attacker_stats: CombatStats, attack_type: AttackType) -> float:
         """Расчет базового урона на основе характеристик из атрибутов"""
@@ -509,7 +514,7 @@ class CombatSystem(BaseComponent):
             base_damage *= attacker_stats.damage_modifier
             
             # Добавление случайности
-            variation = random.uniform(0.8, 1.2)
+            variation = self._rng.uniform(0.8, 1.2)
             base_damage *= variation
             
             return max(1, base_damage)
@@ -617,7 +622,7 @@ class CombatSystem(BaseComponent):
             
             session = self.active_sessions[session_id]
             session.is_active = False
-            session.end_time = time.time()
+            session.end_time = time.perf_counter()
             
             self.system_stats['combat_sessions_active'] -= 1
             

@@ -13,10 +13,35 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class Character(BaseEntity):
     """Класс персонажа с улучшенной графикой - наследуется от BaseEntity"""
     
-    def __init__(self, character_id: str, game, x=0, y=0, z=0, character_class="warrior", color=(1, 1, 1, 1), is_player=False):
+    __slots__ = (
+        'game', 'x', 'y', 'z', 'character_class', 'color', 'node',
+        'level', 'experience', 'experience_to_next_level',
+        'max_health', 'health', 'max_mana', 'mana', 'max_stamina', 'stamina',
+        'physical_damage', 'magical_damage', 'defense', 'attack_speed', 'attack_range',
+        'critical_chance', 'critical_damage', 'dodge_chance', 'magic_resistance',
+        'speed', 'health_regen', 'mana_regen', 'stamina_regen',
+        'attack_cooldown', 'attack_cooldown_time',
+        'animation_state', 'animation_time', 'bob_offset', 'rotation_offset',
+        'attack_start_time', 'entity_id', 'ai_enabled', 'ai_state', 'target_enemy',
+        'target_item', 'last_ai_update', 'ai_update_interval',
+        'last_defensive_skill_time', 'defensive_skill_cooldown',
+        'exploration_target', 'exploration_retarget_interval', 'last_exploration_target_time',
+        'is_player', 'reputation', 'fame', 'achievements', 'total_playtime',
+        'charisma_bonus', 'persuasion_skill', 'quests_completed', 'locations_visited',
+        'npcs_met', 'last_save', 'last_exploration', 'last_social',
+        'size', 'body', 'chest', 'head', 'left_eye', 'right_eye', 'left_pupil',
+        'right_pupil', 'left_arm', 'right_arm', 'left_hand', 'right_hand',
+        'left_leg', 'right_leg', 'left_foot', 'right_foot',
+        'sword', 'staff', 'orb', 'left_dagger', 'right_dagger', 'aura'
+    )
+    
+    def __init__(self, character_id: str, game, x: float = 0, y: float = 0, z: float = 0, 
+                 character_class: str = "warrior", color: Tuple[float, float, float, float] = (1, 1, 1, 1), 
+                 is_player: bool = False) -> None:
         # Инициализируем базовую сущность
         entity_type = EntityType.PLAYER if is_player else EntityType.NPC
         super().__init__(character_id, entity_type, f"character_{character_id}")
@@ -93,13 +118,13 @@ class Character(BaseEntity):
         if is_player:
             self.reputation = 0
             self.fame = 0
-            self.achievements = []
+            self.achievements: List[Any] = []
             self.total_playtime = 0.0
             self.charisma_bonus = 0.0
             self.persuasion_skill = 0.5
-            self.quests_completed = []
-            self.locations_visited = []
-            self.npcs_met = []
+            self.quests_completed: List[Any] = []
+            self.locations_visited: List[Any] = []
+            self.npcs_met: List[Any] = []
             self.last_save = 0.0
             self.last_exploration = 0.0
             self.last_social = 0.0
@@ -441,7 +466,7 @@ class Character(BaseEntity):
         from direct.task import Task
         
         def animate_character(task):
-            current_time = time.time()
+            current_time = time.perf_counter()
             self.animation_time = current_time
             
             # Анимация покачивания (idle)
@@ -497,7 +522,7 @@ class Character(BaseEntity):
         """Установка состояния анимации"""
         self.animation_state = state
         if state == "attacking":
-            self.attack_start_time = time.time()
+            self.attack_start_time = time.perf_counter()
             
     def move_to(self, x, y, z=None):
         """Перемещение персонажа"""
@@ -577,7 +602,7 @@ class Character(BaseEntity):
         if not self.ai_enabled or not self.is_alive():
             return
             
-        current_time = time.time()
+        current_time = time.perf_counter()
         if current_time - self.last_ai_update < self.ai_update_interval:
             return
             
@@ -779,7 +804,7 @@ class Character(BaseEntity):
         """Исследование области с устойчивой целевой точкой, а не хаотичными рывками."""
         import random
 
-        now = time.time()
+        now = time.perf_counter()
         need_new_target = (
             self.exploration_target is None
             or (now - self.last_exploration_target_time) >= self.exploration_retarget_interval
@@ -841,7 +866,7 @@ class Character(BaseEntity):
 
         # Защитные/выживательные действия имеют приоритет над атакой,
         # но ограничены кулдауном, чтобы не спамить каждый тик.
-        now = time.time()
+        now = time.perf_counter()
         defensive_ready = (now - self.last_defensive_skill_time) >= self.defensive_skill_cooldown
         if defensive_ready and self.health <= self.max_health * 0.4:
             if self.character_class == "mage" and self.mana >= 15 and self.health < self.max_health:
@@ -946,7 +971,7 @@ class Character(BaseEntity):
     def save_game(self):
         """Сохранение игры"""
         if self.is_player:
-            self.last_save = time.time()
+            self.last_save = time.perf_counter()
             logger.info("Игра сохранена")
     
     def get_player_stats(self):

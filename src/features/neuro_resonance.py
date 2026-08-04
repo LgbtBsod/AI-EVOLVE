@@ -20,7 +20,7 @@ class ResonanceState(Enum):
     PERFECT = "perfect" # Full squad sync, +50% sync, shared vision
 
 
-@dataclass
+@dataclass(slots=True)
 class ResonanceLink:
     """Represents a neural link between two units."""
     unit_a: str
@@ -30,7 +30,7 @@ class ResonanceLink:
     last_sync: float
 
 
-@dataclass
+@dataclass(slots=True)
 class ResonanceStats:
     current_resonance: float  # 0.0 to 100.0
     state: ResonanceState
@@ -111,8 +111,8 @@ class NeuroResonanceSystem(BaseComponent):
             unit_a=unit_a,
             unit_b=unit_b,
             strength=1.0,
-            established_at=time.time(),
-            last_sync=time.time()
+            established_at=time.perf_counter(),
+            last_sync=time.perf_counter()
         )
         
         self.resonance_links.append(link)
@@ -204,7 +204,7 @@ class NeuroResonanceSystem(BaseComponent):
         
     def on_update(self, dt: float):
         """Update resonance links and states."""
-        current_time = time.time()
+        current_time = time.perf_counter()
         
         # Update link strengths based on distance
         if hasattr(self, '_unit_positions'):

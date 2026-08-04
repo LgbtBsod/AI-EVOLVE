@@ -116,7 +116,7 @@ def format_number(num: float, decimals: int = 2) -> str:
 
 def generate_id(prefix: str = "") -> str:
     """Генерация уникального ID"""
-    timestamp = int(time.time() * 1000)
+    timestamp = int(time.perf_counter() * 1000)
     random_suffix = random.randint(1000, 9999)
     return f"{prefix}{timestamp}_{random_suffix}"
 
@@ -147,11 +147,11 @@ def validate_dict(data: Dict, required_keys: List[str]) -> Tuple[bool, List[str]
 
 def get_timestamp() -> float:
     """Получение текущей метки времени"""
-    return time.time()
+    return time.perf_counter()
 
 def get_timestamp_ms() -> int:
     """Получение текущей метки времени в миллисекундах"""
-    return int(time.time() * 1000)
+    return int(time.perf_counter() * 1000)
 
 def format_duration(seconds: float) -> str:
     """Форматирование длительности"""
@@ -192,9 +192,9 @@ def timing(func: Callable) -> Callable:
     """Декоратор замера времени выполнения"""
     @wraps(func)
     def wrapper(*args, **kwargs):
-        start_time = time.time()
+        start_time = time.perf_counter()
         result = func(*args, **kwargs)
-        end_time = time.time()
+        end_time = time.perf_counter()
         logger.debug(f"{func.__name__} выполнено за {end_time - start_time:.4f}s")
         return result
     return wrapper
