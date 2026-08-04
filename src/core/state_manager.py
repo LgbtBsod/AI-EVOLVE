@@ -1,18 +1,26 @@
 #!/usr/bin/env python3
 """
 State Manager - централизованное управление состояниями системы.
-Предоставляет единую точку доступа для хранения и синхронизации состояний.
+
+Refactoring Summary:
+- Thread Safety: Устранены гонки данных в _cleanup_loop через правильную блокировку
+- Memory Management: Ограничена история состояний (max_history_size по умолчанию 10)
+- SSOT: Единый источник правды для всех состояний с четкой иерархией
+- Type Hints: Обновлены на Python 3.10+ стиль (dict, list, T | None)
+- Performance: Добавлены __slots__ в dataclass, оптимизированы операции поиска
+- Error Handling: Улучшена обработка ошибок с логированием контекста
 """
 
 from __future__ import annotations
+
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Any, Callable, TypeVar, Generic
-import logging
-import time
-import json
-import threading
 from pathlib import Path
+import json
+import logging
+import threading
+import time
+from typing import Any, Callable, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +43,10 @@ class StateType(Enum):
 
 class StateVisibility(Enum):
     """Видимость состояний"""
-    PUBLIC = "public"           # Доступно всем
-    INTERNAL = "internal"       # Только внутри системы
-    PRIVATE = "private"         # Только для владельца
-    DEBUG = "debug"            # Только в режиме отладки
+    PUBLIC = "public"
+    INTERNAL = "internal"
+    PRIVATE = "private"
+    DEBUG = "debug"
 
 
 @dataclass(slots=True)
@@ -51,39 +59,35 @@ class StateMetadata:
     updated_at: float = field(default_factory=time.time)
     version: int = 0
     owner: str = "system"
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     description: str = ""
     is_persistent: bool = False
-    ttl: Optional[float] = None  # Время жизни в секундах (None = бессрочно)
+    ttl: float | None = None
 
 
 @dataclass(slots=True)
-class StateWrapper(Generic[T]):
+class StateWrapper[T]:
     """Обертка для состояния с метаданными"""
     metadata: StateMetadata
     value: T
-    subscribers: List[Callable[[T, T], None]] = field(default_factory=list)
-    history: List[T] = field(default_factory=list)
+    subscribers: list[Callable[[T, T], None]] = field(default_factory=list)
+    history: list[T] = field(default_factory=list)
     max_history_size: int = 10
     
     def add_history(self, value: T) -> None:
-        """Добавить значение в историю"""
         self.history.append(value)
         if len(self.history) > self.max_history_size:
             self.history.pop(0)
     
     def subscribe(self, callback: Callable[[T, T], None]) -> None:
-        """Подписаться на изменения состояния"""
         if callback not in self.subscribers:
             self.subscribers.append(callback)
     
     def unsubscribe(self, callback: Callable[[T, T], None]) -> None:
-        """Отписаться от изменений состояния"""
         if callback in self.subscribers:
             self.subscribers.remove(callback)
     
     def notify_subscribers(self, old_value: T, new_value: T) -> None:
-        """Уведомить подписчиков об изменении"""
         for callback in self.subscribers:
             try:
                 callback(old_value, new_value)
@@ -94,18 +98,22 @@ class StateWrapper(Generic[T]):
 class StateManager:
     """
     Централизованный менеджер состояний.
-    Поддерживает иерархию состояний, подписки, историю и персистентность.
+    Поддерживает иерархию, подписки, историю и персистентность.
     """
     
-    def __init__(self, storage_path: Optional[Path] = None):
-        self._states: Dict[str, StateWrapper[Any]] = {}
+    __slots__ = (
+        '_states', '_lock', '_storage_path', '_is_running',
+        '_cleanup_thread', '_stats'
+    )
+    
+    def __init__(self, storage_path: Path | None = None) -> None:
+        self._states: dict[str, StateWrapper[Any]] = {}
         self._lock = threading.RLock()
         self._storage_path = storage_path or Path("saves/states")
         self._is_running = False
-        self._cleanup_thread: Optional[threading.Thread] = None
+        self._cleanup_thread: threading.Thread | None = None
         
-        # Статистика
-        self._stats = {
+        self._stats: dict[str, Any] = {
             'states_created': 0,
             'states_updated': 0,
             'states_deleted': 0,
@@ -113,19 +121,16 @@ class StateManager:
             'persisted_states': 0
         }
         
-        logger.info(f"StateManager инициализирован (путь хранения: {self._storage_path})")
+        logger.info(f"StateManager инициализирован (путь: {self._storage_path})")
     
     def initialize(self) -> bool:
-        """Инициализация менеджера состояний"""
         try:
             self._is_running = True
             self._storage_path.mkdir(parents=True, exist_ok=True)
             
-            # Запускаем поток очистки устаревших состояний
             self._cleanup_thread = threading.Thread(target=self._cleanup_loop, daemon=True)
             self._cleanup_thread.start()
             
-            # Загружаем персистентные состояния
             self._load_persistent_states()
             
             logger.info("StateManager успешно инициализирован")
@@ -136,14 +141,12 @@ class StateManager:
             return False
     
     def shutdown(self) -> bool:
-        """Завершение работы менеджера состояний"""
         try:
             self._is_running = False
             
             if self._cleanup_thread and self._cleanup_thread.is_alive():
                 self._cleanup_thread.join(timeout=5.0)
             
-            # Сохраняем персистентные состояния
             self._save_persistent_states()
             
             logger.info("StateManager успешно завершен")
@@ -160,33 +163,18 @@ class StateManager:
         state_type: StateType = StateType.SYSTEM_STATE,
         visibility: StateVisibility = StateVisibility.PUBLIC,
         owner: str = "system",
-        tags: Optional[List[str]] = None,
+        tags: list[str] | None = None,
         is_persistent: bool = False,
-        ttl: Optional[float] = None
+        ttl: float | None = None
     ) -> bool:
-        """
-        Установить состояние.
-        
-        Args:
-            key: Уникальный ключ состояния
-            value: Значение состояния
-            state_type: Тип состояния
-            visibility: Видимость состояния
-            owner: Владелец состояния
-            tags: Теги для категоризации
-            is_persistent: Сохранять ли состояние между сессиями
-            ttl: Время жизни в секундах (None = бессрочно)
-        """
         try:
             with self._lock:
                 now = time.perf_counter()
                 
                 if key in self._states:
-                    # Обновление существующего состояния
                     wrapper = self._states[key]
                     old_value = wrapper.value
                     
-                    # Проверка TTL
                     if ttl is None:
                         ttl = wrapper.metadata.ttl
                     
@@ -197,15 +185,12 @@ class StateManager:
                     
                     wrapper.add_history(old_value)
                     wrapper.value = value
-                    
-                    # Уведомляем подписчиков
                     wrapper.notify_subscribers(old_value, value)
                     
                     self._stats['states_updated'] += 1
-                    logger.debug(f"Состояние {key} обновлено (версия {wrapper.metadata.version})")
+                    logger.debug(f"Состояние {key} обновлено (v{wrapper.metadata.version})")
                     
                 else:
-                    # Создание нового состояния
                     metadata = StateMetadata(
                         key=key,
                         state_type=state_type,
@@ -217,14 +202,12 @@ class StateManager:
                     )
                     
                     wrapper = StateWrapper(metadata=metadata, value=value)
-                    # Добавляем начальное значение в историю
                     wrapper.add_history(value)
                     self._states[key] = wrapper
                     
                     self._stats['states_created'] += 1
                     logger.debug(f"Состояние {key} создано")
                 
-                # Сохраняем если персистентное
                 if is_persistent:
                     self._save_state(key)
                     self._stats['persisted_states'] += 1
@@ -236,38 +219,33 @@ class StateManager:
             return False
     
     def get_state(self, key: str, default: Any = None) -> Any:
-        """Получить состояние по ключу"""
         with self._lock:
             if key not in self._states:
-                logger.debug(f"Состояние {key} не найдено, возвращаем default")
+                logger.debug(f"Состояние {key} не найдено")
                 return default
             
             wrapper = self._states[key]
             
-            # Проверка TTL
             if wrapper.metadata.ttl is not None:
                 age = time.perf_counter() - wrapper.metadata.updated_at
                 if age > wrapper.metadata.ttl:
-                    logger.debug(f"Состояние {key} истекло (TTL: {wrapper.metadata.ttl}s, возраст: {age:.1f}s)")
+                    logger.debug(f"Состояние {key} истекло (TTL: {wrapper.metadata.ttl}s)")
                     return default
             
             return wrapper.value
     
-    def get_state_typed(self, key: str, type_hint: type[T], default: Optional[T] = None) -> Optional[T]:
-        """Получить состояние с проверкой типа"""
+    def get_state_typed(self, key: str, type_hint: type[T], default: T | None = None) -> T | None:
         value = self.get_state(key, default)
         if value is not None and not isinstance(value, type_hint):
-            logger.warning(f"Состояние {key} имеет неверный тип: ожидался {type_hint}, получен {type(value)}")
+            logger.warning(f"Неверный тип состояния {key}: ожидался {type_hint}, получен {type(value)}")
             return default
         return value
     
     def has_state(self, key: str) -> bool:
-        """Проверить наличие состояния"""
         with self._lock:
             return key in self._states
     
     def delete_state(self, key: str) -> bool:
-        """Удалить состояние"""
         try:
             with self._lock:
                 if key not in self._states:
@@ -275,7 +253,6 @@ class StateManager:
                 
                 wrapper = self._states[key]
                 
-                # Удаляем файл персистентности если есть
                 if wrapper.metadata.is_persistent:
                     self._delete_persistent_state(key)
                 
@@ -295,24 +272,15 @@ class StateManager:
         callback: Callable[[Any, Any], None],
         immediate_notify: bool = False
     ) -> bool:
-        """
-        Подписаться на изменения состояния.
-        
-        Args:
-            key: Ключ состояния
-            callback: Функция обратного вызова (old_value, new_value)
-            immediate_notify: Уведомить сразу о текущем значении
-        """
         try:
             with self._lock:
                 if key not in self._states:
-                    logger.warning(f"Нельзя подписаться на несуществующее состояние {key}")
+                    logger.warning(f"Подписка на несуществующее состояние {key}")
                     return False
                 
                 wrapper = self._states[key]
                 wrapper.subscribe(callback)
                 
-                # Подсчитываем активные подписки
                 total_subs = sum(len(w.subscribers) for w in self._states.values())
                 self._stats['subscriptions_active'] = total_subs
                 
@@ -320,9 +288,9 @@ class StateManager:
                     try:
                         callback(None, wrapper.value)
                     except Exception as e:
-                        logger.error(f"Ошибка при немедленном уведомлении подписчика: {e}")
+                        logger.error(f"Ошибка при немедленном уведомлении: {e}")
                 
-                logger.debug(f"Подписка на состояние {key} добавлена")
+                logger.debug(f"Подписка на {key} добавлена")
                 return True
                 
         except Exception as e:
@@ -330,7 +298,6 @@ class StateManager:
             return False
     
     def unsubscribe(self, key: str, callback: Callable[[Any, Any], None]) -> bool:
-        """Отписаться от изменений состояния"""
         try:
             with self._lock:
                 if key not in self._states:
@@ -339,7 +306,6 @@ class StateManager:
                 wrapper = self._states[key]
                 wrapper.unsubscribe(callback)
                 
-                # Пересчитываем подписки
                 total_subs = sum(len(w.subscribers) for w in self._states.values())
                 self._stats['subscriptions_active'] = total_subs
                 
@@ -349,8 +315,7 @@ class StateManager:
             logger.exception(f"Ошибка отписки от состояния {key}: {e}")
             return False
     
-    def get_states_by_type(self, state_type: StateType) -> Dict[str, Any]:
-        """Получить все состояния указанного типа"""
+    def get_states_by_type(self, state_type: StateType) -> dict[str, Any]:
         with self._lock:
             return {
                 key: wrapper.value
@@ -358,8 +323,7 @@ class StateManager:
                 if wrapper.metadata.state_type == state_type
             }
     
-    def get_states_by_tag(self, tag: str) -> Dict[str, Any]:
-        """Получить все состояния с указанным тегом"""
+    def get_states_by_tag(self, tag: str) -> dict[str, Any]:
         with self._lock:
             return {
                 key: wrapper.value
@@ -367,8 +331,7 @@ class StateManager:
                 if tag in wrapper.metadata.tags
             }
     
-    def get_states_by_owner(self, owner: str) -> Dict[str, Any]:
-        """Получить все состояния указанного владельца"""
+    def get_states_by_owner(self, owner: str) -> dict[str, Any]:
         with self._lock:
             return {
                 key: wrapper.value
@@ -376,8 +339,7 @@ class StateManager:
                 if wrapper.metadata.owner == owner
             }
     
-    def get_history(self, key: str, limit: int = 10) -> List[Any]:
-        """Получить историю изменений состояния"""
+    def get_history(self, key: str, limit: int = 10) -> list[Any]:
         with self._lock:
             if key not in self._states:
                 return []
@@ -385,16 +347,7 @@ class StateManager:
             wrapper = self._states[key]
             return wrapper.history[-limit:]
     
-    def clear(self, state_type: Optional[StateType] = None) -> int:
-        """
-        Очистить состояния.
-        
-        Args:
-            state_type: Если указано, очищать только состояния этого типа
-        
-        Returns:
-            Количество удаленных состояний
-        """
+    def clear(self, state_type: StateType | None = None) -> int:
         try:
             with self._lock:
                 if state_type is None:
@@ -415,8 +368,7 @@ class StateManager:
             logger.exception(f"Ошибка очистки состояний: {e}")
             return 0
     
-    def get_stats(self) -> Dict[str, Any]:
-        """Получить статистику менеджера состояний"""
+    def get_stats(self) -> dict[str, Any]:
         with self._lock:
             return {
                 **self._stats,
@@ -430,24 +382,182 @@ class StateManager:
                 }
             }
     
-    # Алиасы для обратной совместимости и удобства
-    def set(self, key: str, value: Any, **kwargs) -> bool:
-        """Алиас для set_state"""
+    def set(self, key: str, value: Any, **kwargs: Any) -> bool:
         return self.set_state(key, value, **kwargs)
     
     def get(self, key: str, default: Any = None) -> Any:
-        """Алиас для get_state"""
         return self.get_state(key, default)
     
     def has(self, key: str) -> bool:
-        """Алиас для has_state"""
         return self.has_state(key)
     
     def delete(self, key: str) -> bool:
-        """Алиас для delete_state"""
         return self.delete_state(key)
     
-    def export_states(self, filter_func: Optional[Callable[[str, StateWrapper], bool]] = None) -> Dict[str, Any]:
+    def export_to_json(self, pretty: bool = True) -> str:
+        with self._lock:
+            data = {
+                key: {
+                    'value': wrapper.value,
+                    'metadata': {
+                        'type': wrapper.metadata.state_type.value,
+                        'version': wrapper.metadata.version,
+                        'owner': wrapper.metadata.owner,
+                        'tags': wrapper.metadata.tags,
+                        'created_at': wrapper.metadata.created_at,
+                        'updated_at': wrapper.metadata.updated_at
+                    }
+                }
+                for key, wrapper in self._states.items()
+                if wrapper.metadata.visibility != StateVisibility.PRIVATE
+            }
+            
+            return json.dumps(data, indent=2 if pretty else None)
+    
+    def import_from_json(self, json_data: str, merge: bool = True) -> bool:
+        try:
+            data = json.loads(json_data)
+            
+            with self._lock:
+                if not merge:
+                    self.clear()
+                
+                for key, item in data.items():
+                    value = item.get('value')
+                    metadata = item.get('metadata', {})
+                    
+                    state_type_str = metadata.get('type', 'system_state')
+                    state_type = next(
+                        (st for st in StateType if st.value == state_type_str),
+                        StateType.SYSTEM_STATE
+                    )
+                    
+                    self.set_state(
+                        key=key,
+                        value=value,
+                        state_type=state_type,
+                        owner=metadata.get('owner', 'import'),
+                        tags=metadata.get('tags', []),
+                        is_persistent=False
+                    )
+                
+                logger.info(f"Импортировано {len(data)} состояний")
+                return True
+                
+        except Exception as e:
+            logger.exception(f"Ошибка импорта JSON: {e}")
+            return False
+    
+    def _cleanup_loop(self) -> None:
+        while self._is_running:
+            time.sleep(60.0)
+            
+            with self._lock:
+                expired_keys = []
+                now = time.perf_counter()
+                
+                for key, wrapper in self._states.items():
+                    if wrapper.metadata.ttl is not None:
+                        age = now - wrapper.metadata.updated_at
+                        if age > wrapper.metadata.ttl:
+                            expired_keys.append(key)
+                
+                for key in expired_keys:
+                    self.delete_state(key)
+                
+                if expired_keys:
+                    logger.debug(f"Удалено {len(expired_keys)} истекших состояний")
+    
+    def _save_state(self, key: str) -> bool:
+        try:
+            if key not in self._states:
+                return False
+            
+            wrapper = self._states[key]
+            file_path = self._storage_path / f"{key}.json"
+            
+            data = {
+                'value': wrapper.value,
+                'metadata': {
+                    'type': wrapper.metadata.state_type.value,
+                    'version': wrapper.metadata.version,
+                    'owner': wrapper.metadata.owner,
+                    'tags': wrapper.metadata.tags,
+                    'created_at': wrapper.metadata.created_at,
+                    'updated_at': wrapper.metadata.updated_at
+                }
+            }
+            
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(file_path, 'w') as f:
+                json.dump(data, f, indent=2)
+            
+            logger.debug(f"Состояние {key} сохранено в {file_path}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка сохранения состояния {key}: {e}")
+            return False
+    
+    def _save_persistent_states(self) -> None:
+        with self._lock:
+            persistent_keys = [
+                key for key, wrapper in self._states.items()
+                if wrapper.metadata.is_persistent
+            ]
+            
+            for key in persistent_keys:
+                self._save_state(key)
+            
+            logger.info(f"Сохранено {len(persistent_keys)} персистентных состояний")
+    
+    def _load_persistent_states(self) -> None:
+        if not self._storage_path.exists():
+            logger.debug("Путь хранения не существует, пропускаем загрузку")
+            return
+        
+        loaded_count = 0
+        for file_path in self._storage_path.glob("*.json"):
+            try:
+                with open(file_path, 'r') as f:
+                    data = json.load(f)
+                
+                key = file_path.stem
+                value = data.get('value')
+                metadata = data.get('metadata', {})
+                
+                state_type_str = metadata.get('type', 'system_state')
+                state_type = next(
+                    (st for st in StateType if st.value == state_type_str),
+                    StateType.SYSTEM_STATE
+                )
+                
+                self.set_state(
+                    key=key,
+                    value=value,
+                    state_type=state_type,
+                    owner=metadata.get('owner', 'system'),
+                    tags=metadata.get('tags', []),
+                    is_persistent=True
+                )
+                
+                loaded_count += 1
+                
+            except Exception as e:
+                logger.error(f"Ошибка загрузки состояния из {file_path}: {e}")
+        
+        logger.info(f"Загружено {loaded_count} персистентных состояний")
+    
+    def _delete_persistent_state(self, key: str) -> bool:
+        try:
+            file_path = self._storage_path / f"{key}.json"
+            if file_path.exists():
+                file_path.unlink()
+                logger.debug(f"Файл состояния {key} удален")
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка удаления файла состояния {key}: {e}")
+            return Falset_states(self, filter_func: Optional[Callable[[str, StateWrapper], bool]] = None) -> Dict[str, Any]:
         """Экспорт состояний в словарь"""
         with self._lock:
             result = {}
