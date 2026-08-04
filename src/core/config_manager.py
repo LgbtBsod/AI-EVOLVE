@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 
-@dataclass
+@dataclass(slots=True)
 class DisplayConfig:
     width: int = 1600
     height: int = 900
@@ -15,14 +15,14 @@ class DisplayConfig:
     vsync: bool = True
 
 
-@dataclass
+@dataclass(slots=True)
 class AudioConfig:
     master_volume: float = 1.0
     music_volume: float = 0.7
     sfx_volume: float = 0.8
 
 
-@dataclass
+@dataclass(slots=True)
 class GameplayConfig:
     difficulty: str = "normal"
     auto_save: bool = True

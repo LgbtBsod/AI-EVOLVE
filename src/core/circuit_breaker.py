@@ -56,7 +56,7 @@ class CircuitBreaker:
             if self._state == CircuitState.OPEN:
                 # Проверяем, не истекло ли время восстановления
                 if self._last_failure_time and \
-                   time.time() - self._last_failure_time >= self.recovery_timeout:
+                   time.perf_counter() - self._last_failure_time >= self.recovery_timeout:
                     self._state = CircuitState.HALF_OPEN
                     self._failure_count = 0
             return self._state
@@ -99,7 +99,7 @@ class CircuitBreaker:
     def _on_failure(self):
         """Обработка сбоя."""
         self._failure_count += 1
-        self._last_failure_time = time.time()
+        self._last_failure_time = time.perf_counter()
         
         if self._failure_count >= self.failure_threshold:
             self._state = CircuitState.OPEN

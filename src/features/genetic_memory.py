@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from src.core.architecture import BaseComponent, ComponentType, Priority
 from src.core.state_manager import StateManager
 
-@dataclass
+@dataclass(slots=True)
 class MemoryFragment:
     ancestor_id: str
     skill_name: str
@@ -41,7 +41,7 @@ class GeneticMemorySystem(BaseComponent):
             ancestor_id=entity_id,
             skill_name=skill,
             potency=min(success_rate, 1.0),
-            timestamp=time.time(),
+            timestamp=time.perf_counter(),
             context_tags=context
         )
         
@@ -87,7 +87,7 @@ class GeneticMemorySystem(BaseComponent):
     def on_update(self, dt: float):
         # Fade out active echoes
         to_remove = []
-        current_time = time.time()
+        current_time = time.perf_counter()
         for eid, memory in self.active_echoes.items():
             if current_time - memory.timestamp > 10.0: # Simple expiration for demo
                 to_remove.append(eid)

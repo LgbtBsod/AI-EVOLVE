@@ -41,7 +41,7 @@ class StateVisibility(Enum):
     DEBUG = "debug"            # Только в режиме отладки
 
 
-@dataclass
+@dataclass(slots=True)
 class StateMetadata:
     """Метаданные состояния"""
     key: str
@@ -57,7 +57,7 @@ class StateMetadata:
     ttl: Optional[float] = None  # Время жизни в секундах (None = бессрочно)
 
 
-@dataclass
+@dataclass(slots=True)
 class StateWrapper(Generic[T]):
     """Обертка для состояния с метаданными"""
     metadata: StateMetadata
@@ -179,7 +179,7 @@ class StateManager:
         """
         try:
             with self._lock:
-                now = time.time()
+                now = time.perf_counter()
                 
                 if key in self._states:
                     # Обновление существующего состояния
@@ -246,7 +246,7 @@ class StateManager:
             
             # Проверка TTL
             if wrapper.metadata.ttl is not None:
-                age = time.time() - wrapper.metadata.updated_at
+                age = time.perf_counter() - wrapper.metadata.updated_at
                 if age > wrapper.metadata.ttl:
                     logger.debug(f"Состояние {key} истекло (TTL: {wrapper.metadata.ttl}s, возраст: {age:.1f}s)")
                     return default
@@ -508,7 +508,7 @@ class StateManager:
     
     def _cleanup_expired_states(self) -> int:
         """Очистка состояний с истекшим TTL"""
-        now = time.time()
+        now = time.perf_counter()
         expired_keys = []
         
         with self._lock:

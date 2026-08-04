@@ -21,7 +21,7 @@ class TerrainModificationType(Enum):
     RADIOACTIVE = "radioactive"   # Long-term DoT
 
 
-@dataclass
+@dataclass(slots=True)
 class TerrainModification:
     mod_type: TerrainModificationType
     position: Tuple[float, float]
@@ -34,7 +34,7 @@ class TerrainModification:
     def is_expired(self) -> bool:
         if self.duration < 0:
             return False
-        return time.time() - self.created_at > self.duration
+        return time.perf_counter() - self.created_at > self.duration
 
 
 class TerraformingSystem(BaseComponent):
@@ -70,7 +70,7 @@ class TerraformingSystem(BaseComponent):
             position=position,
             radius=radius,
             duration=duration,
-            created_at=time.time(),
+            created_at=time.perf_counter(),
             effects=effects or self._get_default_effects(mod_type)
         )
         
@@ -208,10 +208,10 @@ class TerraformingSystem(BaseComponent):
     def on_update(self, dt: float):
         """Cleanup expired modifications."""
         # Periodic cleanup
-        if hasattr(self, '_last_cleanup') and time.time() - self._last_cleanup < 5.0:
+        if hasattr(self, '_last_cleanup') and time.perf_counter() - self._last_cleanup < 5.0:
             return
             
-        self._last_cleanup = time.time()
+        self._last_cleanup = time.perf_counter()
         
         expired_count = sum(1 for m in self.modifications if m.is_expired)
         if expired_count > 0:

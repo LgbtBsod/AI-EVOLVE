@@ -45,7 +45,7 @@ class SkillDiscoveryState(Enum):
     OPTIMIZED = auto()
 
 
-@dataclass
+@dataclass(slots=True)
 class SkillInfo:
     """Информация о скилле."""
     skill_id: str
@@ -61,7 +61,7 @@ class SkillInfo:
     effectiveness_score: float = 0.0
 
 
-@dataclass
+@dataclass(slots=True)
 class WeaponInfo:
     """Информация об оружии."""
     weapon_id: str
@@ -74,7 +74,7 @@ class WeaponInfo:
     usage_count: int = 0
 
 
-@dataclass
+@dataclass(slots=True)
 class EntityState:
     """Состояние сущности (персонажа или врага)."""
     health: float
@@ -90,7 +90,7 @@ class EntityState:
     active_debuffs: List[str] = field(default_factory=list)
 
 
-@dataclass
+@dataclass(slots=True)
 class BattleContext:
     """Контекст боя для принятия решений."""
     self_state: EntityState
