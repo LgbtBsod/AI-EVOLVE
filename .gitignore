@@ -1,34 +1,68 @@
-```gitignore
+```
 # Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.py~
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local
+.env.*
 
 # Dependencies
 .venv/
 venv/
 env/
-.env
-.env.local
-.env.*
+ENV/
+.ENV/
+requirements.txt.bak
 
-# Build artifacts
-dist/
-build/
-*.egg-info/
-
-# Logs
-*.log
-
-# Editor/IDE
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *.tmp
 
-# ML models
-saves/ml_agents/**/*.pth
+# OS
+.DS_Store
+Thumbs.db
+
+# Backups
+.backups/
+
+# Database
+content.db
+
+# Saves
+saves/
+
+# Plugin cache
+plugins/example_plugin/__pycache__/
+
+# Requirements hash
+.requirements_installed.sha256
+
 ```

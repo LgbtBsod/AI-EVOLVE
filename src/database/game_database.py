@@ -11,6 +11,9 @@ import time
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, asdict
 from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -150,7 +153,7 @@ class GameDatabase:
             self.conn.commit()
             return True
         except Exception as e:
-            print(f"Error creating session: {e}")
+            logger.error(f"Error creating session: {e}")
             return False
     
     def update_session(self, session_id: str, **kwargs) -> bool:
@@ -185,7 +188,7 @@ class GameDatabase:
             self.conn.commit()
             return True
         except Exception as e:
-            print(f"Error updating session: {e}")
+            logger.error(f"Error updating session: {e}")
             return False
     
     def get_session(self, session_id: str) -> Optional[GameSession]:
@@ -199,7 +202,7 @@ class GameDatabase:
                 return self._row_to_session(row)
             return None
         except Exception as e:
-            print(f"Error getting session: {e}")
+            logger.error(f"Error getting session: {e}")
             return None
     
     def get_all_sessions(self, player_id: Optional[str] = None) -> List[GameSession]:
@@ -213,7 +216,7 @@ class GameDatabase:
             
             return [self._row_to_session(row) for row in cursor.fetchall()]
         except Exception as e:
-            print(f"Error getting sessions: {e}")
+            logger.error(f"Error getting sessions: {e}")
             return []
     
     def _row_to_session(self, row: sqlite3.Row) -> GameSession:
@@ -259,7 +262,7 @@ class GameDatabase:
             self.conn.commit()
             return True
         except Exception as e:
-            print(f"Error adding training record: {e}")
+            logger.error(f"Error adding training record: {e}")
             return False
     
     def get_training_data(self, session_id: Optional[str] = None, 
@@ -292,7 +295,7 @@ class GameDatabase:
                 for row in cursor.fetchall()
             ]
         except Exception as e:
-            print(f"Error getting training data: {e}")
+            logger.error(f"Error getting training data: {e}")
             return []
     
     # === NPC Interactions ===
@@ -321,7 +324,7 @@ class GameDatabase:
             self.conn.commit()
             return True
         except Exception as e:
-            print(f"Error logging NPC interaction: {e}")
+            logger.error(f"Error logging NPC interaction: {e}")
             return False
     
     # === Statistics ===
@@ -352,7 +355,7 @@ class GameDatabase:
                 'ml_records_count': self._get_ml_records_count()
             }
         except Exception as e:
-            print(f"Error getting statistics: {e}")
+            logger.error(f"Error getting statistics: {e}")
             return {}
     
     def _get_ml_records_count(self) -> int:
