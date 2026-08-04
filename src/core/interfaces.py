@@ -1,64 +1,31 @@
+#!/usr/bin/env python3
 """
 ISP (Interface Segregation Principle) Interfaces
-Разделение больших интерфейсов на меньшие, специфичные для клиента.
-Позволяет классам реализовывать только те методы, которые им действительно нужны.
+
+REFactoring Summary:
+- DRY: Удалено дублирование с architecture.py (теперь используются Protocol из architecture)
+- Type Hints: Обновлены на Python 3.10+ стиль (dict, list, T | None)
+- ISP: Интерфейсы разбиты по областям ответственности
+- SSOT: Базовые интерфейсы компонентов импортируются из architecture.py
 """
+
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional, Callable, List
-from enum import Enum
+from typing import Any, Callable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from architecture import IComponent
 
 
-# === Lifecycle Interfaces ===
+# ============================================================================
+# EVENT INTERFACES
+# ============================================================================
 
-class IInitializable(ABC):
-    """Интерфейс для инициализируемых компонентов."""
-    @abstractmethod
-    def on_init(self) -> None:
-        """Инициализация компонента."""
-        pass
-
-
-class IStartable(ABC):
-    """Интерфейс для запускаемых компонентов."""
-    @abstractmethod
-    def on_start(self) -> None:
-        """Запуск компонента."""
-        pass
-
-
-class IPausable(ABC):
-    """Интерфейс для приостанавливаемых компонентов."""
-    @abstractmethod
-    def on_pause(self) -> None:
-        """Пауза."""
-        pass
-    
-    @abstractmethod
-    def on_resume(self) -> None:
-        """Возобновление."""
-        pass
-
-
-class IStoppable(ABC):
-    """Интерфейс для останавливаемых компонентов."""
-    @abstractmethod
-    def on_stop(self) -> None:
-        """Остановка."""
-        pass
-
-
-class IDestroyable(ABC):
-    """Интерфейс для уничтожаемых компонентов."""
-    @abstractmethod
-    def on_destroy(self) -> None:
-        """Очистка ресурсов."""
-        pass
-
-
-# === Event Interfaces ===
 
 class IEventListener(ABC):
     """Интерфейс для слушателя событий."""
+    
     @abstractmethod
     def handle_event(self, event_type: str, data: Any) -> None:
         """Обработка события."""
@@ -67,28 +34,33 @@ class IEventListener(ABC):
 
 class IEventEmitter(ABC):
     """Интерфейс для эмиттера событий."""
+    
     @abstractmethod
     def emit(self, event_type: str, data: Any) -> None:
         """Отправка события."""
         pass
     
     @abstractmethod
-    def subscribe(self, event_type: str, callback: Callable) -> None:
+    def subscribe(self, event_type: str, callback: Callable[..., None]) -> None:
         """Подписка на событие."""
         pass
     
     @abstractmethod
-    def unsubscribe(self, event_type: str, callback: Callable) -> None:
+    def unsubscribe(self, event_type: str, callback: Callable[..., None]) -> None:
         """Отписка от события."""
         pass
 
 
-# === State Interfaces ===
+# ============================================================================
+# STATE INTERFACES
+# ============================================================================
+
 
 class IStateGetter(ABC):
     """Интерфейс только для чтения состояний."""
+    
     @abstractmethod
-    def get_state(self, key: str) -> Optional[Any]:
+    def get_state(self, key: str) -> Any | None:
         """Получение состояния."""
         pass
     
@@ -100,8 +72,9 @@ class IStateGetter(ABC):
 
 class IStateSetter(ABC):
     """Интерфейс только для записи состояний."""
+    
     @abstractmethod
-    def set_state(self, key: str, value: Any, ttl: Optional[float] = None) -> None:
+    def set_state(self, key: str, value: Any, ttl: float | None = None) -> None:
         """Установка состояния."""
         pass
     
@@ -113,52 +86,21 @@ class IStateSetter(ABC):
 
 class IStateObserver(ABC):
     """Интерфейс для наблюдателя за изменениями состояний."""
+    
     @abstractmethod
     def on_state_changed(self, key: str, old_value: Any, new_value: Any) -> None:
         """Вызывается при изменении состояния."""
         pass
 
 
-# === Component Interfaces ===
+# ============================================================================
+# COMBAT INTERFACES
+# ============================================================================
 
-class IComponentInfo(ABC):
-    """Интерфейс для получения информации о компоненте."""
-    @property
-    @abstractmethod
-    def name(self) -> str:
-        """Имя компонента."""
-        pass
-    
-    @property
-    @abstractmethod
-    def component_id(self) -> str:
-        """Уникальный ID."""
-        pass
-    
-    @property
-    @abstractmethod
-    def is_enabled(self) -> bool:
-        """Флаг активности."""
-        pass
-
-
-class IComponentMetrics(ABC):
-    """Интерфейс для получения метрик компонента."""
-    @abstractmethod
-    def get_metrics(self) -> Dict[str, Any]:
-        """Получение метрик производительности."""
-        pass
-    
-    @abstractmethod
-    def reset_metrics(self) -> None:
-        """Сброс метрик."""
-        pass
-
-
-# === Combat Interfaces (для рефакторинга CombatSystem) ===
 
 class IHealthComponent(ABC):
     """Интерфейс компонента здоровья."""
+    
     @abstractmethod
     def take_damage(self, amount: float) -> float:
         """Получение урона. Возвращает фактический урон."""
@@ -190,6 +132,7 @@ class IHealthComponent(ABC):
 
 class IDamageDealer(ABC):
     """Интерфейс для наносящего урон."""
+    
     @abstractmethod
     def calculate_damage(self, target: IHealthComponent) -> float:
         """Расчет урона по цели."""
@@ -203,6 +146,7 @@ class IDamageDealer(ABC):
 
 class ICombatStats(ABC):
     """Интерфейс боевых характеристик."""
+    
     @property
     @abstractmethod
     def damage(self) -> float:
@@ -222,50 +166,51 @@ class ICombatStats(ABC):
         pass
 
 
-# === Cache Interfaces ===
+# ============================================================================
+# CACHE INTERFACES
+# ============================================================================
+
 
 class ICacheable(ABC):
     """Интерфейс для кэшируемых данных."""
+    
     @abstractmethod
     def get_cache_key(self) -> str:
         """Ключ для кэширования."""
         pass
     
     @abstractmethod
-    def get_ttl(self) -> Optional[float]:
+    def get_ttl(self) -> float | None:
         """Время жизни в кэше."""
         pass
 
 
-# === Asset/Load Interfaces ===
+# ============================================================================
+# ASSET/LOAD INTERFACES
+# ============================================================================
+
 
 class ILoadable(ABC):
     """Интерфейс для загружаемых ресурсов."""
+    
     @abstractmethod
-    def save_state(self) -> Dict[str, Any]:
+    def save_state(self) -> dict[str, Any]:
         """Сохранение состояния."""
         pass
     
     @abstractmethod
-    def load_state(self, state: Dict[str, Any]) -> None:
+    def load_state(self, state: dict[str, Any]) -> None:
         """Загрузка состояния."""
         pass
 
 
-# === Composite Interfaces (удобные комбинации) ===
-
-class IFullLifecycle(IInitializable, IStartable, IPausable, IStoppable, IDestroyable):
-    """Полный жизненный цикл компонента."""
-    pass
+# ============================================================================
+# COMPOSITE INTERFACES (удобные комбинации)
+# ============================================================================
 
 
 class IReadWriteState(IStateGetter, IStateSetter):
     """Полный доступ к состоянию (чтение + запись)."""
-    pass
-
-
-class IGameComponent(IComponentInfo, IFullLifecycle, IComponentMetrics):
-    """Полноценный игровой компонент."""
     pass
 
 
