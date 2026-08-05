@@ -13,14 +13,15 @@ Refactoring Summary:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import Enum
-from pathlib import Path
 import json
 import logging
 import threading
 import time
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from enum import Enum
+from pathlib import Path
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -102,8 +103,12 @@ class StateManager:
     """
     
     __slots__ = (
-        '_states', '_lock', '_storage_path', '_is_running',
-        '_cleanup_thread', '_stats'
+        '_cleanup_thread',
+        '_is_running',
+        '_lock',
+        '_states',
+        '_stats',
+        '_storage_path'
     )
     
     def __init__(self, storage_path: Path | None = None) -> None:
@@ -557,7 +562,9 @@ class StateManager:
             return True
         except Exception as e:
             logger.error(f"Ошибка удаления файла состояния {key}: {e}")
-            return Falset_states(self, filter_func: Optional[Callable[[str, StateWrapper], bool]] = None) -> Dict[str, Any]:
+            return False
+
+    def export_states(self, filter_func: Optional[Callable[[str, StateWrapper], bool]] = None) -> Dict[str, Any]:
         """Экспорт состояний в словарь"""
         with self._lock:
             result = {}

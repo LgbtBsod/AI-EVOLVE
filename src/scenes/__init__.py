@@ -1,12 +1,8 @@
 
 import logging
-
 import os
-
 import sys
-
 from pathlib import Path
-
 
 """
     Scenes module for AI - EVOLVE Enhanced Edition:
@@ -16,9 +12,9 @@ from pathlib import Path
 
 
 __all__= [
-    'MenuScene',
     'GameScene',
+    'LoadScene',
+    'MenuScene',
     'PauseScene',
-    'SettingsScene',
-    'LoadScene'
+    'SettingsScene'
 ]

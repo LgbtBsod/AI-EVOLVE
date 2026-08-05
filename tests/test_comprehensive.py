@@ -15,7 +15,6 @@ from src.core.di_container import DIContainer, ServiceLifetime, get_container, r
 from src.core.circuit_breaker import CircuitBreaker, CircuitState, circuit_breaker, CircuitBreakerError
 from src.core.cache import LRUCache, cached
 from src.core.interfaces import (
-    IInitializable, IStartable, IPausable, IStoppable, IDestroyable,
     IHealthComponent, IDamageDealer, ICombatStats
 )
 from src.core.validation import ComponentConfig, CombatStats, EventData, ValidationError

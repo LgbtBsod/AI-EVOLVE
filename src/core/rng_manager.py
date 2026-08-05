@@ -9,11 +9,9 @@ from __future__ import annotations
 
 import random
 import secrets
-from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Generic, Sequence, TypeVar
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import TypeVar
 
 T = TypeVar('T')
 
@@ -37,7 +35,7 @@ class RNGManager:
     - Поддержка как deterministic, так и crypto-safe режимов
     """
     
-    __slots__ = ('_rng', '_config', '_fallback_rng')
+    __slots__ = ('_config', '_fallback_rng', '_rng')
     
     def __init__(self, config: RNGConfig | None = None) -> None:
         self._config = config or RNGConfig()

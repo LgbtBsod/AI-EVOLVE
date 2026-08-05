@@ -3,12 +3,11 @@
 
 import logging
 import time
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
-from src.core.architecture import BaseComponent, ComponentType, Priority, LifecycleState
-from src.core.constants import constants_manager, ToughnessType, StanceState
+from src.core.architecture import BaseComponent, ComponentType, LifecycleState, Priority
 from src.core.state_manager import StateManager, StateType
 
 logger = logging.getLogger(__name__)
@@ -81,7 +80,7 @@ class AttributeSet:
     luck: float = 10.0
     endurance: float = 10.0
     
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> dict[str, float]:
         """Преобразование в словарь"""
         return {
             'strength': self.strength,
@@ -94,7 +93,7 @@ class AttributeSet:
             'endurance': self.endurance
         }
     
-    def from_dict(self, data: Dict[str, float]):
+    def from_dict(self, data: dict[str, float]):
         """Загрузка из словаря"""
         for key, value in data.items():
             if hasattr(self, key):
@@ -104,7 +103,7 @@ class StatCalculator:
     """Калькулятор производных характеристик"""
     
     @staticmethod
-    def calculate_health(attributes: Dict[str, float]) -> float:
+    def calculate_health(attributes: dict[str, float]) -> float:
         """Расчет здоровья"""
         base = 100
         vitality = attributes.get('vitality', 0)
@@ -112,7 +111,7 @@ class StatCalculator:
         return base + (vitality * 10) + (strength * 2)
     
     @staticmethod
-    def calculate_mana(attributes: Dict[str, float]) -> float:
+    def calculate_mana(attributes: dict[str, float]) -> float:
         """Расчет маны"""
         base = 50
         intelligence = attributes.get('intelligence', 0)
@@ -120,7 +119,7 @@ class StatCalculator:
         return base + (intelligence * 8) + (wisdom * 4)
     
     @staticmethod
-    def calculate_stamina(attributes: Dict[str, float]) -> float:
+    def calculate_stamina(attributes: dict[str, float]) -> float:
         """Расчет стамины"""
         base = 100
         endurance = attributes.get('endurance', 0)
@@ -128,7 +127,7 @@ class StatCalculator:
         return base + (endurance * 10) + (vitality * 3)
     
     @staticmethod
-    def calculate_physical_damage(attributes: Dict[str, float]) -> float:
+    def calculate_physical_damage(attributes: dict[str, float]) -> float:
         """Расчет физического урона"""
         base = 10
         strength = attributes.get('strength', 0)
@@ -136,7 +135,7 @@ class StatCalculator:
         return base + (strength * 2) + (agility * 1)
     
     @staticmethod
-    def calculate_magical_damage(attributes: Dict[str, float]) -> float:
+    def calculate_magical_damage(attributes: dict[str, float]) -> float:
         """Расчет магического урона"""
         base = 5
         intelligence = attributes.get('intelligence', 0)
@@ -144,7 +143,7 @@ class StatCalculator:
         return base + (intelligence * 3) + (wisdom * 1)
     
     @staticmethod
-    def calculate_defense(attributes: Dict[str, float]) -> float:
+    def calculate_defense(attributes: dict[str, float]) -> float:
         """Расчет защиты"""
         base = 5
         vitality = attributes.get('vitality', 0)
@@ -152,7 +151,7 @@ class StatCalculator:
         return base + (vitality * 1) + (endurance * 1)
     
     @staticmethod
-    def calculate_attack_speed(attributes: Dict[str, float]) -> float:
+    def calculate_attack_speed(attributes: dict[str, float]) -> float:
         """Расчет скорости атаки"""
         base = 1.0
         agility = attributes.get('agility', 0)
@@ -160,7 +159,7 @@ class StatCalculator:
         return base + (agility * 0.05) + (strength * 0.02)
     
     @staticmethod
-    def calculate_skill_recovery_speed(attributes: Dict[str, float]) -> float:
+    def calculate_skill_recovery_speed(attributes: dict[str, float]) -> float:
         """Расчет скорости восстановления навыков"""
         base = 1.0
         intelligence = attributes.get('intelligence', 0)
@@ -168,7 +167,7 @@ class StatCalculator:
         return base + (intelligence * 0.03) + (wisdom * 0.02)
     
     @staticmethod
-    def calculate_health_regen(attributes: Dict[str, float]) -> float:
+    def calculate_health_regen(attributes: dict[str, float]) -> float:
         """Расчет регенерации здоровья"""
         base = 1.0
         vitality = attributes.get('vitality', 0)
@@ -176,7 +175,7 @@ class StatCalculator:
         return base + (vitality * 0.5) + (endurance * 0.2)
     
     @staticmethod
-    def calculate_mana_regen(attributes: Dict[str, float]) -> float:
+    def calculate_mana_regen(attributes: dict[str, float]) -> float:
         """Расчет регенерации маны"""
         base = 2.0
         intelligence = attributes.get('intelligence', 0)
@@ -184,7 +183,7 @@ class StatCalculator:
         return base + (intelligence * 0.4) + (wisdom * 0.3)
     
     @staticmethod
-    def calculate_stamina_regen(attributes: Dict[str, float]) -> float:
+    def calculate_stamina_regen(attributes: dict[str, float]) -> float:
         """Расчет регенерации стамины"""
         base = 3.0
         endurance = attributes.get('endurance', 0)
@@ -192,7 +191,7 @@ class StatCalculator:
         return base + (endurance * 0.6) + (vitality * 0.2)
     
     @staticmethod
-    def calculate_critical_chance(attributes: Dict[str, float]) -> float:
+    def calculate_critical_chance(attributes: dict[str, float]) -> float:
         """Расчет шанса критического удара"""
         base = 0.05
         agility = attributes.get('agility', 0)
@@ -200,7 +199,7 @@ class StatCalculator:
         return base + (agility * 0.01) + (luck * 0.02)
     
     @staticmethod
-    def calculate_critical_damage(attributes: Dict[str, float]) -> float:
+    def calculate_critical_damage(attributes: dict[str, float]) -> float:
         """Расчет критического урона"""
         base = 1.5
         strength = attributes.get('strength', 0)
@@ -208,7 +207,7 @@ class StatCalculator:
         return base + (strength * 0.05) + (agility * 0.03)
     
     @staticmethod
-    def calculate_dodge_chance(attributes: Dict[str, float]) -> float:
+    def calculate_dodge_chance(attributes: dict[str, float]) -> float:
         """Расчет шанса уклонения"""
         base = 0.05
         agility = attributes.get('agility', 0)
@@ -216,7 +215,7 @@ class StatCalculator:
         return base + (agility * 0.015) + (luck * 0.01)
     
     @staticmethod
-    def calculate_block_chance(attributes: Dict[str, float]) -> float:
+    def calculate_block_chance(attributes: dict[str, float]) -> float:
         """Расчет шанса блока"""
         base = 0.05
         strength = attributes.get('strength', 0)
@@ -224,7 +223,7 @@ class StatCalculator:
         return base + (strength * 0.01) + (endurance * 0.01)
     
     @staticmethod
-    def calculate_magic_resistance(attributes: Dict[str, float]) -> float:
+    def calculate_magic_resistance(attributes: dict[str, float]) -> float:
         """Расчет сопротивления магии"""
         base = 0.0
         wisdom = attributes.get('wisdom', 0)
@@ -232,7 +231,7 @@ class StatCalculator:
         return base + (wisdom * 0.02) + (intelligence * 0.01)
     
     @staticmethod
-    def calculate_max_weight(attributes: Dict[str, float]) -> float:
+    def calculate_max_weight(attributes: dict[str, float]) -> float:
         """Расчет максимального веса"""
         base = 50.0
         strength = attributes.get('strength', 0)
@@ -240,7 +239,7 @@ class StatCalculator:
         return base + (strength * 5) + (endurance * 2)
     
     @staticmethod
-    def calculate_movement_speed(attributes: Dict[str, float]) -> float:
+    def calculate_movement_speed(attributes: dict[str, float]) -> float:
         """Расчет скорости движения"""
         base = 1.0
         agility = attributes.get('agility', 0)
@@ -248,7 +247,7 @@ class StatCalculator:
         return base + (agility * 0.03) + (endurance * 0.01)
     
     @staticmethod
-    def calculate_toughness(attributes: Dict[str, float]) -> float:
+    def calculate_toughness(attributes: dict[str, float]) -> float:
         """Расчет стойкости"""
         base = 100.0
         vitality = attributes.get('vitality', 0)
@@ -256,7 +255,7 @@ class StatCalculator:
         return base + (vitality * 8) + (endurance * 5)
     
     @staticmethod
-    def calculate_toughness_recovery(attributes: Dict[str, float]) -> float:
+    def calculate_toughness_recovery(attributes: dict[str, float]) -> float:
         """Расчет восстановления стойкости"""
         base = 10.0
         endurance = attributes.get('endurance', 0)
@@ -264,7 +263,7 @@ class StatCalculator:
         return base + (endurance * 0.8) + (vitality * 0.4)
     
     @classmethod
-    def calculate_all_stats(cls, attributes: Dict[str, float]) -> Dict[str, float]:
+    def calculate_all_stats(cls, attributes: dict[str, float]) -> dict[str, float]:
         """Расчет всех характеристик"""
         return {
             'health': cls.calculate_health(attributes),
@@ -300,7 +299,7 @@ class AttributeSystem(BaseComponent):
         )
         
         # Архитектурные компоненты
-        self.state_manager: Optional[StateManager] = None
+        self.state_manager: StateManager | None = None
         
         # Калькулятор характеристик
         self.stat_calculator = StatCalculator()
@@ -325,7 +324,7 @@ class AttributeSystem(BaseComponent):
         }
         
         # Кэш расчетов
-        self._stat_cache: Dict[str, Dict[str, float]] = {}
+        self._stat_cache: dict[str, dict[str, float]] = {}
         self._last_cleanup_time = time.time()
     
     def set_architecture_components(self, state_manager: StateManager):
@@ -451,8 +450,8 @@ class AttributeSystem(BaseComponent):
             logger.debug("Кэш характеристик очищен")
     
     def calculate_stats_for_entity(self, entity_id: str, base_attributes: AttributeSet, 
-                                 attribute_modifiers: List[AttributeModifier] = None,
-                                 stat_modifiers: List[StatModifier] = None) -> Dict[str, float]:
+                                 attribute_modifiers: list[AttributeModifier] = None,
+                                 stat_modifiers: list[StatModifier] = None) -> dict[str, float]:
         """Расчет характеристик для сущности"""
         try:
             # Проверяем кэш
@@ -485,7 +484,7 @@ class AttributeSystem(BaseComponent):
             return {}
     
     def _apply_attribute_modifiers(self, base_attributes: AttributeSet, 
-                                 modifiers: List[AttributeModifier]) -> Dict[str, float]:
+                                 modifiers: list[AttributeModifier]) -> dict[str, float]:
         """Применение модификаторов атрибутов"""
         try:
             # Начинаем с базовых атрибутов
@@ -515,8 +514,8 @@ class AttributeSystem(BaseComponent):
             logger.error(f"Ошибка применения модификаторов атрибутов: {e}")
             return base_attributes.to_dict()
     
-    def _apply_stat_modifiers(self, base_stats: Dict[str, float], 
-                            modifiers: List[StatModifier]) -> Dict[str, float]:
+    def _apply_stat_modifiers(self, base_stats: dict[str, float], 
+                            modifiers: list[StatModifier]) -> dict[str, float]:
         """Применение модификаторов характеристик"""
         try:
             final_stats = base_stats.copy()
@@ -545,7 +544,7 @@ class AttributeSystem(BaseComponent):
             logger.error(f"Ошибка применения модификаторов характеристик: {e}")
             return base_stats
     
-    def get_system_info(self) -> Dict[str, Any]:
+    def get_system_info(self) -> dict[str, Any]:
         """Получение информации о системе"""
         return {
             'name': self.component_id,
@@ -573,7 +572,7 @@ class AttributeSystem(BaseComponent):
             'update_time': 0.0
         }
     
-    def get_system_info(self) -> Dict[str, Any]:
+    def get_system_info(self) -> dict[str, Any]:
         """Получение информации о системе"""
         return {
             'name': self.component_id,

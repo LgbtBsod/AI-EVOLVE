@@ -2,19 +2,15 @@
 """Система тестирования - unit, integration и performance тесты
 Автоматизированное тестирование всех компонентов игры"""
 
+import concurrent.futures
+import logging
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple, Callable
-import logging
-import math
-import time
-import random
-import unittest
-import threading
-import concurrent.futures
+from typing import Any
 
-from src.core.architecture import BaseComponent, ComponentType, Priority, LifecycleState
+from src.core.architecture import BaseComponent, ComponentType, LifecycleState, Priority
 
 logger = logging.getLogger(__name__)
 
@@ -62,10 +58,10 @@ class TestCase:
     timeout: float = 30.0
     retry_count: int = 0
     max_retries: int = 3
-    dependencies: List[str] = field(default_factory=list)
-    setup_function: Optional[Callable] = None
-    teardown_function: Optional[Callable] = None
-    parameters: Dict[str, Any] = field(default_factory=dict)
+    dependencies: list[str] = field(default_factory=list)
+    setup_function: Callable | None = None
+    teardown_function: Callable | None = None
+    parameters: dict[str, Any] = field(default_factory=dict)
 
 @dataclass
 class TestResult:
@@ -74,11 +70,11 @@ class TestResult:
     test_name: str
     status: TestStatus
     start_time: float
-    end_time: Optional[float] = None
+    end_time: float | None = None
     duration: float = 0.0
-    error_message: Optional[str] = None
-    stack_trace: Optional[str] = None
-    performance_metrics: Dict[str, float] = field(default_factory=dict)
+    error_message: str | None = None
+    stack_trace: str | None = None
+    performance_metrics: dict[str, float] = field(default_factory=dict)
     retry_count: int = 0
 
 @dataclass
@@ -87,9 +83,9 @@ class TestSuite:
     suite_id: str
     name: str
     description: str
-    test_cases: List[TestCase] = field(default_factory=list)
-    setup_function: Optional[Callable] = None
-    teardown_function: Optional[Callable] = None
+    test_cases: list[TestCase] = field(default_factory=list)
+    setup_function: Callable | None = None
+    teardown_function: Callable | None = None
     parallel_execution: bool = False
     max_workers: int = 4
 
@@ -104,9 +100,9 @@ class TestReport:
     skipped_tests: int
     error_tests: int
     total_duration: float
-    test_results: List[TestResult] = field(default_factory=list)
-    performance_summary: Dict[str, float] = field(default_factory=dict)
-    coverage_data: Dict[str, float] = field(default_factory=dict)
+    test_results: list[TestResult] = field(default_factory=list)
+    performance_summary: dict[str, float] = field(default_factory=dict)
+    coverage_data: dict[str, float] = field(default_factory=dict)
 
 class TestSystem(BaseComponent):
     """Система тестирования"""
@@ -119,12 +115,12 @@ class TestSystem(BaseComponent):
         )
         
         # Тестовые наборы
-        self.test_suites: Dict[str, TestSuite] = {}
-        self.test_cases: Dict[str, TestCase] = {}
+        self.test_suites: dict[str, TestSuite] = {}
+        self.test_cases: dict[str, TestCase] = {}
         
         # Результаты тестирования
-        self.test_results: Dict[str, TestResult] = {}
-        self.current_report: Optional[TestReport] = None
+        self.test_results: dict[str, TestResult] = {}
+        self.current_report: TestReport | None = None
         
         # Настройки тестирования
         self.auto_run_tests: bool = False
@@ -138,10 +134,10 @@ class TestSystem(BaseComponent):
         self.total_tests_failed: int = 0
         
         # Callbacks
-        self.on_test_started: Optional[Callable] = None
-        self.on_test_completed: Optional[Callable] = None
-        self.on_test_failed: Optional[Callable] = None
-        self.on_suite_completed: Optional[Callable] = None
+        self.on_test_started: Callable | None = None
+        self.on_test_completed: Callable | None = None
+        self.on_test_failed: Callable | None = None
+        self.on_suite_completed: Callable | None = None
         
         logger.info("Система тестирования инициализирована")
     
@@ -419,7 +415,7 @@ class TestSystem(BaseComponent):
         except Exception as e:
             logger.error(f"Ошибка регистрации стресс-тестов: {e}")
     
-    def run_test(self, test_id: str) -> Optional[TestResult]:
+    def run_test(self, test_id: str) -> TestResult | None:
         """Запуск отдельного теста"""
         try:
             if test_id not in self.test_cases:
@@ -507,7 +503,7 @@ class TestSystem(BaseComponent):
             logger.error(f"Ошибка выполнения теста {test_id}: {e}")
             return None
     
-    def run_test_suite(self, suite_id: str) -> Optional[TestReport]:
+    def run_test_suite(self, suite_id: str) -> TestReport | None:
         """Запуск тестового набора"""
         try:
             if suite_id not in self.test_suites:
@@ -577,7 +573,7 @@ class TestSystem(BaseComponent):
             logger.error(f"Ошибка выполнения тестового набора {suite_id}: {e}")
             return None
     
-    def run_all_tests(self) -> Optional[TestReport]:
+    def run_all_tests(self) -> TestReport | None:
         """Запуск всех тестов"""
         try:
             logger.info("Запуск всех тестов...")
@@ -618,7 +614,7 @@ class TestSystem(BaseComponent):
             logger.error(f"Ошибка выполнения всех тестов: {e}")
             return None
     
-    def _run_tests_parallel(self, test_cases: List[TestCase]) -> List[Optional[TestResult]]:
+    def _run_tests_parallel(self, test_cases: list[TestCase]) -> list[TestResult | None]:
         """Параллельное выполнение тестов"""
         try:
             results = []
@@ -645,7 +641,7 @@ class TestSystem(BaseComponent):
             logger.error(f"Ошибка параллельного выполнения тестов: {e}")
             return []
     
-    def _run_tests_sequential(self, test_cases: List[TestCase]) -> List[Optional[TestResult]]:
+    def _run_tests_sequential(self, test_cases: list[TestCase]) -> list[TestResult | None]:
         """Последовательное выполнение тестов"""
         try:
             results = []
@@ -704,7 +700,6 @@ class TestSystem(BaseComponent):
         """Тест базовой архитектуры"""
         try:
             # Проверка импорта базовых компонентов
-            from src.core.architecture import BaseComponent, ComponentType, Priority, LifecycleState
             
             # BaseComponent - абстрактный класс, используем ComponentRegistry для проверки
             from src.core.architecture import ComponentRegistry
@@ -725,7 +720,11 @@ class TestSystem(BaseComponent):
         """Тест системы эффектов"""
         try:
             # Проверка импорта системы эффектов
-            from src.systems.effects.effect_system import EffectSystem, EffectType, EffectCategory
+            from src.systems.effects.effect_system import (
+                EffectCategory,
+                EffectSystem,
+                EffectType,
+            )
             
             # Проверяем только импорт и наличие классов
             assert EffectSystem is not None
@@ -742,7 +741,11 @@ class TestSystem(BaseComponent):
         """Тест системы навыков"""
         try:
             # Проверка импорта системы навыков
-            from src.systems.skills.skill_system import SkillSystem, SkillType, SkillCategory
+            from src.systems.skills.skill_system import (
+                SkillCategory,
+                SkillSystem,
+                SkillType,
+            )
             
             # Проверяем только импорт и наличие классов
             assert SkillSystem is not None
@@ -759,7 +762,11 @@ class TestSystem(BaseComponent):
         """Тест системы боя"""
         try:
             # Проверка импорта системы боя
-            from src.systems.combat.combat_system import CombatSystem, CombatType, AttackType
+            from src.systems.combat.combat_system import (
+                AttackType,
+                CombatSystem,
+                CombatType,
+            )
             
             # Проверяем только импорт и наличие классов
             assert CombatSystem is not None
@@ -776,7 +783,7 @@ class TestSystem(BaseComponent):
         """Тест системы UI"""
         try:
             # Проверка импорта системы UI
-            from src.ui.ui_system import UISystem, UIType, UILayout
+            from src.ui.ui_system import UILayout, UISystem, UIType
             
             # Проверяем только импорт и наличие классов
             assert UISystem is not None
@@ -793,10 +800,11 @@ class TestSystem(BaseComponent):
         """Тест интеграции систем"""
         try:
             # Проверяем только импорты (системы имеют абстрактные методы)
-            from src.systems.effects.effect_system import EffectSystem
             from src.systems.skills.skill_system import SkillSystem
-            from src.systems.combat.combat_system import CombatSystem
             from src.ui.ui_system import UISystem
+
+            from src.systems.combat.combat_system import CombatSystem
+            from src.systems.effects.effect_system import EffectSystem
             
             # Проверка что классы существуют
             assert EffectSystem is not None
@@ -936,7 +944,7 @@ class TestSystem(BaseComponent):
             logger.error(f"Стресс-тест системы боя провален: {e}")
             raise
     
-    def get_test_statistics(self) -> Dict[str, Any]:
+    def get_test_statistics(self) -> dict[str, Any]:
         """Получение статистики тестирования"""
         try:
             return {
@@ -971,7 +979,6 @@ class TestSystem(BaseComponent):
     
     def _on_update(self, delta_time: float) -> None:
         """Переопределяемый метод обновления - не используется для TestSystem"""
-        pass
     
     def _on_initialize(self) -> bool:
         """Переопределяемый метод инициализации"""
@@ -979,20 +986,15 @@ class TestSystem(BaseComponent):
     
     def _on_start(self) -> None:
         """Переопределяемый метод запуска"""
-        pass
     
     def _on_pause(self) -> None:
         """Переопределяемый метод приостановки"""
-        pass
     
     def _on_resume(self) -> None:
         """Переопределяемый метод возобновления"""
-        pass
     
     def _on_stop(self) -> None:
         """Переопределяемый метод остановки"""
-        pass
     
     def _on_destroy(self) -> None:
         """Переопределяемый метод уничтожения"""
-        pass

@@ -2,8 +2,8 @@
 """Базовая сущность для всех игровых объектов"""
 
 import logging
-from typing import Dict, List, Optional, Any
 from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +35,7 @@ class BaseEntity:
         self.is_alive = True
         
         # Компоненты
-        self.components: Dict[str, Any] = {}
+        self.components: dict[str, Any] = {}
         
         # Metadata
         self.created_at = None
@@ -62,7 +62,6 @@ class BaseEntity:
             return
         
         # Обновление логики сущности (переопределяется в наследниках)
-        pass
     
     def take_damage(self, damage: float, damage_type: str = "physical") -> float:
         """Получение урона"""
@@ -119,7 +118,7 @@ class BaseEntity:
             logger.error(f"Ошибка добавления компонента {component_name}: {e}")
             return False
     
-    def get_component(self, component_name: str) -> Optional[Any]:
+    def get_component(self, component_name: str) -> Any | None:
         """Получение компонента"""
         return self.components.get(component_name)
     
@@ -143,7 +142,7 @@ class BaseEntity:
             logger.error(f"Ошибка уничтожения сущности {self.entity_id}: {e}")
             return False
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Сериализация в словарь"""
         return {
             'entity_id': self.entity_id,
@@ -160,7 +159,7 @@ class BaseEntity:
         }
     
     @classmethod
-    def from_dict(cls, data: Dict[str, Any], game=None) -> 'BaseEntity':
+    def from_dict(cls, data: dict[str, Any], game=None) -> 'BaseEntity':
         """Десериализация из словаря"""
         entity = cls(
             entity_id=data['entity_id'],

@@ -2,35 +2,35 @@
 """AI системы - Единая система искусственного интеллекта с машинным обучением"""
 
 from .ai_system import (
-    AISystem,
-    AIType,
-    AIState,
-    AIPriority,
-    MemoryType,
-    LearningType,
-    AIEntity,
     AIBehavior,
     AIDecision,
-    MemoryEntry,
+    AIEntity,
+    AINeuralNetwork,
+    AIPriority,
+    AISettings,
+    AIState,
+    AISystem,
+    AIType,
     GenerationMemory,
     LearningExperience,
-    AISettings,
-    AINeuralNetwork
+    LearningType,
+    MemoryEntry,
+    MemoryType,
 )
 
 __all__ = [
-    'AISystem',
-    'AIType', 
-    'AIState',
-    'AIPriority',
-    'MemoryType',
-    'LearningType',
-    'AIEntity',
     'AIBehavior',
     'AIDecision',
-    'MemoryEntry',
+    'AIEntity',
+    'AINeuralNetwork',
+    'AIPriority',
+    'AISettings',
+    'AIState',
+    'AISystem',
+    'AIType',
     'GenerationMemory',
     'LearningExperience',
-    'AISettings',
-    'AINeuralNetwork'
+    'LearningType',
+    'MemoryEntry',
+    'MemoryType'
 ]

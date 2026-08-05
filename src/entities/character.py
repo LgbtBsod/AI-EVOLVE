@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
-import math
-import time
-import random
-from typing import Dict, List, Optional, Any, Tuple
-from panda3d.core import CardMaker, Vec3, Vec4, TransparencyAttrib, LODNode
-
-from .base_entity import BaseEntity
-from ..core.constants import EntityType
 import logging
+import math
+import random
+import time
+from typing import Any
+
+from panda3d.core import CardMaker, TransparencyAttrib
+
+from ..core.constants import EntityType
+from .base_entity import BaseEntity
 
 logger = logging.getLogger(__name__)
 
@@ -18,29 +18,93 @@ class Character(BaseEntity):
     """Класс персонажа с улучшенной графикой - наследуется от BaseEntity"""
     
     __slots__ = (
-        'game', 'x', 'y', 'z', 'character_class', 'color', 'node',
-        'level', 'experience', 'experience_to_next_level',
-        'max_health', 'health', 'max_mana', 'mana', 'max_stamina', 'stamina',
-        'physical_damage', 'magical_damage', 'defense', 'attack_speed', 'attack_range',
-        'critical_chance', 'critical_damage', 'dodge_chance', 'magic_resistance',
-        'speed', 'health_regen', 'mana_regen', 'stamina_regen',
-        'attack_cooldown', 'attack_cooldown_time',
-        'animation_state', 'animation_time', 'bob_offset', 'rotation_offset',
-        'attack_start_time', 'entity_id', 'ai_enabled', 'ai_state', 'target_enemy',
-        'target_item', 'last_ai_update', 'ai_update_interval',
-        'last_defensive_skill_time', 'defensive_skill_cooldown',
-        'exploration_target', 'exploration_retarget_interval', 'last_exploration_target_time',
-        'is_player', 'reputation', 'fame', 'achievements', 'total_playtime',
-        'charisma_bonus', 'persuasion_skill', 'quests_completed', 'locations_visited',
-        'npcs_met', 'last_save', 'last_exploration', 'last_social',
-        'size', 'body', 'chest', 'head', 'left_eye', 'right_eye', 'left_pupil',
-        'right_pupil', 'left_arm', 'right_arm', 'left_hand', 'right_hand',
-        'left_leg', 'right_leg', 'left_foot', 'right_foot',
-        'sword', 'staff', 'orb', 'left_dagger', 'right_dagger', 'aura'
+        'achievements',
+        'ai_enabled',
+        'ai_state',
+        'ai_update_interval',
+        'animation_state',
+        'animation_time',
+        'attack_cooldown',
+        'attack_cooldown_time',
+        'attack_range',
+        'attack_speed',
+        'attack_start_time',
+        'aura',
+        'bob_offset',
+        'body',
+        'character_class',
+        'charisma_bonus',
+        'chest',
+        'color',
+        'critical_chance',
+        'critical_damage',
+        'defense',
+        'defensive_skill_cooldown',
+        'dodge_chance',
+        'entity_id',
+        'experience',
+        'experience_to_next_level',
+        'exploration_retarget_interval',
+        'exploration_target',
+        'fame',
+        'game',
+        'head',
+        'health',
+        'health_regen',
+        'is_player',
+        'last_ai_update',
+        'last_defensive_skill_time',
+        'last_exploration',
+        'last_exploration_target_time',
+        'last_save',
+        'last_social',
+        'left_arm',
+        'left_dagger',
+        'left_eye',
+        'left_foot',
+        'left_hand',
+        'left_leg',
+        'left_pupil',
+        'level',
+        'locations_visited',
+        'magic_resistance',
+        'magical_damage',
+        'mana',
+        'mana_regen',
+        'max_health',
+        'max_mana',
+        'max_stamina',
+        'node',
+        'npcs_met',
+        'orb',
+        'persuasion_skill',
+        'physical_damage',
+        'quests_completed',
+        'reputation',
+        'right_arm',
+        'right_dagger',
+        'right_eye',
+        'right_foot',
+        'right_hand',
+        'right_leg',
+        'right_pupil',
+        'rotation_offset',
+        'size',
+        'speed',
+        'staff',
+        'stamina',
+        'stamina_regen',
+        'sword',
+        'target_enemy',
+        'target_item',
+        'total_playtime',
+        'x',
+        'y',
+        'z'
     )
     
     def __init__(self, character_id: str, game, x: float = 0, y: float = 0, z: float = 0, 
-                 character_class: str = "warrior", color: Tuple[float, float, float, float] = (1, 1, 1, 1), 
+                 character_class: str = "warrior", color: tuple[float, float, float, float] = (1, 1, 1, 1), 
                  is_player: bool = False) -> None:
         # Инициализируем базовую сущность
         entity_type = EntityType.PLAYER if is_player else EntityType.NPC
@@ -118,13 +182,13 @@ class Character(BaseEntity):
         if is_player:
             self.reputation = 0
             self.fame = 0
-            self.achievements: List[Any] = []
+            self.achievements: list[Any] = []
             self.total_playtime = 0.0
             self.charisma_bonus = 0.0
             self.persuasion_skill = 0.5
-            self.quests_completed: List[Any] = []
-            self.locations_visited: List[Any] = []
-            self.npcs_met: List[Any] = []
+            self.quests_completed: list[Any] = []
+            self.locations_visited: list[Any] = []
+            self.npcs_met: list[Any] = []
             self.last_save = 0.0
             self.last_exploration = 0.0
             self.last_social = 0.0
@@ -397,7 +461,6 @@ class Character(BaseEntity):
         cube = parent.attachNewNode(name)
         
         # Создаем куб из 6 граней с разными текстурами
-        from panda3d.core import CardMaker
         
         # Передняя грань
         cm = CardMaker(f"{name}_front")
@@ -459,7 +522,6 @@ class Character(BaseEntity):
         """Применение текстуры к грани"""
         # В реальной игре здесь была бы загрузка и применение текстур
         # Пока что просто применяем базовый цвет
-        pass
         
     def _start_animations(self):
         """Запуск анимаций персонажа"""
@@ -589,8 +651,8 @@ class Character(BaseEntity):
         return self.health <= 0
         
     def update_ai(self, enemies, items, dt, exit_position=None, vision_range: float = 0.0,
-                  known_exit_positions: Optional[List[Tuple[float, float]]] = None,
-                  hint_positions: Optional[List[Tuple[float, float]]] = None):
+                  known_exit_positions: list[tuple[float, float]] | None = None,
+                  hint_positions: list[tuple[float, float]] | None = None):
         """Обновление ИИ персонажа.
 
         :param exit_position: текущие координаты маяка выхода (если известны системе сцены)

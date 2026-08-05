@@ -11,17 +11,15 @@ Refactored:
 
 from __future__ import annotations
 
+import logging
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple, Callable, Set
-import logging
-import math
-import time
+from typing import Any
 
-from src.core.architecture import BaseComponent, ComponentType, Priority, LifecycleState
-from src.core.constants import EffectType, EffectCategory
-from src.core.state_manager import StateManager, StateType
+from src.core.architecture import BaseComponent, ComponentType, LifecycleState, Priority
+from src.core.constants import EffectCategory, EffectType
 from src.core.rng_manager import RNGManager
 
 logger = logging.getLogger(__name__)
@@ -43,7 +41,7 @@ class EffectModifier:
     stat_type: str
     value: float
     modifier_type: str = "additive"  # additive, multiplicative, override
-    condition: Optional[str] = None
+    condition: str | None = None
 
 @dataclass(slots=True)
 class EffectTrigger:
@@ -66,13 +64,13 @@ class Effect:
     stack_type: EffectStackType = EffectStackType.NONE
     max_stacks: int = 1
     current_stacks: int = 1
-    modifiers: List[EffectModifier] = field(default_factory=list)
-    triggers: List[EffectTrigger] = field(default_factory=list)
-    visual_effects: List[str] = field(default_factory=list)
-    sound_effects: List[str] = field(default_factory=list)
-    icon_path: Optional[str] = None
+    modifiers: list[EffectModifier] = field(default_factory=list)
+    triggers: list[EffectTrigger] = field(default_factory=list)
+    visual_effects: list[str] = field(default_factory=list)
+    sound_effects: list[str] = field(default_factory=list)
+    icon_path: str | None = None
     created_at: float = field(default_factory=lambda: time.perf_counter())
-    source: Optional[str] = None
+    source: str | None = None
     removable: bool = True
     dispellable: bool = True
 
@@ -82,7 +80,7 @@ class ActiveEffect:
     effect: Effect
     entity_id: str
     applied_at: float = field(default_factory=lambda: time.perf_counter())
-    expires_at: Optional[float] = None
+    expires_at: float | None = None
     current_stacks: int = 1
     is_active: bool = True
     last_tick: float = field(default_factory=lambda: time.perf_counter())
@@ -97,26 +95,26 @@ class EffectTemplate:
     effect_type: EffectType
     category: EffectCategory
     base_duration: float
-    base_modifiers: List[EffectModifier]
-    base_triggers: List[EffectTrigger]
-    visual_effects: List[str]
-    sound_effects: List[str]
-    icon_path: Optional[str] = None
-    requirements: Dict[str, Any] = field(default_factory=dict)
+    base_modifiers: list[EffectModifier]
+    base_triggers: list[EffectTrigger]
+    visual_effects: list[str]
+    sound_effects: list[str]
+    icon_path: str | None = None
+    requirements: dict[str, Any] = field(default_factory=dict)
 
 class EffectSystem(BaseComponent):
     """Система эффектов"""
     
     __slots__ = (
-        'effect_templates',
+        '_rng',
         'active_effects',
-        'total_effects_applied',
-        'total_effects_removed',
         'effect_statistics',
+        'effect_templates',
         'on_effect_applied',
         'on_effect_removed',
         'on_effect_tick',
-        '_rng'
+        'total_effects_applied',
+        'total_effects_removed'
     )
     
     def __init__(self) -> None:
@@ -130,18 +128,18 @@ class EffectSystem(BaseComponent):
         self._rng = RNGManager()
         
         # Эффекты
-        self.effect_templates: Dict[str, EffectTemplate] = {}
-        self.active_effects: Dict[str, List[ActiveEffect]] = {}  # entity_id -> effects
+        self.effect_templates: dict[str, EffectTemplate] = {}
+        self.active_effects: dict[str, list[ActiveEffect]] = {}  # entity_id -> effects
         
         # Статистика
         self.total_effects_applied: int = 0
         self.total_effects_removed: int = 0
-        self.effect_statistics: Dict[str, int] = {}
+        self.effect_statistics: dict[str, int] = {}
         
         # Callbacks
-        self.on_effect_applied: Optional[Callable] = None
-        self.on_effect_removed: Optional[Callable] = None
-        self.on_effect_tick: Optional[Callable] = None
+        self.on_effect_applied: Callable | None = None
+        self.on_effect_removed: Callable | None = None
+        self.on_effect_tick: Callable | None = None
         
         logger.info("Система эффектов инициализирована")
     
@@ -299,8 +297,8 @@ class EffectSystem(BaseComponent):
             logger.error(f"Ошибка создания базовых эффектов: {e}")
             return False
     
-    def apply_effect(self, entity_id: str, template_id: str, source: Optional[str] = None, 
-                    duration: Optional[float] = None, stacks: int = 1) -> Optional[str]:
+    def apply_effect(self, entity_id: str, template_id: str, source: str | None = None, 
+                    duration: float | None = None, stacks: int = 1) -> str | None:
         """Применение эффекта к сущности"""
         try:
             if template_id not in self.effect_templates:
@@ -413,7 +411,7 @@ class EffectSystem(BaseComponent):
             logger.error(f"Ошибка удаления эффекта: {e}")
             return False
     
-    def remove_all_effects(self, entity_id: str, effect_type: Optional[EffectType] = None) -> int:
+    def remove_all_effects(self, entity_id: str, effect_type: EffectType | None = None) -> int:
         """Удаление всех эффектов сущности"""
         try:
             if entity_id not in self.active_effects:
@@ -441,7 +439,7 @@ class EffectSystem(BaseComponent):
             logger.error(f"Ошибка удаления всех эффектов: {e}")
             return 0
     
-    def get_entity_effects(self, entity_id: str, effect_type: Optional[EffectType] = None) -> List[ActiveEffect]:
+    def get_entity_effects(self, entity_id: str, effect_type: EffectType | None = None) -> list[ActiveEffect]:
         """Получение эффектов сущности"""
         try:
             if entity_id not in self.active_effects:
@@ -474,7 +472,7 @@ class EffectSystem(BaseComponent):
             logger.error(f"Ошибка проверки наличия эффекта: {e}")
             return False
     
-    def get_effect_modifiers(self, entity_id: str, stat_type: str) -> List[EffectModifier]:
+    def get_effect_modifiers(self, entity_id: str, stat_type: str) -> list[EffectModifier]:
         """Получение модификаторов эффектов для характеристики"""
         try:
             modifiers = []
@@ -557,18 +555,31 @@ class EffectSystem(BaseComponent):
                         logger.debug(f"Тик эффекта {active_effect.effect.name} для {active_effect.entity_id}")
                 
                 elif trigger.trigger_type == "on_hit":
-                    # Обработка попаданий
-                    pass
+                    # Обработка попаданий - применение эффектов при успешном попадании
+                    for effect_id in trigger.effects:
+                        if effect_id in self.effect_templates:
+                            template = self.effect_templates[effect_id]
+                            # Создаем эффект на цели попадания
+                            target_id = getattr(trigger.context, 'target_id', None)
+                            if target_id:
+                                self.apply_effect(target_id, effect_id, source_entity_id=active_effect.entity_id)
+                                logger.debug(f"Эффект {effect_id} применён при попадании по {target_id}")
                 
                 elif trigger.trigger_type == "on_damage":
-                    # Обработка получения урона
-                    pass
+                    # Обработка получения урона - эффекты при получении урона
+                    for effect_id in trigger.effects:
+                        if effect_id in self.effect_templates:
+                            template = self.effect_templates[effect_id]
+                            # Применяем эффект к получившему урон
+                            damaged_entity_id = getattr(trigger.context, 'damaged_entity_id', active_effect.entity_id)
+                            self.apply_effect(damaged_entity_id, effect_id, source_entity_id=active_effect.entity_id)
+                            logger.debug(f"Эффект {effect_id} применён при получении урона {damaged_entity_id}")
                 
         except Exception as e:
             logger.error(f"Ошибка обработки триггеров эффекта: {e}")
     
-    def create_custom_effect(self, template_id: str, custom_modifiers: List[EffectModifier], 
-                           duration: float, name: str = "") -> Optional[str]:
+    def create_custom_effect(self, template_id: str, custom_modifiers: list[EffectModifier], 
+                           duration: float, name: str = "") -> str | None:
         """Создание пользовательского эффекта"""
         try:
             if template_id not in self.effect_templates:
@@ -597,7 +608,7 @@ class EffectSystem(BaseComponent):
             logger.exception("Ошибка создания пользовательского эффекта: %s", e)
             return None
     
-    def get_effect_statistics(self) -> Dict[str, Any]:
+    def get_effect_statistics(self) -> dict[str, Any]:
         """Получение статистики эффектов"""
         try:
             return {

@@ -4,11 +4,12 @@
 Использует паттерн "Контракт" для валидации действий и их выполнения.
 """
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Callable, TypeVar, Generic
-from enum import Enum, auto
 import logging
+from abc import ABC, abstractmethod
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from enum import Enum, auto
+from typing import Any, Generic, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -30,11 +31,11 @@ class ContractResult(Generic[T]):
     """Результат выполнения контракта."""
     success: bool
     status: ContractStatus
-    data: Optional[T] = None
-    error: Optional[str] = None
-    warnings: List[str] = field(default_factory=list)
+    data: T | None = None
+    error: str | None = None
+    warnings: list[str] = field(default_factory=list)
     execution_time: float = 0.0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def __bool__(self) -> bool:
         return self.success
@@ -59,11 +60,11 @@ class SmartContract(ABC):
         self.contract_id = contract_id
         self.priority = priority
         self.status = ContractStatus.PENDING
-        self.conditions: List[ContractCondition] = []
-        self.pre_hooks: List[Callable] = []
-        self.post_hooks: List[Callable] = []
-        self.rollback_hooks: List[Callable] = []
-        self.context: Dict[str, Any] = {}
+        self.conditions: list[ContractCondition] = []
+        self.pre_hooks: list[Callable] = []
+        self.post_hooks: list[Callable] = []
+        self.rollback_hooks: list[Callable] = []
+        self.context: dict[str, Any] = {}
         
     def add_condition(self, name: str, check_func: Callable[[], bool], 
                      error_message: str, is_critical: bool = True) -> 'SmartContract':
@@ -118,7 +119,7 @@ class SmartContract(ABC):
                     return ContractResult(
                         success=False,
                         status=ContractStatus.FAILED,
-                        error=f"Ошибка проверки {condition.name}: {str(e)}"
+                        error=f"Ошибка проверки {condition.name}: {e!s}"
                     )
         
         return ContractResult(success=True, status=ContractStatus.PENDING)
@@ -126,7 +127,6 @@ class SmartContract(ABC):
     @abstractmethod
     def execute(self) -> ContractResult[Any]:
         """Выполнить контракт."""
-        pass
     
     def rollback(self) -> None:
         """Откатить изменения."""
@@ -160,7 +160,7 @@ class SmartContract(ABC):
                 return ContractResult(
                     success=False,
                     status=ContractStatus.FAILED,
-                    error=f"Ошибка пре-хука: {str(e)}"
+                    error=f"Ошибка пре-хука: {e!s}"
                 )
         
         # Выполнение
@@ -175,7 +175,7 @@ class SmartContract(ABC):
                         hook(self.context, result.data)
                     except Exception as e:
                         logger.warning(f"Ошибка пост-хука: {e}")
-                        result.warnings.append(f"Пост-хук failed: {str(e)}")
+                        result.warnings.append(f"Пост-хук failed: {e!s}")
                 
                 self.status = ContractStatus.COMPLETED
             else:
@@ -223,7 +223,7 @@ class ContractRegistry:
         contract_class = self.contracts[contract_name]
         return contract_class(*args, **kwargs)
     
-    def get_all_contracts(self) -> Dict[str, type]:
+    def get_all_contracts(self) -> dict[str, type]:
         """Получить все зарегистрированные контракты."""
         return self.contracts.copy()
 

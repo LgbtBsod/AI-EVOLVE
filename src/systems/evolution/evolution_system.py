@@ -12,19 +12,18 @@ Refactored by Senior Python Architect:
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from enum import Enum
 import logging
 import time
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
 
 from src.core.architecture import BaseComponent, ComponentType, Priority
-from src.core.constants import GeneType, EvolutionType, constants_manager, PROBABILITY_CONSTANTS
+from src.core.constants import (
+    GeneType,
+)
 from src.core.rng_manager import RNGManager
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +65,7 @@ class Gene:
     name: str
     description: str
     base_value: float
-    current_value: Optional[float] = None
+    current_value: float | None = None
     max_value: float = 100.0
     mutation_chance: float = 0.05
     evolution_cost: int = 10
@@ -74,7 +73,7 @@ class Gene:
     effects: dict[str, float] = field(default_factory=dict)
     visual_effects: list[str] = field(default_factory=list)
     sound_effects: list[str] = field(default_factory=list)
-    last_mutation: Optional[float] = None
+    last_mutation: float | None = None
     mutation_count: int = 0
     
     def __post_init__(self) -> None:
@@ -95,9 +94,9 @@ class Mutation:
     effects: dict[str, float]
     visual_effects: list[str]
     sound_effects: list[str]
-    duration: Optional[float] = None
+    duration: float | None = None
     timestamp: float = field(default_factory=lambda: time.perf_counter())
-    source: Optional[str] = None
+    source: str | None = None
     reversible: bool = True
     cascade_chance: float = 0.1
 
@@ -124,7 +123,7 @@ class EvolutionProgress:
     total_mutations: int = 0
     active_mutations: list[str] = field(default_factory=list)
     evolution_history: list[dict[str, Any]] = field(default_factory=list)
-    last_evolution: Optional[float] = None
+    last_evolution: float | None = None
     evolution_path: EvolutionPath = EvolutionPath.NATURAL
 
 
@@ -138,7 +137,7 @@ class GeneticCombination:
     effects: dict[str, float]
     visual_effects: list[str]
     activation_chance: float
-    duration: Optional[float] = None
+    duration: float | None = None
 
 # = ОСНОВНАЯ СИСТЕМА ЭВОЛЮЦИИ
 class EvolutionSystem(BaseComponent):
@@ -409,7 +408,7 @@ class EvolutionSystem(BaseComponent):
             raise
     
     def trigger_mutation(self, character_id: str, gene_id: str,
-                        mutation_type: MutationType = MutationType.SPONTANEOUS) -> Optional[Mutation]:
+                        mutation_type: MutationType = MutationType.SPONTANEOUS) -> Mutation | None:
         """Запуск мутации гена"""
         try:
             if character_id not in self.character_progress:
@@ -445,7 +444,7 @@ class EvolutionSystem(BaseComponent):
             logger.error(f"Ошибка запуска мутации для персонажа {character_id}: {e}")
             return None
     
-    def _create_mutation(self, gene: Gene, mutation_type: MutationType) -> Optional[Mutation]:
+    def _create_mutation(self, gene: Gene, mutation_type: MutationType) -> Mutation | None:
         """Создание мутации для гена"""
         try:
             # Определяем уровень мутации
@@ -723,7 +722,7 @@ class EvolutionSystem(BaseComponent):
             logger.error(f"Ошибка добавления очков эволюции персонажу {character_id}: {e}")
             return False
     
-    def get_evolution_progress(self, character_id: str) -> Optional[EvolutionProgress]:
+    def get_evolution_progress(self, character_id: str) -> EvolutionProgress | None:
         """Получение прогресса эволюции персонажа"""
         return self.character_progress.get(character_id)
     

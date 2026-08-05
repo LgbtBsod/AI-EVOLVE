@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """ML-агент для обучения персонажа в AI-EVOLVE"""
 
-import logging
-import numpy as np
-from typing import Dict, List, Any, Optional, Tuple
-from enum import Enum
-import random
 import json
+import logging
 import os
+import random
+from enum import Enum
+from typing import Any
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,7 @@ class Observation:
     """Наблюдение среды для агента"""
     
     def __init__(self, 
-                 position: Tuple[float, float] = (0.0, 0.0),
+                 position: tuple[float, float] = (0.0, 0.0),
                  health: float = 100.0,
                  mana: float = 50.0,
                  stamina: float = 100.0,
@@ -205,7 +206,7 @@ class MLAgent:
         self.network = SimpleNeuralNetwork()
         
         # Память для обучения
-        self.memory: List[Tuple[Observation, int, float, Observation, bool]] = []
+        self.memory: list[tuple[Observation, int, float, Observation, bool]] = []
         self.memory_size = 10000
         self.batch_size = 32
         
@@ -280,7 +281,7 @@ class MLAgent:
         avg_loss = total_loss / (epochs * self.batch_size)
         logger.debug(f"Обучение завершено, средний loss: {avg_loss:.4f}")
     
-    def get_reward(self, event_type: str, event_data: Dict[str, Any]) -> float:
+    def get_reward(self, event_type: str, event_data: dict[str, Any]) -> float:
         """Расчёт награды за событие"""
         rewards = {
             'enemy_defeated': 10.0,
@@ -361,7 +362,7 @@ class MLAgent:
         
         logger.info(f"Эпизод {self.episodes} завершён: побед={self.wins}, поражений={self.losses}")
     
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Получение статистики агента"""
         return {
             'agent_id': self.agent_id,

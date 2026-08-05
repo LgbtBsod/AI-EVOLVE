@@ -2,13 +2,13 @@
 Morale & Panic System
 AI units experience morale changes affecting combat performance.
 """
-import random
 import logging
-from typing import Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
+
 from src.core.architecture import BaseComponent, ComponentType, Priority
-from src.core.event_system import EventSystem, Event
+from src.core.event_system import Event, EventSystem
+
 
 class MoraleState(Enum):
     HEROIC = "heroic"      # +30% performance
@@ -33,7 +33,7 @@ class MoraleSystem(BaseComponent):
     """
     def __init__(self):
         super().__init__(ComponentType.SYSTEM, Priority.NORMAL)
-        self.unit_morale: Dict[str, MoraleStats] = {}
+        self.unit_morale: dict[str, MoraleStats] = {}
         
     def on_start(self):
         logging.info("Morale System initialized.")

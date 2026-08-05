@@ -2,13 +2,14 @@
 Genetic Memory System - Ancestral Echoes
 Allows entities to access skills/memories of their ancestors.
 """
+import logging
 import random
 import time
-import logging
-from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
+from typing import Any
+
 from src.core.architecture import BaseComponent, ComponentType, Priority
-from src.core.state_manager import StateManager
+
 
 @dataclass(slots=True)
 class MemoryFragment:
@@ -16,7 +17,7 @@ class MemoryFragment:
     skill_name: str
     potency: float  # 0.0 to 1.0
     timestamp: float
-    context_tags: List[str] = field(default_factory=list)
+    context_tags: list[str] = field(default_factory=list)
 
 class GeneticMemorySystem(BaseComponent):
     """
@@ -26,13 +27,13 @@ class GeneticMemorySystem(BaseComponent):
     def __init__(self, max_memories: int = 50):
         super().__init__(ComponentType.SYSTEM, Priority.HIGH)
         self.max_memories = max_memories
-        self.memory_pool: List[MemoryFragment] = []
-        self.active_echoes: Dict[str, MemoryFragment] = {}
+        self.memory_pool: list[MemoryFragment] = []
+        self.active_echoes: dict[str, MemoryFragment] = {}
         
     def on_start(self):
         logging.info("Genetic Memory System initialized. Listening for evolutionary milestones.")
         
-    def record_milestone(self, entity_id: str, skill: str, success_rate: float, context: List[str]):
+    def record_milestone(self, entity_id: str, skill: str, success_rate: float, context: list[str]):
         """Record a significant achievement to be passed down."""
         if success_rate < 0.7:  # Only remember significant successes
             return
@@ -52,7 +53,7 @@ class GeneticMemorySystem(BaseComponent):
             
         self.logger.debug(f"Memory recorded: {skill} from {entity_id}")
 
-    def trigger_echo(self, current_entity: Any, context: List[str]) -> Optional[Dict[str, Any]]:
+    def trigger_echo(self, current_entity: Any, context: list[str]) -> dict[str, Any] | None:
         """
         Attempt to trigger an ancestral echo based on current context.
         Returns bonus stats if successful.

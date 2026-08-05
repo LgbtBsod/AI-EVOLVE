@@ -5,11 +5,12 @@ Implements group consciousness mechanics where nearby allies share information a
 """
 import logging
 import time
-from typing import Dict, List, Optional, Set, Any
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
+from typing import Any
+
 from src.core.architecture import BaseComponent, ComponentType, Priority
-from src.core.event_system import EventSystem, Event
+from src.core.event_system import Event, EventSystem
 
 
 class ResonanceState(Enum):
@@ -34,7 +35,7 @@ class ResonanceLink:
 class ResonanceStats:
     current_resonance: float  # 0.0 to 100.0
     state: ResonanceState
-    linked_units: Set[str]
+    linked_units: set[str]
     shared_vision: bool
     coordination_bonus: float
 
@@ -53,14 +54,14 @@ class NeuroResonanceSystem(BaseComponent):
         self.max_links_per_unit = max_links_per_unit
         self.sync_range = sync_range
         
-        self.unit_resonance: Dict[str, ResonanceStats] = {}
-        self.resonance_links: List[ResonanceLink] = []
-        self.squad_groups: Dict[str, Set[str]] = {}  # squad_id -> unit_ids
+        self.unit_resonance: dict[str, ResonanceStats] = {}
+        self.resonance_links: list[ResonanceLink] = []
+        self.squad_groups: dict[str, set[str]] = {}  # squad_id -> unit_ids
         
     def on_start(self):
         logging.info("Neuro Resonance System initialized. Ready for squad synchronization.")
         
-    def register_unit(self, unit_id: str, squad_id: Optional[str] = None):
+    def register_unit(self, unit_id: str, squad_id: str | None = None):
         """Register a unit for resonance tracking."""
         self.unit_resonance[unit_id] = ResonanceStats(
             current_resonance=0.0,
@@ -166,7 +167,7 @@ class NeuroResonanceSystem(BaseComponent):
                     }
                 ))
                 
-    def get_shared_information(self, unit_id: str) -> Dict[str, Any]:
+    def get_shared_information(self, unit_id: str) -> dict[str, Any]:
         """Get information shared through resonance links."""
         if unit_id not in self.unit_resonance:
             return {}
@@ -188,7 +189,7 @@ class NeuroResonanceSystem(BaseComponent):
                 
         return shared_data
         
-    def get_combat_bonus(self, unit_id: str) -> Dict[str, float]:
+    def get_combat_bonus(self, unit_id: str) -> dict[str, float]:
         """Get combat bonuses from resonance."""
         if unit_id not in self.unit_resonance:
             return {}

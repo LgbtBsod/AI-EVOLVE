@@ -3,9 +3,10 @@ Pydantic Validation Models
 Строгая валидация конфигураций и данных с использованием Pydantic.
 Обеспечивает типобезопасность и автоматическую проверку данных.
 """
-from pydantic import BaseModel, Field, field_validator, model_validator, ValidationError
-from typing import Optional, List, Dict, Any
 from enum import Enum
+from typing import Any
+
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 
 class ComponentStateEnum(str, Enum):
@@ -23,7 +24,7 @@ class ComponentConfig(BaseModel):
     name: str = Field(..., min_length=1, max_length=64, description="Имя компонента")
     enabled: bool = Field(default=True, description="Флаг активности")
     priority: int = Field(default=0, ge=-100, le=100, description="Приоритет выполнения")
-    tags: List[str] = Field(default_factory=list, description="Теги для группировки")
+    tags: list[str] = Field(default_factory=list, description="Теги для группировки")
     
     @field_validator('name')
     @classmethod
@@ -38,15 +39,15 @@ class StateTransitionRequest(BaseModel):
     component_id: str
     target_state: ComponentStateEnum
     force: bool = Field(default=False, description="Принудительный переход")
-    reason: Optional[str] = Field(None, max_length=255)
+    reason: str | None = Field(None, max_length=255)
 
 
 class EventData(BaseModel):
     """Данные события."""
     event_type: str = Field(..., min_length=1, description="Тип события")
     source: str = Field(..., description="Источник события")
-    payload: Dict[str, Any] = Field(default_factory=dict, description="Полезная нагрузка")
-    timestamp: Optional[float] = None
+    payload: dict[str, Any] = Field(default_factory=dict, description="Полезная нагрузка")
+    timestamp: float | None = None
     
     model_config = {
         'arbitrary_types_allowed': True
@@ -64,8 +65,7 @@ class CombatStats(BaseModel):
     @model_validator(mode='after')
     def clamp_health_to_max(self):
         """Обрезает health до max_health если превышает."""
-        if self.health > self.max_health:
-            self.health = self.max_health
+        self.health = min(self.health, self.max_health)
         return self
     
     @property
@@ -77,10 +77,10 @@ class AttributeDefinition(BaseModel):
     """Определение атрибута."""
     key: str
     value: Any
-    min_value: Optional[Any] = None
-    max_value: Optional[Any] = None
+    min_value: Any | None = None
+    max_value: Any | None = None
     is_derived: bool = False
-    formula: Optional[str] = None
+    formula: str | None = None
 
 
 def validate_component_config(config: dict) -> ComponentConfig:

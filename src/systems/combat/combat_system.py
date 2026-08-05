@@ -12,11 +12,12 @@ Refactoring Summary:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from enum import Enum
 import logging
 import time
-from typing import TYPE_CHECKING, Callable, Protocol
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from src.systems.attributes.attribute_system import AttributeSystem
@@ -133,8 +134,11 @@ class CombatSystem:
     """
     
     __slots__ = (
-        '_sessions', '_attribute_system', '_damage_formulas',
-        '_event_handlers', '_rng'
+        '_attribute_system',
+        '_damage_formulas',
+        '_event_handlers',
+        '_rng',
+        '_sessions'
     )
     
     def __init__(self, attribute_system: AttributeSystem | None = None) -> None:

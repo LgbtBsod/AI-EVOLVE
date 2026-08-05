@@ -2,10 +2,10 @@
 Comprehensive Test Suite for New AI-EVOLVE Features
 Tests all new gameplay mechanics: Neuro Resonance, Terraforming, Adaptive Anticipation
 """
-import unittest
-import time
 import sys
-from unittest.mock import Mock, MagicMock
+import time
+import unittest
+from unittest.mock import MagicMock
 
 # Mock panda3d before importing systems that might need it
 sys.modules['panda3d.core'] = MagicMock()
@@ -16,7 +16,7 @@ class TestNeuroResonanceSystem(unittest.TestCase):
     """Test Neuro Resonance - Allied Synchronization"""
     
     def test_import_and_instantiation(self):
-        from src.features.neuro_resonance import NeuroResonanceSystem, ResonanceState
+        from src.features.neuro_resonance import NeuroResonanceSystem
         system = NeuroResonanceSystem(max_links_per_unit=3, sync_range=40.0)
         self.assertIsNotNone(system)
         self.assertEqual(system.max_links_per_unit, 3)
@@ -80,12 +80,17 @@ class TestTerraformingSystem(unittest.TestCase):
     """Test Terraforming - Battlefield Environmental Scars"""
     
     def test_import_and_instantiation(self):
-        from src.features.terraforming import TerraformingSystem, TerrainModificationType
+        from src.features.terraforming import (
+            TerraformingSystem,
+        )
         system = TerraformingSystem(max_modifications=50)
         self.assertIsNotNone(system)
         
     def test_add_crater_modification(self):
-        from src.features.terraforming import TerraformingSystem, TerrainModificationType
+        from src.features.terraforming import (
+            TerraformingSystem,
+            TerrainModificationType,
+        )
         system = TerraformingSystem()
         
         system.add_modification(
@@ -99,7 +104,10 @@ class TestTerraformingSystem(unittest.TestCase):
         self.assertEqual(system.modifications[0].mod_type, TerrainModificationType.CRATER)
         
     def test_position_effects(self):
-        from src.features.terraforming import TerraformingSystem, TerrainModificationType
+        from src.features.terraforming import (
+            TerraformingSystem,
+            TerrainModificationType,
+        )
         system = TerraformingSystem()
         
         # Add a crater at (100, 100) with radius 10
@@ -120,7 +128,10 @@ class TestTerraformingSystem(unittest.TestCase):
         self.assertEqual(len(effects_outside), 0)
         
     def test_is_position_blocked(self):
-        from src.features.terraforming import TerraformingSystem, TerrainModificationType
+        from src.features.terraforming import (
+            TerraformingSystem,
+            TerrainModificationType,
+        )
         system = TerraformingSystem()
         
         system.add_modification(
@@ -134,7 +145,10 @@ class TestTerraformingSystem(unittest.TestCase):
         self.assertFalse(system.is_position_blocked((100.0, 100.0)))
         
     def test_multiple_modifications_stack(self):
-        from src.features.terraforming import TerraformingSystem, TerrainModificationType
+        from src.features.terraforming import (
+            TerraformingSystem,
+            TerrainModificationType,
+        )
         system = TerraformingSystem()
         
         # Add burn mark and debris at same location
@@ -158,7 +172,10 @@ class TestTerraformingSystem(unittest.TestCase):
         self.assertIn("cover_bonus", effects)
         
     def test_cleanup_expired(self):
-        from src.features.terraforming import TerraformingSystem, TerrainModificationType
+        from src.features.terraforming import (
+            TerraformingSystem,
+            TerrainModificationType,
+        )
         system = TerraformingSystem(max_modifications=5)
         
         # Add modifications with very short duration
@@ -182,13 +199,18 @@ class TestAdaptiveAnticipationSystem(unittest.TestCase):
     """Test Adaptive Anticipation - Predictive AI Defense"""
     
     def test_import_and_instantiation(self):
-        from src.features.adaptive_anticipation import AdaptiveAnticipationSystem, AttackPattern
+        from src.features.adaptive_anticipation import (
+            AdaptiveAnticipationSystem,
+        )
         system = AdaptiveAnticipationSystem(history_size=50, learning_rate=0.15)
         self.assertIsNotNone(system)
         self.assertEqual(system.history_size, 50)
         
     def test_record_encounter(self):
-        from src.features.adaptive_anticipation import AdaptiveAnticipationSystem, AttackPattern
+        from src.features.adaptive_anticipation import (
+            AdaptiveAnticipationSystem,
+            AttackPattern,
+        )
         system = AdaptiveAnticipationSystem()
         
         system.record_encounter(
@@ -203,7 +225,10 @@ class TestAdaptiveAnticipationSystem(unittest.TestCase):
         self.assertEqual(system.stats.recognized_patterns[AttackPattern.MELEE_RUSH], 1)
         
     def test_prediction_accuracy_improves(self):
-        from src.features.adaptive_anticipation import AdaptiveAnticipationSystem, AttackPattern
+        from src.features.adaptive_anticipation import (
+            AdaptiveAnticipationSystem,
+            AttackPattern,
+        )
         system = AdaptiveAnticipationSystem(history_size=100)
         
         # Record multiple successful blocks
@@ -221,7 +246,10 @@ class TestAdaptiveAnticipationSystem(unittest.TestCase):
         self.assertGreater(system.stats.adaptation_level, 0.1)
         
     def test_predict_next_attack(self):
-        from src.features.adaptive_anticipation import AdaptiveAnticipationSystem, AttackPattern
+        from src.features.adaptive_anticipation import (
+            AdaptiveAnticipationSystem,
+            AttackPattern,
+        )
         system = AdaptiveAnticipationSystem()
         
         # Need at least 5 encounters for prediction
@@ -248,14 +276,19 @@ class TestAdaptiveAnticipationSystem(unittest.TestCase):
         self.assertEqual(prediction, AttackPattern.MELEE_RUSH)
         
     def test_get_optimal_counter(self):
-        from src.features.adaptive_anticipation import AdaptiveAnticipationSystem, AttackPattern
+        from src.features.adaptive_anticipation import (
+            AdaptiveAnticipationSystem,
+            AttackPattern,
+        )
         system = AdaptiveAnticipationSystem()
         
         counter = system.get_optimal_counter(AttackPattern.STEALTH_FLANK)
         self.assertEqual(counter, "area_scan_and_defensive_stance")
         
     def test_get_dodge_direction(self):
-        from src.features.adaptive_anticipation import AdaptiveAnticipationSystem, AttackPattern
+        from src.features.adaptive_anticipation import (
+            AdaptiveAnticipationSystem,
+        )
         system = AdaptiveAnticipationSystem()
         
         attacker_pos = (0.0, 0.0)
@@ -266,7 +299,10 @@ class TestAdaptiveAnticipationSystem(unittest.TestCase):
         self.assertEqual(len(dodge), 2)
         
     def test_get_player_profile(self):
-        from src.features.adaptive_anticipation import AdaptiveAnticipationSystem, AttackPattern
+        from src.features.adaptive_anticipation import (
+            AdaptiveAnticipationSystem,
+            AttackPattern,
+        )
         system = AdaptiveAnticipationSystem()
         
         # Initially insufficient data
@@ -295,12 +331,12 @@ class TestFeatureIntegration(unittest.TestCase):
     def test_all_features_import_cleanly(self):
         """Ensure all new feature modules import without errors"""
         from src.features import (
-            GeneticMemorySystem,
+            AdaptiveAnticipationSystem,
             DynamicWeatherSystem,
+            GeneticMemorySystem,
             MoraleSystem,
             NeuroResonanceSystem,
             TerraformingSystem,
-            AdaptiveAnticipationSystem
         )
         
         # Instantiate all
@@ -320,9 +356,9 @@ class TestFeatureIntegration(unittest.TestCase):
         
     def test_solid_compliance(self):
         """Verify new features follow SOLID principles"""
+        from src.features.adaptive_anticipation import AdaptiveAnticipationSystem
         from src.features.neuro_resonance import NeuroResonanceSystem
         from src.features.terraforming import TerraformingSystem
-        from src.features.adaptive_anticipation import AdaptiveAnticipationSystem
         
         # Single Responsibility: Each system has one clear purpose
         # Check that classes have focused method sets
@@ -338,8 +374,8 @@ class TestFeatureIntegration(unittest.TestCase):
     def test_thread_safety_basic(self):
         """Basic thread safety check for new systems"""
         import threading
+
         from src.features.neuro_resonance import NeuroResonanceSystem
-        from src.features.terraforming import TerraformingSystem, TerrainModificationType
         
         system = NeuroResonanceSystem()
         errors = []

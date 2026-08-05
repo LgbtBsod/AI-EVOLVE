@@ -13,14 +13,13 @@ REFactoring Summary:
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from collections.abc import Iterator, Mapping
-from dataclasses import dataclass, field
-from enum import Enum, auto
-from functools import cached_property
 import logging
 import time
-from typing import Any, Protocol, runtime_checkable, TypeVar
+from abc import abstractmethod
+from collections.abc import Iterator, Mapping
+from dataclasses import dataclass
+from enum import Enum, auto
+from typing import Any, Protocol, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -165,7 +164,6 @@ class IComponent(
     Protocol
 ):
     """Полный интерфейс компонента (композиция ISP интерфейсов)"""
-    pass
 
 
 # ============================================================================
@@ -287,8 +285,12 @@ class BaseComponent(LifecycleMixin, MetricsMixin):
     """
 
     __slots__ = (
-        '_component_id', '_component_type', '_priority',
-        '_created_at', '_dependencies', '_tags'
+        '_component_id',
+        '_component_type',
+        '_created_at',
+        '_dependencies',
+        '_priority',
+        '_tags'
     )
 
     def __init__(
@@ -394,7 +396,6 @@ class BaseComponent(LifecycleMixin, MetricsMixin):
 
     def _on_start(self) -> None:
         """Переопределяемый метод запуска"""
-        pass
 
     def pause(self) -> bool:
         """Приостановка компонента"""
@@ -416,7 +417,6 @@ class BaseComponent(LifecycleMixin, MetricsMixin):
 
     def _on_pause(self) -> None:
         """Переопределяемый метод приостановки"""
-        pass
 
     def resume(self) -> bool:
         """Возобновление компонента"""
@@ -438,7 +438,6 @@ class BaseComponent(LifecycleMixin, MetricsMixin):
 
     def _on_resume(self) -> None:
         """Переопределяемый метод возобновления"""
-        pass
 
     def stop(self) -> bool:
         """Остановка компонента"""
@@ -462,7 +461,6 @@ class BaseComponent(LifecycleMixin, MetricsMixin):
 
     def _on_stop(self) -> None:
         """Переопределяемый метод остановки"""
-        pass
 
     def destroy(self) -> bool:
         """Уничтожение компонента"""
@@ -487,7 +485,6 @@ class BaseComponent(LifecycleMixin, MetricsMixin):
 
     def _on_destroy(self) -> None:
         """Переопределяемый метод уничтожения"""
-        pass
 
     def update(self, delta_time: float) -> None:
         """Обновление компонента с метриками (использует perf_counter для точности)"""
@@ -509,7 +506,6 @@ class BaseComponent(LifecycleMixin, MetricsMixin):
     @abstractmethod
     def _on_update(self, delta_time: float) -> None:
         """Переопределяемый метод обновления"""
-        pass
 
     def get_info(self) -> dict[str, Any]:
         """Получение диагностической информации о компоненте"""
@@ -558,7 +554,7 @@ class ComponentRegistry(Mapping[str, BaseComponent]):
     - Type Hints: Python 3.10+ стиль
     """
 
-    __slots__ = ('_components', '_by_type', '_by_priority')
+    __slots__ = ('_by_priority', '_by_type', '_components')
 
     def __init__(self) -> None:
         self._components: dict[str, BaseComponent] = {}
@@ -612,20 +608,20 @@ class ComponentRegistry(Mapping[str, BaseComponent]):
         """Получение компонента по ID"""
         return self._components.get(component_id)
 
-    def get_by_type(self, component_type: ComponentType) -> Iterator[BaseComponent]:
-        """Генератор компонентов по типу (без аллокации списка)"""
-        for cid in self._by_type.get(component_type, []):
-            if cid in self._components:
-                yield self._components[cid]
+    def get_by_type(self, component_type: ComponentType) -> list[BaseComponent]:
+        """Получить компоненты по типу в виде списка."""
+        return [self._components[cid] for cid in self._by_type.get(component_type, []) if cid in self._components]
 
-    def get_by_priority(self, priority: Priority) -> Iterator[BaseComponent]:
-        """Генератор компонентов по приоритету (без аллокации списка)"""
-        for cid in self._by_priority.get(priority, []):
-            if cid in self._components:
-                yield self._components[cid]
+    def get_by_priority(self, priority: Priority) -> list[BaseComponent]:
+        """Получить компоненты по приоритету в виде списка."""
+        return [self._components[cid] for cid in self._by_priority.get(priority, []) if cid in self._components]
 
-    def get_all(self) -> Iterator[BaseComponent]:
-        """Генератор всех компонентов (без аллокации списка)"""
+    def get_all(self) -> list[BaseComponent]:
+        """Получить все компоненты в виде списка (для обратной совместимости)."""
+        return list(self._components.values())
+    
+    def get_all_iter(self) -> Iterator[BaseComponent]:
+        """Генератор всех компонентов (без аллокации списка, для итерации)."""
         for component in self._components.values():
             yield component
 

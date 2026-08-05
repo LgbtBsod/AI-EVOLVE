@@ -10,20 +10,23 @@ Refactored:
 
 from __future__ import annotations
 
+import logging
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple, Callable, Set
-import logging
-import math
-import time
-import json
+from typing import Any
 
-from src.core.architecture import BaseComponent, ComponentType, Priority, LifecycleState
-from src.core.constants import DamageType, constants_manager
+from src.core.architecture import BaseComponent, ComponentType, LifecycleState, Priority
 from src.core.rng_manager import RNGManager
 from src.core.state_manager import StateManager, StateType
-from src.systems.attributes.attribute_system import AttributeSystem, AttributeSet, AttributeModifier, StatModifier, BaseAttribute, DerivedStat
+from src.systems.attributes.attribute_system import (
+    AttributeModifier,
+    AttributeSystem,
+    BaseAttribute,
+    DerivedStat,
+    StatModifier,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +89,7 @@ class ItemModifier:
     value: float
     duration: float = -1.0  # -1 для постоянных модификаторов
     is_percentage: bool = False
-    condition: Optional[str] = None
+    condition: str | None = None
     source: str = "item"
 
 @dataclass(slots=True)
@@ -105,7 +108,7 @@ class ItemEffect:
     target: str
     duration: float = 0.0
     radius: float = 0.0
-    condition: Optional[str] = None
+    condition: str | None = None
 
 @dataclass(slots=True)
 class ItemTemplate:
@@ -116,51 +119,51 @@ class ItemTemplate:
     item_type: ItemType
     rarity: ItemRarity
     level_requirement: int = 1
-    slot: Optional[ItemSlot] = None
+    slot: ItemSlot | None = None
     stack_size: int = 1
     max_durability: int = 100
     weight: float = 1.0
     value: int = 0
     
     # Интеграция с системой атрибутов
-    attribute_requirements: Dict[str, int] = field(default_factory=dict)  # attribute_name -> min_value
-    stat_requirements: Dict[str, int] = field(default_factory=dict)  # stat_name -> min_value
-    attribute_modifiers: List[ItemModifier] = field(default_factory=list)
-    stat_modifiers: List[ItemModifier] = field(default_factory=list)
+    attribute_requirements: dict[str, int] = field(default_factory=dict)  # attribute_name -> min_value
+    stat_requirements: dict[str, int] = field(default_factory=dict)  # stat_name -> min_value
+    attribute_modifiers: list[ItemModifier] = field(default_factory=list)
+    stat_modifiers: list[ItemModifier] = field(default_factory=list)
     
     # Эффекты предмета
-    effects: List[ItemEffect] = field(default_factory=list)
-    requirements: List[ItemRequirement] = field(default_factory=list)
+    effects: list[ItemEffect] = field(default_factory=list)
+    requirements: list[ItemRequirement] = field(default_factory=list)
     
     # Визуальные параметры
-    icon_path: Optional[str] = None
-    model_path: Optional[str] = None
+    icon_path: str | None = None
+    model_path: str | None = None
     scale: float = 1.0
-    rotation: Tuple[float, float, float] = (0.0, 0.0, 0.0)
-    position_offset: Tuple[float, float, float] = (0.0, 0.0, 0.0)
+    rotation: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    position_offset: tuple[float, float, float] = (0.0, 0.0, 0.0)
 
 @dataclass(slots=True)
 class ItemInstance:
     """Экземпляр предмета"""
     instance_id: str
     template_id: str
-    owner_id: Optional[str] = None
+    owner_id: str | None = None
     quantity: int = 1
     durability: int = 100
     level: int = 1
     experience: int = 0
     is_equipped: bool = False
-    equipped_slot: Optional[ItemSlot] = None
+    equipped_slot: ItemSlot | None = None
     created_at: float = field(default_factory=time.perf_counter)
     last_used: float = 0.0
     
     # Интеграция с системой атрибутов
-    active_attribute_modifiers: List[AttributeModifier] = field(default_factory=list)
-    active_stat_modifiers: List[StatModifier] = field(default_factory=list)
+    active_attribute_modifiers: list[AttributeModifier] = field(default_factory=list)
+    active_stat_modifiers: list[StatModifier] = field(default_factory=list)
     
 # Дополнительные свойства
-    custom_properties: Dict[str, Any] = field(default_factory=dict)
-    enchantments: List[str] = field(default_factory=list)
+    custom_properties: dict[str, Any] = field(default_factory=dict)
+    enchantments: list[str] = field(default_factory=list)
 
 @dataclass(slots=True)
 class Inventory:
@@ -169,8 +172,8 @@ class Inventory:
     max_slots: int = 50
     max_weight: float = 100.0
     current_weight: float = 0.0
-    items: Dict[str, ItemInstance] = field(default_factory=dict)  # instance_id -> item
-    equipped_items: Dict[ItemSlot, str] = field(default_factory=dict)  # slot -> instance_id
+    items: dict[str, ItemInstance] = field(default_factory=dict)  # instance_id -> item
+    equipped_items: dict[ItemSlot, str] = field(default_factory=dict)  # slot -> instance_id
 
 @dataclass(slots=True)
 class EquipmentSet:
@@ -178,9 +181,9 @@ class EquipmentSet:
     set_id: str
     name: str
     description: str
-    pieces: List[str]  # item_ids
-    bonus_effects: List[ItemEffect] = field(default_factory=list)
-    bonus_modifiers: List[ItemModifier] = field(default_factory=list)
+    pieces: list[str]  # item_ids
+    bonus_effects: list[ItemEffect] = field(default_factory=list)
+    bonus_modifiers: list[ItemModifier] = field(default_factory=list)
 
 class ItemSystem(BaseComponent):
     """Система предметов"""
@@ -195,15 +198,15 @@ class ItemSystem(BaseComponent):
         )
         
         # Архитектурные компоненты
-        self.state_manager: Optional[StateManager] = None
-        self.attribute_system: Optional[AttributeSystem] = None
+        self.state_manager: StateManager | None = None
+        self.attribute_system: AttributeSystem | None = None
         
         # Шаблоны предметов
-        self.item_templates: Dict[str, ItemTemplate] = {}
-        self.equipment_sets: Dict[str, EquipmentSet] = {}
+        self.item_templates: dict[str, ItemTemplate] = {}
+        self.equipment_sets: dict[str, EquipmentSet] = {}
         
         # Инвентари сущностей
-        self.inventories: Dict[str, Inventory] = {}
+        self.inventories: dict[str, Inventory] = {}
         
         # Настройки системы
         self.system_settings = {
@@ -227,11 +230,11 @@ class ItemSystem(BaseComponent):
         }
         
         # Callbacks
-        self.on_item_created: Optional[Callable] = None
-        self.on_item_destroyed: Optional[Callable] = None
-        self.on_item_equipped: Optional[Callable] = None
-        self.on_item_unequipped: Optional[Callable] = None
-        self.on_item_used: Optional[Callable] = None
+        self.on_item_created: Callable | None = None
+        self.on_item_destroyed: Callable | None = None
+        self.on_item_equipped: Callable | None = None
+        self.on_item_unequipped: Callable | None = None
+        self.on_item_used: Callable | None = None
         
         logger.info("Система предметов инициализирована")
     
@@ -392,7 +395,6 @@ class ItemSystem(BaseComponent):
         """Обновление износа предметов"""
         # Здесь может быть логика постепенного износа предметов
         # Например, износ при использовании, при получении урона и т.д.
-        pass
     
     def _clear_all_item_modifiers(self):
         """Очистка всех модификаторов предметов"""
@@ -523,7 +525,7 @@ class ItemSystem(BaseComponent):
         except Exception as e:
             logger.error(f"Ошибка создания наборов экипировки: {e}")
     
-    def create_item(self, template_id: str, owner_id: str = None, quantity: int = 1) -> Optional[ItemInstance]:
+    def create_item(self, template_id: str, owner_id: str = None, quantity: int = 1) -> ItemInstance | None:
         """Создание предмета из шаблона"""
         try:
             if template_id not in self.item_templates:
@@ -836,7 +838,7 @@ class ItemSystem(BaseComponent):
         except Exception as e:
             logger.error(f"Ошибка применения эффектов предмета: {e}")
     
-    def get_item_modifiers_for_entity(self, entity_id: str) -> Tuple[List[AttributeModifier], List[StatModifier]]:
+    def get_item_modifiers_for_entity(self, entity_id: str) -> tuple[list[AttributeModifier], list[StatModifier]]:
         """Получение всех активных модификаторов предметов для сущности"""
         try:
             if entity_id not in self.inventories:
@@ -859,7 +861,7 @@ class ItemSystem(BaseComponent):
             logger.error(f"Ошибка получения модификаторов предметов для сущности {entity_id}: {e}")
             return [], []
     
-    def get_equipment_set_bonuses(self, entity_id: str) -> Tuple[List[AttributeModifier], List[StatModifier]]:
+    def get_equipment_set_bonuses(self, entity_id: str) -> tuple[list[AttributeModifier], list[StatModifier]]:
         """Получение бонусов от наборов экипировки"""
         try:
             if entity_id not in self.inventories:
@@ -916,7 +918,7 @@ class ItemSystem(BaseComponent):
             logger.error(f"Ошибка получения бонусов наборов экипировки для сущности {entity_id}: {e}")
             return [], []
     
-    def get_system_info(self) -> Dict[str, Any]:
+    def get_system_info(self) -> dict[str, Any]:
         """Получение информации о системе"""
         return {
                     'name': self.component_id,

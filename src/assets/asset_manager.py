@@ -4,11 +4,16 @@ AI-EVOLVE Asset Manager
 Оптимизирована для производительности и соответствия SOLID.
 """
 
+import logging
 import os
-from typing import Dict, Optional, Any
+from typing import Any
+
 from PIL import Image
+
 from src.core.cache import LRUCache
 from src.core.interfaces import ILoadable
+
+logger = logging.getLogger(__name__)
 
 
 class AssetManager(ILoadable):
@@ -31,7 +36,7 @@ class AssetManager(ILoadable):
         
         self._initialized = True
         self._asset_cache: LRUCache = LRUCache(capacity=100, default_ttl=300)
-        self._asset_paths: Dict[str, str] = {}
+        self._asset_paths: dict[str, str] = {}
         self._base_dir = os.path.normpath(os.path.join(os.path.dirname(__file__), "../../assets"))
         
         # Предзагрузка критических ассетов
@@ -49,7 +54,7 @@ class AssetManager(ILoadable):
         
         self._asset_paths[name] = full_path
     
-    def load_asset(self, name: str) -> Optional[Image.Image]:
+    def load_asset(self, name: str) -> Image.Image | None:
         """
         Загрузка ассета с кэшированием.
         Если ассет в кэше - возвращается из кэша.
@@ -73,11 +78,11 @@ class AssetManager(ILoadable):
             img = Image.open(path).convert('RGBA')
             self._asset_cache.set(name, img)
             return img
-        except Exception as e:
-            print(f"❌ Error loading asset {name}: {e}")
+        except OSError as e:
+            logger.error(f"Error loading asset {name}: {e}")
             return None
     
-    def _auto_discover_asset(self, name: str) -> Optional[str]:
+    def _auto_discover_asset(self, name: str) -> str | None:
         """Автоматический поиск ассета по имени"""
         # Если имя содержит путь (например 'sprites/player.png')
         if '/' in name or '\\' in name:
@@ -119,7 +124,7 @@ class AssetManager(ILoadable):
                     count += 1
         return count
     
-    def get_sprite(self, entity_type: str, variant: str = 'basic') -> Optional[Image.Image]:
+    def get_sprite(self, entity_type: str, variant: str = 'basic') -> Image.Image | None:
         """Получение спрайта сущности"""
         if variant == 'basic':
             name = f"sprites/{entity_type}"
@@ -129,15 +134,15 @@ class AssetManager(ILoadable):
         # Попытка загрузки с расширением .png
         return self.load_asset(f"{name}.png")
     
-    def get_tile(self, tile_type: str) -> Optional[Image.Image]:
+    def get_tile(self, tile_type: str) -> Image.Image | None:
         """Получение текстуры тайла"""
         return self.load_asset(f"tiles/{tile_type}.png")
     
-    def get_ui_element(self, element_name: str) -> Optional[Image.Image]:
+    def get_ui_element(self, element_name: str) -> Image.Image | None:
         """Получение UI элемента"""
         return self.load_asset(f"ui/{element_name}.png")
     
-    def get_effect(self, effect_name: str) -> Optional[Image.Image]:
+    def get_effect(self, effect_name: str) -> Image.Image | None:
         """Получение эффекта"""
         return self.load_asset(f"effects/{effect_name}.png")
     
@@ -145,7 +150,7 @@ class AssetManager(ILoadable):
         """Очистка кэша (освобождение памяти)"""
         self._asset_cache.clear()
     
-    def get_cache_stats(self) -> Dict[str, Any]:
+    def get_cache_stats(self) -> dict[str, Any]:
         """Статистика кэша"""
         return {
             'capacity': self._asset_cache.capacity,
@@ -161,33 +166,33 @@ class AssetManager(ILoadable):
         # Здесь можно добавить принудительную выгрузку по TTL
         return self._asset_cache.cleanup()
     
-    async def load_async(self, name: str) -> Optional[Image.Image]:
+    async def load_async(self, name: str) -> Image.Image | None:
         """Асинхронная загрузка ассета"""
         import asyncio
         await asyncio.sleep(0)  # Yield control
         return self.load_asset(name)
     
-    async def preload_all_async(self) -> Dict[str, int]:
+    async def preload_all_async(self) -> dict[str, int]:
         """Асинхронная предзагрузка всех ассетов"""
         import asyncio
         
         results = {'sprites': 0, 'tiles': 0, 'ui': 0, 'effects': 0}
         
-        for category in results.keys():
+        for category in results:
             results[category] = self.preload_category(category)
             await asyncio.sleep(0)
         
         return results
     
     # ILoadable interface implementation
-    def save_state(self) -> Dict[str, Any]:
+    def save_state(self) -> dict[str, Any]:
         """Сохранение состояния менеджера (пути, статистика)"""
         return {
             'registered_assets': self._asset_paths.copy(),
             'cache_stats': self.get_cache_stats()
         }
     
-    def load_state(self, state: Dict[str, Any]) -> None:
+    def load_state(self, state: dict[str, Any]) -> None:
         """Загрузка состояния менеджера"""
         if 'registered_assets' in state:
             self._asset_paths.update(state['registered_assets'])

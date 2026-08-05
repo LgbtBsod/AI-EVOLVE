@@ -2,8 +2,8 @@
 """Константы игры - централизованное управление всеми константами"""
 
 import logging
-from typing import Dict, List, Any, Optional
 from enum import Enum
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -614,39 +614,39 @@ class ConstantsManager:
             'scene_settings': SCENE_SETTINGS
         }
     
-    def get_base_stats(self) -> Dict[str, Any]:
+    def get_base_stats(self) -> dict[str, Any]:
         """Получение базовых характеристик"""
         return self._constants['base_stats'].copy()
     
-    def get_probability_constants(self) -> Dict[str, Any]:
+    def get_probability_constants(self) -> dict[str, Any]:
         """Получение констант вероятности"""
         return self._constants['probability_constants'].copy()
     
-    def get_time_constants(self) -> Dict[str, Any]:
+    def get_time_constants(self) -> dict[str, Any]:
         """Получение временных констант"""
         return self._constants['time_constants'].copy()
     
-    def get_toughness_constants(self) -> Dict[str, Any]:
+    def get_toughness_constants(self) -> dict[str, Any]:
         """Получение констант стойкости"""
         return self._constants['toughness_constants'].copy()
     
-    def get_emotion_colors(self) -> Dict[EmotionType, tuple]:
+    def get_emotion_colors(self) -> dict[EmotionType, tuple]:
         """Получение цветов эмоций"""
         return self._constants['emotion_colors'].copy()
     
-    def get_ai_settings(self) -> Dict[str, Any]:
+    def get_ai_settings(self) -> dict[str, Any]:
         """Получение настроек ИИ"""
         return self._constants['ai_settings'].copy()
     
-    def get_ui_settings(self) -> Dict[str, Any]:
+    def get_ui_settings(self) -> dict[str, Any]:
         """Получение настроек UI"""
         return self._constants['ui_settings'].copy()
     
-    def get_entity_settings(self) -> Dict[str, Any]:
+    def get_entity_settings(self) -> dict[str, Any]:
         """Получение настроек сущностей"""
         return self._constants['entity_settings'].copy()
     
-    def get_scene_settings(self) -> Dict[str, Any]:
+    def get_scene_settings(self) -> dict[str, Any]:
         """Получение настроек сцен"""
         return self._constants['scene_settings'].copy()
     
@@ -689,7 +689,7 @@ class ConstantsManager:
             'update_time': 0.0
         }
     
-    def get_system_info(self) -> Dict[str, Any]:
+    def get_system_info(self) -> dict[str, Any]:
         """Получение информации о системе"""
         return {
             'name': self.component_id,

@@ -3,10 +3,8 @@ Health Component
 Реализует IHealthComponent интерфейс.
 Отвечает только за здоровье, урон и лечение.
 """
-from typing import Optional
-from src.core.interfaces import IHealthComponent
 from src.core.architecture import BaseComponent, ComponentType, Priority
-from src.core.validation import CombatStats
+from src.core.interfaces import IHealthComponent
 
 
 class HealthComponent(BaseComponent, IHealthComponent):
@@ -27,7 +25,6 @@ class HealthComponent(BaseComponent, IHealthComponent):
     
     def _on_update(self, delta_time: float) -> None:
         """Обновление компонента (пустая реализация)."""
-        pass
     
     @property
     def current_health(self) -> float:

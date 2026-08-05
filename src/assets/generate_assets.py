@@ -4,11 +4,14 @@ AI-EVOLVE Asset Generator
 Создает спрайты, текстуры и UI элементы программно.
 """
 
-import os
+import logging
 import math
-from PIL import Image, ImageDraw, ImageFilter, ImageEnhance
-import numpy as np
+import os
 
+import numpy as np
+from PIL import Image, ImageDraw, ImageFilter
+
+logger = logging.getLogger(__name__)
 ASSETS_DIR = os.path.join(os.path.dirname(__file__), "../../assets")
 
 def ensure_dir(path):
@@ -160,9 +163,13 @@ def generate_projectile_effect(color=(255, 200, 50), size=32):
     img = img.filter(ImageFilter.GaussianBlur(1))
     return img
 
-def generate_all_assets():
-    """Генерация всех ассетов игры"""
-    print("🎨 Генерация графических ассетов AI-EVOLVE...")
+def generate_all_assets() -> bool:
+    """Генерация всех ассетов игры
+    
+    Returns:
+        bool: True если генерация успешна
+    """
+    logger.info("🎨 Генерация графических ассетов AI-EVOLVE...")
     
     ensure_dir(ASSETS_DIR)
     ensure_dir(os.path.join(ASSETS_DIR, "sprites"))
@@ -173,24 +180,24 @@ def generate_all_assets():
     # Спрайты персонажей
     player = generate_player_sprite()
     player.save(os.path.join(ASSETS_DIR, "sprites", "player.png"))
-    print("✅ Спрайт игрока создан")
+    logger.info("✅ Спрайт игрока создан")
     
     for variant in ['basic', 'elite', 'boss', 'scout']:
         enemy = generate_enemy_sprite(variant=variant)
         enemy.save(os.path.join(ASSETS_DIR, "sprites", f"enemy_{variant}.png"))
-        print(f"✅ Спрайт врага ({variant}) создан")
+        logger.info(f"✅ Спрайт врага ({variant}) создан")
     
     # Текстуры
     for t_type in ['ground', 'grass', 'metal', 'water']:
         tile = generate_tile_texture(type=t_type)
         tile.save(os.path.join(ASSETS_DIR, "tiles", f"{t_type}.png"))
-        print(f"✅ Текстура ({t_type}) создана")
+        logger.info(f"✅ Текстура ({t_type}) создана")
     
     # UI
     ui_assets = generate_ui_elements()
     for name, img in ui_assets.items():
         img.save(os.path.join(ASSETS_DIR, "ui", f"{name}.png"))
-        print(f"✅ UI элемент ({name}) создан")
+        logger.info(f"✅ UI элемент ({name}) создан")
     
     # Эффекты
     projectile = generate_projectile_effect()
@@ -202,9 +209,9 @@ def generate_all_assets():
     draw.ellipse([20, 20, 44, 44], fill=(255, 200, 50, 255))
     explosion = explosion.filter(ImageFilter.GaussianBlur(3))
     explosion.save(os.path.join(ASSETS_DIR, "effects", "explosion.png"))
-    print("✅ Эффекты созданы")
+    logger.info("✅ Эффекты созданы")
     
-    print(f"\n📦 Все ассеты сохранены в: {os.path.abspath(ASSETS_DIR)}")
+    logger.info(f"\n📦 Все ассеты сохранены в: {os.path.abspath(ASSETS_DIR)}")
     return True
 
 if __name__ == "__main__":

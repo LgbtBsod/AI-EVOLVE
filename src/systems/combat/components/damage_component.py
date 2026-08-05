@@ -3,9 +3,8 @@ Damage Component
 Реализует IDamageDealer интерфейс.
 Отвечает только за расчет и нанесение урона.
 """
-from typing import Optional
-from src.core.interfaces import IDamageDealer, IHealthComponent
 from src.core.architecture import BaseComponent, ComponentType, Priority
+from src.core.interfaces import IDamageDealer, IHealthComponent
 
 
 class DamageComponent(BaseComponent, IDamageDealer):
@@ -27,7 +26,6 @@ class DamageComponent(BaseComponent, IDamageDealer):
     
     def _on_update(self, delta_time: float) -> None:
         """Обновление компонента (пустая реализация)."""
-        pass
     
     @property
     def base_damage(self) -> float:

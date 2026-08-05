@@ -3,14 +3,17 @@ Refactored Combat System
 Использует компонентный подход (HealthComponent, DamageComponent, CombatStatsComponent).
 Соблюдает SRP, ISP, DIP.
 """
-from typing import Dict, List, Optional, Any, Callable, Tuple
-from src.core.architecture import BaseComponent, ComponentType, Priority
-from src.core.state_manager import StateManager
-from src.core.interfaces import IHealthComponent, IDamageDealer, ICombatStats
-from src.core.circuit_breaker import CircuitBreaker, circuit_breaker
-from src.systems.combat.components import HealthComponent, DamageComponent, CombatStatsComponent
 import logging
-import time
+from collections.abc import Callable
+from typing import Any
+
+from src.core.architecture import BaseComponent, ComponentType, Priority
+from src.core.circuit_breaker import CircuitBreaker, circuit_breaker
+from src.systems.combat.components import (
+    CombatStatsComponent,
+    DamageComponent,
+    HealthComponent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,20 +26,20 @@ class CombatEntity:
     
     def __init__(self, entity_id: str):
         self.entity_id = entity_id
-        self._health: Optional[HealthComponent] = None
-        self._damage: Optional[DamageComponent] = None
-        self._stats: Optional[CombatStatsComponent] = None
+        self._health: HealthComponent | None = None
+        self._damage: DamageComponent | None = None
+        self._stats: CombatStatsComponent | None = None
     
     @property
-    def health(self) -> Optional[HealthComponent]:
+    def health(self) -> HealthComponent | None:
         return self._health
     
     @property
-    def damage(self) -> Optional[DamageComponent]:
+    def damage(self) -> DamageComponent | None:
         return self._damage
     
     @property
-    def stats(self) -> Optional[CombatStatsComponent]:
+    def stats(self) -> CombatStatsComponent | None:
         return self._stats
     
     def add_health_component(self, max_health: float = 100.0) -> HealthComponent:
@@ -90,10 +93,10 @@ class RefactoredCombatSystem(BaseComponent):
         )
         
         # Хранилище сущностей
-        self._entities: Dict[str, CombatEntity] = {}
+        self._entities: dict[str, CombatEntity] = {}
         
         # Активные бои
-        self._active_combats: Dict[str, List[str]] = {}
+        self._active_combats: dict[str, list[str]] = {}
         
         # Circuit Breaker для внешних вызовов
         self._external_call_breaker = CircuitBreaker(
@@ -110,15 +113,14 @@ class RefactoredCombatSystem(BaseComponent):
         }
         
         # Callbacks
-        self.on_entity_died: Optional[Callable[[str], None]] = None
-        self.on_combat_started: Optional[Callable[[str], None]] = None
-        self.on_combat_ended: Optional[Callable[[str], None]] = None
+        self.on_entity_died: Callable[[str], None] | None = None
+        self.on_combat_started: Callable[[str], None] | None = None
+        self.on_combat_ended: Callable[[str], None] | None = None
         
         logger.info("Refactored Combat System initialized")
     
     def _on_update(self, delta_time: float) -> None:
         """Обновление системы боя."""
-        pass
     
     def create_entity(self, entity_id: str) -> CombatEntity:
         """Создать боевую сущность."""
@@ -138,7 +140,7 @@ class RefactoredCombatSystem(BaseComponent):
             del self._entities[entity_id]
             logger.debug(f"Removed combat entity: {entity_id}")
     
-    def get_entity(self, entity_id: str) -> Optional[CombatEntity]:
+    def get_entity(self, entity_id: str) -> CombatEntity | None:
         """Получить сущность."""
         return self._entities.get(entity_id)
     
@@ -148,7 +150,7 @@ class RefactoredCombatSystem(BaseComponent):
         attacker_id: str, 
         target_id: str,
         use_skills: bool = False
-    ) -> Tuple[float, bool]:
+    ) -> tuple[float, bool]:
         """
         Атака цели атакующим.
         Возвращает (нанесенный_урон, был_крит).
@@ -193,7 +195,7 @@ class RefactoredCombatSystem(BaseComponent):
         
         return damage_dealt, is_crit
     
-    def start_combat(self, combat_id: str, participants: List[str]) -> bool:
+    def start_combat(self, combat_id: str, participants: list[str]) -> bool:
         """Начать бой между участниками."""
         if combat_id in self._active_combats:
             logger.warning(f"Combat {combat_id} already active")
@@ -235,7 +237,7 @@ class RefactoredCombatSystem(BaseComponent):
         
         return entity.health.heal(amount)
     
-    def get_combat_stats(self, entity_id: str) -> Dict[str, Any]:
+    def get_combat_stats(self, entity_id: str) -> dict[str, Any]:
         """Получить статистику по сущности."""
         entity = self.get_entity(entity_id)
         if not entity:
@@ -261,7 +263,7 @@ class RefactoredCombatSystem(BaseComponent):
         
         return stats
     
-    def get_system_metrics(self) -> Dict[str, Any]:
+    def get_system_metrics(self) -> dict[str, Any]:
         """Метрики системы."""
         base_metrics = super().get_metrics()
         base_metrics.update({

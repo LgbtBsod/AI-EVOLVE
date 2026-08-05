@@ -47,8 +47,12 @@ class DynamicWeatherSystem(BaseComponent):
     """
 
     __slots__ = (
-        '_rng', 'current_weather', 'weather_history', 'transition_timer',
-        'next_weather_duration', 'weather_profiles'
+        '_rng',
+        'current_weather',
+        'next_weather_duration',
+        'transition_timer',
+        'weather_history',
+        'weather_profiles'
     )
 
     def __init__(self, rng: RNGManager | None = None) -> None:
