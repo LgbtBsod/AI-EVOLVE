@@ -3,9 +3,9 @@ Combat Stats Component
 Реализует ICombatStats интерфейс.
 Отвечает только за хранение и расчет боевых характеристик.
 """
-from src.core.interfaces import ICombatStats
 from src.core.architecture import BaseComponent
 from src.core.cache import LRUCache
+from src.core.interfaces import ICombatStats
 
 
 class CombatStatsComponent(BaseComponent, ICombatStats):

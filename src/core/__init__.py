@@ -11,19 +11,19 @@ import sys
 from pathlib import Path
 
 from .rng_manager import (
-    RNGManager,
     RNGConfig,
+    RNGManager,
     get_default_rng,
-    set_default_rng,
     reset_default_rng,
+    set_default_rng,
 )
 
 __all__ = [
-    'RNGManager',
     'RNGConfig',
+    'RNGManager',
     'get_default_rng',
-    'set_default_rng',
     'reset_default_rng',
+    'set_default_rng',
 ]
 
 # Тесты для проекта "Эволюционная Адаптация: Генетический Резонанс"

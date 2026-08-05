@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
-import math
-import time
-import random
-from typing import Dict, List, Optional, Any
-from panda3d.core import CardMaker, Vec3, Vec4, TransparencyAttrib
 import logging
+import math
+import random
+import time
+
+from panda3d.core import CardMaker
 
 logger = logging.getLogger(__name__)
 

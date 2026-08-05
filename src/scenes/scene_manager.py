@@ -3,12 +3,12 @@
 
 import logging
 import time
-from typing import Dict, List, Optional, Any, Callable
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from enum import Enum
+from typing import Any, Optional
 
-from src.core.architecture import BaseComponent, ComponentType, Priority, LifecycleState
-from src.core.constants import constants_manager, SceneType, SceneState
+from src.core.architecture import BaseComponent, ComponentType, LifecycleState, Priority
+from src.core.constants import SceneType, constants_manager
 from src.core.state_manager import StateManager, StateType
 
 logger = logging.getLogger(__name__)
@@ -18,7 +18,7 @@ class Scene:
     
     def __init__(self, scene_id: str):
         self.scene_id = scene_id
-        self.scene_manager: Optional["SceneManager"] = None
+        self.scene_manager: SceneManager | None = None
         self.ui_root = None
         self.initialized = False
         self.active = False
@@ -38,13 +38,19 @@ class Scene:
         return True
     
     def update(self, delta_time: float) -> None:
-        pass
-    
+        """Обновление логики сцены каждый кадр. Переопределяется в наследниках."""
+        # Базовая реализация не делает ничего
+        # Наследники должны переопределить этот метод для своей логики
+        
     def render(self, render_node: Any) -> None:
-        pass
-    
+        """Отрисовка сцены. Переопределяется в наследниках."""
+        # Базовая реализация не делает ничего
+        # Наследники должны переопределить этот метод для своей отрисовки
+        
     def handle_event(self, event: Any) -> None:
-        pass
+        """Обработка событий ввода. Переопределяется в наследниках."""
+        # Базовая реализация не делает ничего
+        # Наследники должны переопределить этот метод для обработки событий
     
     def cleanup(self) -> None:
         self.active = False
@@ -58,11 +64,11 @@ class SceneData:
     scene_type: SceneType
     scene_name: str
     scene_file: str
-    properties: Dict[str, Any] = field(default_factory=dict)
-    entities: List[str] = field(default_factory=list)
-    ui_elements: List[str] = field(default_factory=list)
-    background_music: Optional[str] = None
-    ambient_sounds: List[str] = field(default_factory=list)
+    properties: dict[str, Any] = field(default_factory=dict)
+    entities: list[str] = field(default_factory=list)
+    ui_elements: list[str] = field(default_factory=list)
+    background_music: str | None = None
+    ambient_sounds: list[str] = field(default_factory=list)
     instance: Optional["Scene"] = None
 
 @dataclass(slots=True)
@@ -72,7 +78,7 @@ class SceneTransition:
     to_scene: str
     transition_type: str = "fade"
     duration: float = 1.0
-    callback: Optional[Callable] = None
+    callback: Callable | None = None
 
 class SceneManager(BaseComponent):
     """Менеджер игровых сцен"""
@@ -85,18 +91,18 @@ class SceneManager(BaseComponent):
         )
         
         # Архитектурные компоненты
-        self.state_manager: Optional[StateManager] = None
+        self.state_manager: StateManager | None = None
         
         # Сцены и переходы
-        self.scenes: Dict[str, SceneData] = {}
-        self.scene_instances: Dict[str, Scene] = {}
-        self.active_scene: Optional[str] = None
-        self.previous_scene: Optional[str] = None
-        self.scene_stack: List[str] = []
+        self.scenes: dict[str, SceneData] = {}
+        self.scene_instances: dict[str, Scene] = {}
+        self.active_scene: str | None = None
+        self.previous_scene: str | None = None
+        self.scene_stack: list[str] = []
         
         # Переходы
-        self.current_transition: Optional[SceneTransition] = None
-        self.transition_queue: List[SceneTransition] = []
+        self.current_transition: SceneTransition | None = None
+        self.transition_queue: list[SceneTransition] = []
         
         # Настройки сцен
         self.scene_settings = {
@@ -334,7 +340,6 @@ class SceneManager(BaseComponent):
     def _update_transition(self, transition: SceneTransition, delta_time: float):
         """Обновление перехода"""
         # Здесь будет логика обновления перехода
-        pass
     
     def _start_transition(self, transition: SceneTransition):
         """Начало перехода"""
@@ -368,7 +373,7 @@ class SceneManager(BaseComponent):
             return False
     
     def create_scene(self, scene_id: str, scene_type: SceneType, scene_name: str, 
-                    scene_file: str) -> Optional[SceneData]:
+                    scene_file: str) -> SceneData | None:
         """Создание новой сцены"""
         try:
             if scene_id in self.scenes:
@@ -470,7 +475,7 @@ class SceneManager(BaseComponent):
             return False
     
     def transition_to_scene(self, to_scene: str, transition_type: str = "fade", 
-                          duration: float = 1.0, callback: Optional[Callable] = None) -> bool:
+                          duration: float = 1.0, callback: Callable | None = None) -> bool:
         """Переход к сцене"""
         try:
             if to_scene not in self.scenes:
@@ -509,25 +514,25 @@ class SceneManager(BaseComponent):
             logger.error(f"Ошибка возврата к предыдущей сцене: {e}")
             return False
     
-    def get_scene(self, scene_id: str) -> Optional[SceneData]:
+    def get_scene(self, scene_id: str) -> SceneData | None:
         """Получение сцены"""
         return self.scenes.get(scene_id)
     
-    def get_active_scene_data(self) -> Optional[SceneData]:
+    def get_active_scene_data(self) -> SceneData | None:
         """Получение данных активной сцены"""
         if self.active_scene:
             return self.scenes.get(self.active_scene)
         return None
     
-    def get_all_scenes(self) -> Dict[str, SceneData]:
+    def get_all_scenes(self) -> dict[str, SceneData]:
         """Получение всех сцен"""
         return self.scenes.copy()
     
-    def get_scene_stack(self) -> List[str]:
+    def get_scene_stack(self) -> list[str]:
         """Получение стека сцен"""
         return self.scene_stack.copy()
     
-    def get_system_info(self) -> Dict[str, Any]:
+    def get_system_info(self) -> dict[str, Any]:
         """Получение информации о системе"""
         return {
             'name': self.system_name,
@@ -561,12 +566,12 @@ class SceneManager(BaseComponent):
         """Регистрация встроенных сцен"""
         try:
             # Локальные импорты для избежания циклов
-            from .menu_scene import MenuScene
-            from .settings_scene import SettingsScene
-            from .load_scene import LoadScene
-            from .pause_scene import PauseScene
             from .creator_scene import CreatorScene
             from .game_scene import GameScene
+            from .load_scene import LoadScene
+            from .menu_scene import MenuScene
+            from .pause_scene import PauseScene
+            from .settings_scene import SettingsScene
 
             self.register_scene("main_menu", MenuScene(), SceneType.MAIN_MENU, "Главное меню")
             self.register_scene("settings", SettingsScene(), SceneType.SETTINGS, "Настройки")

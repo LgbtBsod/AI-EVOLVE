@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Простая система крафта для создания базовых предметов
 """
 
-from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 
 class CraftResult(Enum):
@@ -22,7 +21,7 @@ class Recipe:
     """Рецепт крафта"""
     recipe_id: str
     name: str
-    required_materials: Dict[str, int]  # {item_id: quantity}
+    required_materials: dict[str, int]  # {item_id: quantity}
     result_item: str
     result_quantity: int = 1
     craft_time: float = 2.0  # секунды
@@ -34,7 +33,7 @@ class Recipe:
 class CraftResultData:
     """Результат попытки крафта"""
     result: CraftResult
-    items_created: List[str] = field(default_factory=list)
+    items_created: list[str] = field(default_factory=list)
     message: str = ""
     experience_gained: float = 0.0
 
@@ -46,14 +45,14 @@ class CraftingSystem:
     
     def __init__(self):
         # База рецептов
-        self.recipes: Dict[str, Recipe] = {}
+        self.recipes: dict[str, Recipe] = {}
         
         # Навыки игрока
         self.crafting_skill: float = 0.0  # 0.0 - 1.0
         self.crafting_experience: float = 0.0
         
         # История крафта
-        self.crafting_history: List[CraftResultData] = []
+        self.crafting_history: list[CraftResultData] = []
         
         # Инициализация базовых рецептов
         self._initialize_basic_recipes()
@@ -127,7 +126,7 @@ class CraftingSystem:
         self.recipes[recipe.recipe_id] = recipe
     
     def craft_item(self, recipe_id: str, 
-                   inventory: Dict[str, int],
+                   inventory: dict[str, int],
                    player_skill: float = 0.0) -> CraftResultData:
         """
         Создать предмет по рецепту
@@ -219,21 +218,21 @@ class CraftingSystem:
         # Простая формула: skill = min(1.0, experience / 1000)
         self.crafting_skill = min(1.0, self.crafting_experience / 1000.0)
     
-    def get_recipe_info(self, recipe_id: str) -> Optional[Recipe]:
+    def get_recipe_info(self, recipe_id: str) -> Recipe | None:
         """Получить информацию о рецепте"""
         return self.recipes.get(recipe_id)
     
-    def get_all_recipes(self) -> List[Recipe]:
+    def get_all_recipes(self) -> list[Recipe]:
         """Получить все рецепты"""
         return list(self.recipes.values())
     
-    def can_craft(self, recipe_id: str, inventory: Dict[str, int], 
+    def can_craft(self, recipe_id: str, inventory: dict[str, int], 
                   player_skill: float = 0.0) -> bool:
         """Проверить можно ли создать предмет"""
         result = self.craft_item(recipe_id, inventory, player_skill)
         return result.result in [CraftResult.SUCCESS, CraftResult.CRITICAL_SUCCESS]
     
-    def get_crafting_statistics(self) -> Dict[str, Any]:
+    def get_crafting_statistics(self) -> dict[str, Any]:
         """Получить статистику крафта"""
         stats = {
             'total_attempts': len(self.crafting_history),

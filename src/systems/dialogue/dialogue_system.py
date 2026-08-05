@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Система диалогов и взаимодействия с NPC
 Поддержка проверки характеристик (харизма) для получения информации
 """
 
 import random
-from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
 
 
 class DialogueOutcome(Enum):
@@ -35,7 +34,7 @@ class DialogueLine:
 class DialogueResult:
     """Результат диалога"""
     outcome: DialogueOutcome
-    information: Optional[Dict[str, Any]] = None
+    information: dict[str, Any] | None = None
     message: str = ""
     reputation_change: float = 0.0
     triggered_encounter: bool = False
@@ -52,8 +51,8 @@ class NPCProfile:
     knows_exit_location: bool = False
     exit_hint_accuracy: float = 0.8  # Точность подсказки
     charisma_threshold: float = 0.3  # Порог харизмы для сотрудничества
-    gossip_topics: List[str] = field(default_factory=list)
-    rewards_for_help: List[str] = field(default_factory=list)
+    gossip_topics: list[str] = field(default_factory=list)
+    rewards_for_help: list[str] = field(default_factory=list)
 
 
 class DialogueSystem:
@@ -63,15 +62,15 @@ class DialogueSystem:
     
     def __init__(self):
         # Профили NPC
-        self.npc_profiles: Dict[str, NPCProfile] = {}
+        self.npc_profiles: dict[str, NPCProfile] = {}
         
         # История диалогов
-        self.dialogue_history: List[DialogueResult] = []
+        self.dialogue_history: list[DialogueResult] = []
         
         # Шаблоны ответов
         self.response_templates = self._load_response_templates()
         
-    def _load_response_templates(self) -> Dict[str, List[str]]:
+    def _load_response_templates(self) -> dict[str, list[str]]:
         """Загрузить шаблоны ответов для разных ситуаций"""
         return {
             'exit_hint_success': [
@@ -289,7 +288,7 @@ class DialogueSystem:
         wrong_directions = [d for d in all_directions if d != true_direction]
         return random.choice(wrong_directions)
     
-    def get_npc_info(self, npc_id: str) -> Optional[NPCProfile]:
+    def get_npc_info(self, npc_id: str) -> NPCProfile | None:
         """Получить информацию о NPC"""
         return self.npc_profiles.get(npc_id)
     
@@ -299,7 +298,7 @@ class DialogueSystem:
         if len(self.dialogue_history) > 100:
             self.dialogue_history.pop(0)
     
-    def get_dialogue_statistics(self) -> Dict[str, Any]:
+    def get_dialogue_statistics(self) -> dict[str, Any]:
         """Получить статистику диалогов"""
         stats = {
             'total_dialogues': len(self.dialogue_history),

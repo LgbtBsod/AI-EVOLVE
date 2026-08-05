@@ -2,11 +2,10 @@
 Comprehensive Test Suite for New Features
 Tests Genetic Memory, Dynamic Weather, and Morale Systems.
 """
-import unittest
-import time
-from unittest.mock import Mock, patch, MagicMock
-import sys
 import os
+import sys
+import unittest
+from unittest.mock import Mock
 
 # Add src to path correctly
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -14,7 +13,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 class TestGeneticMemory(unittest.TestCase):
     def test_memory_recording(self):
         """Test that significant milestones are recorded."""
-        from src.features.genetic_memory import GeneticMemorySystem, MemoryFragment
+        from src.features.genetic_memory import GeneticMemorySystem
         
         system = GeneticMemorySystem(max_memories=5)
         system.on_start()
@@ -131,7 +130,7 @@ class TestDynamicWeather(unittest.TestCase):
 class TestMoraleSystem(unittest.TestCase):
     def test_morale_states(self):
         """Test morale state transitions."""
-        from src.features.morale_system import MoraleSystem, MoraleState
+        from src.features.morale_system import MoraleState, MoraleSystem
         
         system = MoraleSystem()
         system.on_start()
@@ -150,7 +149,7 @@ class TestMoraleSystem(unittest.TestCase):
         
     def test_performance_modifier(self):
         """Test combat performance modifiers."""
-        from src.features.morale_system import MoraleSystem, MoraleState
+        from src.features.morale_system import MoraleSystem
         
         system = MoraleSystem()
         system.on_start()
@@ -178,7 +177,7 @@ class TestMoraleSystem(unittest.TestCase):
         
     def test_passive_decay(self):
         """Test passive morale decay over time."""
-        from src.features.morale_system import MoraleSystem, MoraleState
+        from src.features.morale_system import MoraleState, MoraleSystem
         
         system = MoraleSystem()
         system.on_start()
@@ -199,9 +198,9 @@ class TestMoraleSystem(unittest.TestCase):
 class TestIntegration(unittest.TestCase):
     def test_combined_systems(self):
         """Test all systems working together."""
-        from src.features.genetic_memory import GeneticMemorySystem
         from src.features.dynamic_weather import DynamicWeatherSystem, WeatherType
-        from src.features.morale_system import MoraleSystem, MoraleState
+        from src.features.genetic_memory import GeneticMemorySystem
+        from src.features.morale_system import MoraleState, MoraleSystem
         
         # Initialize all
         memory_sys = GeneticMemorySystem()

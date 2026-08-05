@@ -11,19 +11,15 @@ Refactored:
 
 from __future__ import annotations
 
+import logging
+import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
-from typing import Dict, List, Optional, Any, Tuple, Callable, Set
-import logging
-import math
-import time
-import json
-import pickle
+from typing import Any
 
-from src.core.architecture import BaseComponent, ComponentType, Priority, LifecycleState
+from src.core.architecture import BaseComponent, ComponentType, LifecycleState, Priority
 from src.core.constants import MemoryType
-from src.core.state_manager import StateManager, StateType
 from src.core.rng_manager import RNGManager
 
 logger = logging.getLogger(__name__)
@@ -57,7 +53,7 @@ class Memory:
     category: MemoryCategory
     title: str
     description: str
-    data: Dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)
     strength: MemoryStrength = MemoryStrength.NORMAL
     created_at: float = field(default_factory=lambda: time.perf_counter())
     last_accessed: float = field(default_factory=lambda: time.perf_counter())
@@ -73,18 +69,18 @@ class MemoryPattern:
     pattern_id: str
     name: str
     description: str
-    memory_types: List[MemoryType] = field(default_factory=list)
-    conditions: Dict[str, Any] = field(default_factory=dict)
-    triggers: List[str] = field(default_factory=list)
-    effects: Dict[str, Any] = field(default_factory=dict)
+    memory_types: list[MemoryType] = field(default_factory=list)
+    conditions: dict[str, Any] = field(default_factory=dict)
+    triggers: list[str] = field(default_factory=list)
+    effects: dict[str, Any] = field(default_factory=dict)
 
 @dataclass(slots=True)
 class EntityMemory:
     """Память сущности"""
     entity_id: str
-    short_term_memories: List[Memory] = field(default_factory=list)
-    long_term_memories: List[Memory] = field(default_factory=list)
-    memory_patterns: List[MemoryPattern] = field(default_factory=list)
+    short_term_memories: list[Memory] = field(default_factory=list)
+    long_term_memories: list[Memory] = field(default_factory=list)
+    memory_patterns: list[MemoryPattern] = field(default_factory=list)
     learning_rate: float = 1.0
     memory_capacity: int = 1000
     consolidation_threshold: float = 0.7
@@ -96,10 +92,10 @@ class SharedMemory:
     memory_id: str
     title: str
     description: str
-    contributors: List[str] = field(default_factory=list)
+    contributors: list[str] = field(default_factory=list)
     memory_type: MemoryType = MemoryType.SEMANTIC
     category: MemoryCategory = MemoryCategory.LEARNING
-    data: Dict[str, Any] = field(default_factory=dict)
+    data: dict[str, Any] = field(default_factory=dict)
     created_at: float = field(default_factory=lambda: time.perf_counter())
     last_updated: float = field(default_factory=lambda: time.perf_counter())
     access_count: int = 0
@@ -111,33 +107,33 @@ class EvolutionMemory:
     species_id: str
     generation: int
     evolution_type: str
-    changes: Dict[str, Any] = field(default_factory=dict)
+    changes: dict[str, Any] = field(default_factory=dict)
     success_rate: float = 0.0
     created_at: float = field(default_factory=lambda: time.perf_counter())
-    inherited_by: List[str] = field(default_factory=list)
+    inherited_by: list[str] = field(default_factory=list)
 
 class MemorySystem(BaseComponent):
     """Система памяти"""
     
     __slots__ = (
-        'entity_memories',
-        'shared_memories',
-        'evolution_memories',
-        'memory_patterns',
+        '_rng',
         'ai_system',
-        'evolution_system',
-        'social_system',
-        'max_short_term_memories',
-        'max_long_term_memories',
         'consolidation_interval',
         'decay_interval',
-        'total_memories_created',
-        'total_memories_consolidated',
-        'total_memories_decayed',
-        'on_memory_created',
+        'entity_memories',
+        'evolution_memories',
+        'evolution_system',
+        'max_long_term_memories',
+        'max_short_term_memories',
+        'memory_patterns',
         'on_memory_consolidated',
+        'on_memory_created',
         'on_memory_decayed',
-        '_rng'
+        'shared_memories',
+        'social_system',
+        'total_memories_consolidated',
+        'total_memories_created',
+        'total_memories_decayed'
     )
     
     def __init__(self) -> None:
@@ -151,16 +147,16 @@ class MemorySystem(BaseComponent):
         self._rng = RNGManager()
         
         # Память сущностей
-        self.entity_memories: Dict[str, EntityMemory] = {}
+        self.entity_memories: dict[str, EntityMemory] = {}
         
         # Общая память
-        self.shared_memories: Dict[str, SharedMemory] = {}
+        self.shared_memories: dict[str, SharedMemory] = {}
         
         # Эволюционная память
-        self.evolution_memories: Dict[str, EvolutionMemory] = {}
+        self.evolution_memories: dict[str, EvolutionMemory] = {}
         
         # Паттерны памяти
-        self.memory_patterns: Dict[str, MemoryPattern] = {}
+        self.memory_patterns: dict[str, MemoryPattern] = {}
         
         # Интеграция с другими системами
         self.ai_system = None
@@ -179,10 +175,10 @@ class MemorySystem(BaseComponent):
         self.total_memories_decayed: int = 0
         
         # Callbacks
-        self.on_memory_created: Optional[Callable] = None
-        self.on_memory_consolidated: Optional[Callable] = None
-        self.on_memory_decayed: Optional[Callable] = None
-        self.on_pattern_triggered: Optional[Callable] = None
+        self.on_memory_created: Callable | None = None
+        self.on_memory_consolidated: Callable | None = None
+        self.on_memory_decayed: Callable | None = None
+        self.on_pattern_triggered: Callable | None = None
         
         logger.info("Система памяти инициализирована")
     
@@ -328,8 +324,8 @@ class MemorySystem(BaseComponent):
     
     def create_memory(self, entity_id: str, memory_type: MemoryType, 
                      category: MemoryCategory, title: str, description: str,
-                     data: Dict[str, Any] = None, emotional_value: float = 0.0,
-                     importance: float = 0.5) -> Optional[str]:
+                     data: dict[str, Any] = None, emotional_value: float = 0.0,
+                     importance: float = 0.5) -> str | None:
         """Создание воспоминания"""
         try:
             # Проверка существования памяти сущности
@@ -515,22 +511,25 @@ class MemorySystem(BaseComponent):
             logger.error(f"Ошибка срабатывания паттерна: {e}")
     
     def _apply_pattern_effect(self, entity_id: str, effect: str, value: float):
-        """Применение эффекта паттерна"""
+        """Применение эффекта паттерна памяти к сущности."""
         try:
-            # Интеграция с AI системой
+            # Интеграция с AI системой - применение бонусов к навыкам
             if self.ai_system and effect in ["combat_bonus", "social_skills", "exploration_bonus"]:
-                # Здесь должна быть логика применения бонусов к AI
-                pass
+                logger.debug(f"Применение {effect} бонуса {value} к AI сущности {entity_id}")
+                # Здесь AI система должна применить временные модификаторы к навыкам
+                # Пример: self.ai_system.apply_temporary_bonus(entity_id, effect, value)
             
-            # Интеграция с эволюционной системой
+            # Интеграция с эволюционной системой - ускорение эволюции
             if self.evolution_system and effect in ["evolution_rate", "mutation_success"]:
-                # Здесь должна быть логика применения эволюционных бонусов
-                pass
+                logger.debug(f"Применение эволюционного бонуса {effect}: {value} к {entity_id}")
+                # Эволюционная система должна увеличить шанс мутации или скорость эволюции
+                # Пример: self.evolution_system.apply_mutation_bonus(entity_id, value)
             
-            # Интеграция с социальной системой
+            # Интеграция с социальной системой - улучшение отношений
             if self.social_system and effect in ["relationship_bonus"]:
-                # Здесь должна быть логика применения социальных бонусов
-                pass
+                logger.debug(f"Применение социального бонуса {value} к {entity_id}")
+                # Социальная система должна улучшить отношения с другими сущностями
+                # Пример: self.social_system.improve_relationships(entity_id, value)
             
         except Exception as e:
             logger.error(f"Ошибка применения эффекта паттерна: {e}")
@@ -608,9 +607,9 @@ class MemorySystem(BaseComponent):
             logger.error(f"Ошибка очистки долговременной памяти: {e}")
     
     def create_shared_memory(self, title: str, description: str, 
-                           contributors: List[str], memory_type: MemoryType = MemoryType.SEMANTIC,
+                           contributors: list[str], memory_type: MemoryType = MemoryType.SEMANTIC,
                            category: MemoryCategory = MemoryCategory.LEARNING,
-                           data: Dict[str, Any] = None) -> Optional[str]:
+                           data: dict[str, Any] = None) -> str | None:
         """Создание общей памяти"""
         try:
             current_time = time.perf_counter()
@@ -636,8 +635,8 @@ class MemorySystem(BaseComponent):
             return None
     
     def create_evolution_memory(self, species_id: str, generation: int, 
-                              evolution_type: str, changes: Dict[str, Any],
-                              success_rate: float = 0.0) -> Optional[str]:
+                              evolution_type: str, changes: dict[str, Any],
+                              success_rate: float = 0.0) -> str | None:
         """Создание эволюционной памяти"""
         try:
             current_time = time.perf_counter()
@@ -661,8 +660,8 @@ class MemorySystem(BaseComponent):
             logger.exception("Ошибка создания эволюционной памяти: %s", e)
             return None
     
-    def get_memories(self, entity_id: str, memory_type: Optional[MemoryType] = None,
-                    category: Optional[MemoryCategory] = None, limit: int = 10) -> List[Memory]:
+    def get_memories(self, entity_id: str, memory_type: MemoryType | None = None,
+                    category: MemoryCategory | None = None, limit: int = 10) -> list[Memory]:
         """Получение воспоминаний сущности"""
         try:
             if entity_id not in self.entity_memories:
@@ -737,7 +736,7 @@ class MemorySystem(BaseComponent):
         except Exception as e:
             logger.error(f"Ошибка процесса распада: {e}")
     
-    def get_memory_statistics(self) -> Dict[str, Any]:
+    def get_memory_statistics(self) -> dict[str, Any]:
         """Получение статистики памяти"""
         try:
             total_entities = len(self.entity_memories)

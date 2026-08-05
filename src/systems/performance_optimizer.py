@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
-import time
-import math
-from typing import Dict, List, Optional, Tuple
-from direct.task import Task
 import logging
+
+from direct.task import Task
 
 logger = logging.getLogger(__name__)
 
 # Пробуем импортировать компоненты Panda3D с обработкой ошибок
 try:
-    from panda3d.core import LODNode, CullBinManager
+    from panda3d.core import CullBinManager, LODNode
     LOD_AVAILABLE = True
 except ImportError:
     LOD_AVAILABLE = False
@@ -62,7 +59,7 @@ class PerformanceOptimizer:
             logger.info("✅ Система оптимизации инициализирована")
             return True
             
-        except Exception as e:
+        except Exception:
             logger.error(" Ошибка инициализации системы оптимизации: {e}")
             return False
             
@@ -73,7 +70,7 @@ class PerformanceOptimizer:
                 from panda3d.core import LODManager
                 self.lod_manager = LODManager()
                 logger.info("✅ LOD система настроена")
-            except Exception as e:
+            except Exception:
                 logger.warning(" LOD система недоступна: {e}")
         else:
             logger.info("⚠️  LOD система недоступна в данной версии Panda3D")
@@ -84,7 +81,7 @@ class PerformanceOptimizer:
             try:
                 self.occlusion_culler = OcclusionCuller()
                 logger.info("✅ Окклюзионное отсечение настроено")
-            except Exception as e:
+            except Exception:
                 logger.warning(" Окклюзионное отсечение недоступно: {e}")
         else:
             logger.info("⚠️  Окклюзионное отсечение недоступно в данной версии Panda3D")
@@ -106,14 +103,18 @@ class PerformanceOptimizer:
                 cull_bin_manager.addBin("ui", CullBinManager.BTStateSorted, 20)
                 
                 logger.info("✅ Бины рендеринга настроены")
-            except Exception as e:
+            except Exception:
                 logger.warning(" Ошибка настройки бинов рендеринга: {e}")
         else:
             logger.info("⚠️  Бины рендеринга недоступны в данной версии Panda3D")
             
-    def _start_performance_monitoring(self):
-        """Запуск мониторинга производительности"""
-        def monitor_performance(task):
+    def _start_performance_monitoring(self) -> None:
+        """Запуск мониторинга производительности
+        
+        Создает задачу для периодического сбора статистики FPS
+        и применения адаптивной оптимизации.
+        """
+        def monitor_performance(task: Task) -> Task:
             # Получаем статистику производительности
             if hasattr(self.game, 'showbase'):
                 try:
@@ -122,9 +123,10 @@ class PerformanceOptimizer:
                     # Альтернативный способ получения FPS
                     try:
                         self.performance_stats['fps'] = self.game.showbase.clock.getAverageFrameRate()
-                    except:
+                    except (AttributeError, TypeError) as e:
+                        logger.debug(f"Could not get FPS: {e}")
                         self.performance_stats['fps'] = 60.0
-                
+            
             # Адаптивная оптимизация
             if self.adaptive_quality:
                 self._adaptive_optimization()
@@ -211,7 +213,7 @@ class PerformanceOptimizer:
             if hasattr(render_system.cam, 'setFar'):
                 render_system.cam.setFar(100)
                 
-        except Exception as e:
+        except Exception:
             logger.warning(" Ошибка настройки низкого качества: {e}")
             
     def _set_medium_quality(self, render_system):
@@ -228,7 +230,7 @@ class PerformanceOptimizer:
             if hasattr(render_system.cam, 'setFar'):
                 render_system.cam.setFar(500)
                 
-        except Exception as e:
+        except Exception:
             logger.warning(" Ошибка настройки среднего качества: {e}")
             
     def _set_high_quality(self, render_system):
@@ -246,7 +248,7 @@ class PerformanceOptimizer:
             if hasattr(render_system.cam, 'setFar'):
                 render_system.cam.setFar(1000)
                 
-        except Exception as e:
+        except Exception:
             logger.warning(" Ошибка настройки высокого качества: {e}")
             
     def _set_ultra_quality(self, render_system):
@@ -266,7 +268,7 @@ class PerformanceOptimizer:
             if hasattr(render_system.cam, 'setFar'):
                 render_system.cam.setFar(2000)
                 
-        except Exception as e:
+        except Exception:
             logger.warning(" Ошибка настройки ультра качества: {e}")
             
     def create_lod_object(self, name, high_detail, medium_detail, low_detail, 
@@ -292,7 +294,7 @@ class PerformanceOptimizer:
             
             return lod_np
             
-        except Exception as e:
+        except Exception:
             logger.error(" Ошибка создания LOD объекта: {e}")
             return high_detail
             
@@ -308,7 +310,7 @@ class PerformanceOptimizer:
                 
             logger.info(" Сцена оптимизирована: {len(scene_objects)} объектов")
             
-        except Exception as e:
+        except Exception:
             logger.error(" Ошибка оптимизации сцены: {e}")
             
     def _group_objects(self, objects):
@@ -347,7 +349,6 @@ class PerformanceOptimizer:
     def _batch_static_objects(self, objects):
         """Объединение статических объектов"""
         # В реальной игре здесь была бы батчинг геометрии
-        pass
         
     def _sort_transparent_objects(self, objects):
         """Сортировка прозрачных объектов по расстоянию"""

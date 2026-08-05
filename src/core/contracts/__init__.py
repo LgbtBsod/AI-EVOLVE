@@ -2,21 +2,20 @@
 Пакет смарт-контрактов для стандартизации игровых механик.
 """
 
-from .smart_contracts import (
-    SmartContract,
-    ContractResult,
-    ContractStatus,
-    ContractCondition,
-    ContractRegistry,
-    register_contract
-)
-
 from .combat_contracts import (
     AttackContract,
+    CombatAction,
+    CombatContractExecutor,
     DefenseContract,
     SkillUsageContract,
-    CombatContractExecutor,
-    CombatAction
+)
+from .smart_contracts import (
+    ContractCondition,
+    ContractRegistry,
+    ContractResult,
+    ContractStatus,
+    SmartContract,
+    register_contract,
 )
 
 __all__ = [

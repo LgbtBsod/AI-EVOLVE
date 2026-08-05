@@ -1,11 +1,8 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
+import logging
 import os
 import time
-import logging
-from typing import Dict, List, Optional
-from panda3d.core import AudioSound, AudioManager
 
 logger = logging.getLogger(__name__)
 
@@ -305,21 +302,24 @@ class AudioSystem:
             'current_music': self.current_music is not None
         }
         
-    def destroy(self):
-        """Уничтожение аудио системы"""
+    def destroy(self) -> None:
+        """Уничтожение аудио системы
+        
+        Освобождает все звуковые ресурсы и останавливает воспроизведение.
+        """
         # Останавливаем все звуки
         for sound in self.sounds.values():
             try:
                 sound.stop()
-            except:
-                pass
+            except (AttributeError, RuntimeError) as e:
+                logger.debug(f"Error stopping sound: {e}")
                 
         # Останавливаем музыку
         if self.current_music:
             try:
                 self.current_music.stop()
-            except:
-                pass
+            except (AttributeError, RuntimeError) as e:
+                logger.debug(f"Error stopping music: {e}")
                 
         # Очищаем данные
         self.sounds.clear()

@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
-import math
-import time
-import random
 import logging
-from typing import Dict, List, Optional, Any
-from panda3d.core import CardMaker, Vec3, Vec4, TransparencyAttrib
+import math
+import random
+import time
+
+from panda3d.core import CardMaker, TransparencyAttrib
 
 logger = logging.getLogger(__name__)
 
@@ -96,8 +95,9 @@ class EnhancedGameScene:
 
     def _create_exit_beacon(self):
         """Создание маяка выхода на следующий уровень в случайном месте карты."""
-        from panda3d.core import CardMaker
         import random
+
+        from panda3d.core import CardMaker
 
         if self.exit_beacon:
             self.exit_beacon.removeNode()
@@ -123,8 +123,9 @@ class EnhancedGameScene:
 
     def _spawn_exit_hint_maps(self):
         """Создаёт несколько 'карт', которые раскрывают координаты маяка при подборе."""
-        from panda3d.core import CardMaker
         import random
+
+        from panda3d.core import CardMaker
 
         # Простые визуальные маркеры неподалёку от стартовой области
         for i in range(2):
@@ -144,8 +145,9 @@ class EnhancedGameScene:
 
     def _spawn_exit_hint_npcs(self):
         """Создаёт несколько простых NPC-маркеров, часть из которых даёт подсказку о маяке."""
-        from panda3d.core import CardMaker
         import random
+
+        from panda3d.core import CardMaker
 
         for i in range(3):
             nx = random.uniform(-40, 40)
@@ -422,8 +424,11 @@ class EnhancedGameScene:
         for task_name in list(self._runtime_task_names):
             try:
                 task_mgr.remove(task_name)
-            except Exception:
-                pass
+            except KeyError:
+                # Задача уже удалена или не существует
+                logger.debug(f"Задача {task_name} уже удалена")
+            except Exception as e:
+                logger.warning(f"Не удалось удалить задачу {task_name}: {e}")
         self._runtime_task_names.clear()
 
     def _start_camera_follow(self):
@@ -464,8 +469,7 @@ class EnhancedGameScene:
             # Обновляем кулдаун атаки
             if self.player.attack_cooldown > 0:
                 self.player.attack_cooldown -= dt
-            if self.player.attack_cooldown < 0:
-                self.player.attack_cooldown = 0
+            self.player.attack_cooldown = max(self.player.attack_cooldown, 0)
                 
             # Восстанавливаем характеристики
             self.player.health = min(self.player.max_health, self.player.health + self.player.health_regen * dt)

@@ -3,11 +3,12 @@ Circuit Breaker Pattern
 Защита системы от каскадных сбоев при вызове ненадежных внешних сервисов или операций.
 Реализует состояния: CLOSED (норма), OPEN (сбой), HALF_OPEN (проверка).
 """
-import time
 import threading
-from typing import Callable, Any, Optional
+import time
+from collections.abc import Callable
 from enum import Enum
 from functools import wraps
+from typing import Any
 
 
 class CircuitState(Enum):
@@ -18,7 +19,6 @@ class CircuitState(Enum):
 
 class CircuitBreakerError(Exception):
     """Ошибка: цепь разомкнута."""
-    pass
 
 
 class CircuitBreaker:
@@ -43,7 +43,7 @@ class CircuitBreaker:
         
         self._state = CircuitState.CLOSED
         self._failure_count = 0
-        self._last_failure_time: Optional[float] = None
+        self._last_failure_time: float | None = None
         self._lock = threading.RLock()
         
         # Статистика
@@ -82,7 +82,7 @@ class CircuitBreaker:
             
             return result
             
-        except self.expected_exceptions as e:
+        except self.expected_exceptions:
             with self._lock:
                 self._on_failure()
             raise

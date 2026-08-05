@@ -15,13 +15,10 @@ import logging
 from collections import Counter, deque
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from src.core.architecture import BaseComponent, ComponentType, Priority
 from src.core.rng_manager import RNGManager
-
-if TYPE_CHECKING:
-    from collections.abc import Sequence
 
 
 class AttackPattern(Enum):
@@ -289,4 +286,3 @@ class AdaptiveAnticipationSystem(BaseComponent):
     def _on_update(self, delta_time: float) -> None:
         """Periodic update for time-based analysis."""
         # Could implement decay of old patterns here
-        pass

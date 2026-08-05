@@ -5,11 +5,12 @@ Implements dynamic terrain changes: craters, burn marks, debris fields.
 """
 import logging
 import time
-from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any
+
 from src.core.architecture import BaseComponent, ComponentType, Priority
-from src.core.event_system import EventSystem, Event
+from src.core.event_system import Event, EventSystem
 
 
 class TerrainModificationType(Enum):
@@ -24,11 +25,11 @@ class TerrainModificationType(Enum):
 @dataclass(slots=True)
 class TerrainModification:
     mod_type: TerrainModificationType
-    position: Tuple[float, float]
+    position: tuple[float, float]
     radius: float
     duration: float  # seconds, -1 for permanent
     created_at: float
-    effects: Dict[str, float] = field(default_factory=dict)
+    effects: dict[str, float] = field(default_factory=dict)
     
     @property
     def is_expired(self) -> bool:
@@ -50,8 +51,8 @@ class TerraformingSystem(BaseComponent):
     def __init__(self, max_modifications: int = 100):
         super().__init__(ComponentType.SYSTEM, Priority.NORMAL)
         self.max_modifications = max_modifications
-        self.modifications: List[TerrainModification] = []
-        self.position_grid: Dict[Tuple[int, int], List[TerrainModification]] = {}
+        self.modifications: list[TerrainModification] = []
+        self.position_grid: dict[tuple[int, int], list[TerrainModification]] = {}
         
     def on_start(self):
         logging.info("Terraforming System initialized. Battlefield will retain combat scars.")
@@ -59,10 +60,10 @@ class TerraformingSystem(BaseComponent):
     def add_modification(
         self,
         mod_type: TerrainModificationType,
-        position: Tuple[float, float],
+        position: tuple[float, float],
         radius: float,
         duration: float = 60.0,
-        effects: Optional[Dict[str, float]] = None
+        effects: dict[str, float] | None = None
     ):
         """Add a terrain modification."""
         mod = TerrainModification(
@@ -99,7 +100,7 @@ class TerraformingSystem(BaseComponent):
                 }
             ))
             
-    def _get_default_effects(self, mod_type: TerrainModificationType) -> Dict[str, float]:
+    def _get_default_effects(self, mod_type: TerrainModificationType) -> dict[str, float]:
         """Get default effects for modification type."""
         defaults = {
             TerrainModificationType.CRATER: {
@@ -135,7 +136,7 @@ class TerraformingSystem(BaseComponent):
         }
         return defaults.get(mod_type, {})
         
-    def get_position_effects(self, position: Tuple[float, float]) -> Dict[str, float]:
+    def get_position_effects(self, position: tuple[float, float]) -> dict[str, float]:
         """Get all cumulative effects at a position."""
         grid_key = (int(position[0] / 10), int(position[1] / 10))
         
@@ -169,12 +170,12 @@ class TerraformingSystem(BaseComponent):
                         
         return combined_effects
         
-    def is_position_blocked(self, position: Tuple[float, float]) -> bool:
+    def is_position_blocked(self, position: tuple[float, float]) -> bool:
         """Check if position is blocked by terrain modification."""
         effects = self.get_position_effects(position)
         return effects.get("movement_speed", 0) <= -0.9
         
-    def get_cover_bonus(self, position: Tuple[float, float]) -> float:
+    def get_cover_bonus(self, position: tuple[float, float]) -> float:
         """Get cover bonus at position."""
         effects = self.get_position_effects(position)
         return effects.get("cover_bonus", 0.0)
@@ -218,7 +219,7 @@ class TerraformingSystem(BaseComponent):
             self._cleanup_oldest()
             logging.debug(f"Cleaned up {expired_count} expired terrain modifications")
             
-    def get_battlefield_state(self) -> Dict[str, Any]:
+    def get_battlefield_state(self) -> dict[str, Any]:
         """Get summary of current battlefield state."""
         active_mods = [m for m in self.modifications if not m.is_expired]
         

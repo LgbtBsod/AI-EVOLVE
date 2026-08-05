@@ -2,13 +2,14 @@
 """Утилиты для проекта AI-EVOLVE - переиспользуемые функции"""
 
 import logging
-import random
 import math
-import time
-from typing import Dict, List, Any, Optional, Tuple, TypeVar, Callable, Union
-from collections import defaultdict
-from functools import wraps
+import random
 import threading
+import time
+from collections import defaultdict
+from collections.abc import Callable
+from functools import wraps
+from typing import Any, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -18,17 +19,17 @@ T = TypeVar('T')
 # КОЛЛЕКЦИИ
 # ============================================================================
 
-def safe_get(dictionary: Dict, key: str, default: Any = None) -> Any:
+def safe_get(dictionary: dict, key: str, default: Any = None) -> Any:
     """Безопасное получение значения из словаря"""
     return dictionary.get(key, default)
 
-def merge_dicts(base: Dict, override: Dict) -> Dict:
+def merge_dicts(base: dict, override: dict) -> dict:
     """Слияние словарей с приоритетом override"""
     result = base.copy()
     result.update(override)
     return result
 
-def flatten_list(nested_list: List[Any]) -> List[Any]:
+def flatten_list(nested_list: list[Any]) -> list[Any]:
     """Рекурсивное выравнивание списка"""
     result = []
     for item in nested_list:
@@ -38,11 +39,11 @@ def flatten_list(nested_list: List[Any]) -> List[Any]:
             result.append(item)
     return result
 
-def chunk_list(lst: List[T], size: int) -> List[List[T]]:
+def chunk_list(lst: list[T], size: int) -> list[list[T]]:
     """Разбиение списка на части"""
     return [lst[i:i + size] for i in range(0, len(lst), size)]
 
-def group_by(items: List[Dict], key: str) -> Dict[Any, List]:
+def group_by(items: list[dict], key: str) -> dict[Any, list]:
     """Группировка списка словарей по ключу"""
     grouped = defaultdict(list)
     for item in items:
@@ -61,13 +62,13 @@ def lerp(start: float, end: float, t: float) -> float:
     """Линейная интерполяция"""
     return start + (end - start) * clamp(t, 0.0, 1.0)
 
-def distance_2d(pos1: Tuple[float, float], pos2: Tuple[float, float]) -> float:
+def distance_2d(pos1: tuple[float, float], pos2: tuple[float, float]) -> float:
     """Расстояние между двумя точками в 2D"""
     dx = pos2[0] - pos1[0]
     dy = pos2[1] - pos1[1]
     return math.sqrt(dx * dx + dy * dy)
 
-def normalize_vector(x: float, y: float) -> Tuple[float, float]:
+def normalize_vector(x: float, y: float) -> tuple[float, float]:
     """Нормализация вектора"""
     length = math.sqrt(x * x + y * y)
     if length == 0:
@@ -78,13 +79,13 @@ def random_range(min_val: float, max_val: float) -> float:
     """Случайное число в диапазоне"""
     return random.uniform(min_val, max_val)
 
-def random_choice(items: List[T]) -> Optional[T]:
+def random_choice(items: list[T]) -> T | None:
     """Случайный выбор из списка"""
     if not items:
         return None
     return random.choice(items)
 
-def weighted_choice(items: List[Tuple[T, float]]) -> Optional[T]:
+def weighted_choice(items: list[tuple[T, float]]) -> T | None:
     """Взвешенный случайный выбор"""
     if not items:
         return None
@@ -136,7 +137,7 @@ def is_in_range(value: float, min_val: float, max_val: float) -> bool:
     """Проверка попадания в диапазон"""
     return min_val <= value <= max_val
 
-def validate_dict(data: Dict, required_keys: List[str]) -> Tuple[bool, List[str]]:
+def validate_dict(data: dict, required_keys: list[str]) -> tuple[bool, list[str]]:
     """Валидация словаря на наличие обязательных ключей"""
     missing_keys = [key for key in required_keys if key not in data]
     return len(missing_keys) == 0, missing_keys
@@ -229,7 +230,7 @@ def deprecated(message: str = ""):
 # ЛОГИРОВАНИЕ
 # ============================================================================
 
-def setup_logging(level: int = logging.INFO, log_file: Optional[str] = None) -> None:
+def setup_logging(level: int = logging.INFO, log_file: str | None = None) -> None:
     """Настройка логирования"""
     handlers = [logging.StreamHandler()]
     
@@ -274,7 +275,7 @@ class ThreadPool:
         thread.start()
         return thread
     
-    def map(self, func: Callable, items: List[Any]) -> List[Any]:
+    def map(self, func: Callable, items: list[Any]) -> list[Any]:
         """Параллельное выполнение функции на списке"""
         results = []
         threads = []
@@ -292,7 +293,7 @@ class ThreadPool:
 # КОНФИГУРАЦИЯ
 # ============================================================================
 
-def load_config_from_env(prefix: str = "") -> Dict[str, str]:
+def load_config_from_env(prefix: str = "") -> dict[str, str]:
     """Загрузка конфигурации из переменных окружения"""
     import os
     config = {}
@@ -302,7 +303,7 @@ def load_config_from_env(prefix: str = "") -> Dict[str, str]:
             config[config_key] = value
     return config
 
-def deep_update(base: Dict, update: Dict) -> Dict:
+def deep_update(base: dict, update: dict) -> dict:
     """Глубокое обновление словаря"""
     result = base.copy()
     for key, value in update.items():
@@ -316,21 +317,21 @@ def deep_update(base: Dict, update: Dict) -> Dict:
 # ИГРОВЫЕ УТИЛИТЫ
 # ============================================================================
 
-def calculate_damage(base_damage: float, modifiers: Dict[str, float]) -> float:
+def calculate_damage(base_damage: float, modifiers: dict[str, float]) -> float:
     """Расчёт урона с модификаторами"""
     damage = base_damage
     for modifier_name, modifier_value in modifiers.items():
         damage *= modifier_value
     return max(0, damage)
 
-def interpolate_stats(base_stats: Dict[str, float], level: int, growth_rate: float = 0.1) -> Dict[str, float]:
+def interpolate_stats(base_stats: dict[str, float], level: int, growth_rate: float = 0.1) -> dict[str, float]:
     """Интерполяция характеристик по уровню"""
     result = {}
     for stat_name, base_value in base_stats.items():
         result[stat_name] = base_value * (1 + growth_rate * (level - 1))
     return result
 
-def generate_loot_table(items: List[Dict], luck: float = 0.0) -> List[Dict]:
+def generate_loot_table(items: list[dict], luck: float = 0.0) -> list[dict]:
     """Генерация таблицы лута с учётом удачи"""
     loot = []
     for item in items:

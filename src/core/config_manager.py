@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 
 @dataclass(slots=True)
@@ -40,13 +40,13 @@ class ConfigManager:
     def _path(self, name: str) -> Path:
         return self.config_dir / f"{name}.json"
 
-    def load(self, name: str) -> Dict[str, Any]:
+    def load(self, name: str) -> dict[str, Any]:
         path = self._path(name)
         if not path.exists():
             return {}
         return json.loads(path.read_text(encoding="utf-8"))
 
-    def save(self, name: str, payload: Dict[str, Any]) -> None:
+    def save(self, name: str, payload: dict[str, Any]) -> None:
         self._path(name).write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def save_defaults(self) -> None:

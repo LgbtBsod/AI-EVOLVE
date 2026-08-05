@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 import math
 import random
 import time
-from typing import List, Dict, Tuple, Optional
-from panda3d.core import CardMaker, Vec3, Vec4, TransparencyAttrib
-from direct.task import Task
+
+from panda3d.core import CardMaker, TransparencyAttrib
+
 
 class Particle:
     """Отдельная частица"""

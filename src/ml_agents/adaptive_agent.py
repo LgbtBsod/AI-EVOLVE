@@ -4,17 +4,15 @@
 Поддерживает исследование скиллов, уклонение, блокирование и использование оружия.
 """
 
-import numpy as np
-from typing import Dict, List, Optional, Tuple, Any, Union
+import logging
 from dataclasses import dataclass, field
 from enum import Enum, auto
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.distributions import Categorical
-import logging
 from pathlib import Path
-import json
+
+import numpy as np
+import torch
+from torch import nn, optim
+from torch.distributions import Categorical
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +67,7 @@ class WeaponInfo:
     weapon_type: str
     damage: int
     attack_speed: float
-    skills: List[str] = field(default_factory=list)
+    skills: list[str] = field(default_factory=list)
     proficiency: float = 0.0
     usage_count: int = 0
 
@@ -83,11 +81,11 @@ class EntityState:
     max_mana: float
     stamina: float
     max_stamina: float
-    position: Tuple[float, float, float]
-    velocity: Tuple[float, float, float]
-    status_effects: List[str] = field(default_factory=list)
-    active_buffs: List[str] = field(default_factory=list)
-    active_debuffs: List[str] = field(default_factory=list)
+    position: tuple[float, float, float]
+    velocity: tuple[float, float, float]
+    status_effects: list[str] = field(default_factory=list)
+    active_buffs: list[str] = field(default_factory=list)
+    active_debuffs: list[str] = field(default_factory=list)
 
 
 @dataclass(slots=True)
@@ -100,9 +98,9 @@ class BattleContext:
     terrain_cover: bool
     allies_nearby: int
     enemies_nearby: int
-    available_skills: List[SkillInfo]
-    equipped_weapon: Optional[WeaponInfo]
-    environment_hazards: List[str] = field(default_factory=list)
+    available_skills: list[SkillInfo]
+    equipped_weapon: WeaponInfo | None
+    environment_hazards: list[str] = field(default_factory=list)
 
 
 class AdaptiveNeuralNetwork(nn.Module):
@@ -147,7 +145,7 @@ class AdaptiveNeuralNetwork(nn.Module):
         
         self.hidden_dim = hidden_dim
     
-    def forward(self, state: torch.Tensor, context: Optional[torch.Tensor] = None):
+    def forward(self, state: torch.Tensor, context: torch.Tensor | None = None):
         # Кодирование состояния
         encoded = self.state_encoder(state)
         
@@ -199,10 +197,10 @@ class AdaptiveRLAgent:
         }
         
         # База знаний
-        self.skills: Dict[str, SkillInfo] = {}
-        self.weapons: Dict[str, WeaponInfo] = {}
-        self.enemy_patterns: Dict[str, List[Dict]] = {}  # Паттерны поведения врагов
-        self.combat_history: List[Dict] = []
+        self.skills: dict[str, SkillInfo] = {}
+        self.weapons: dict[str, WeaponInfo] = {}
+        self.enemy_patterns: dict[str, list[dict]] = {}  # Паттерны поведения врагов
+        self.combat_history: list[dict] = []
         
         # Статистика
         self.total_episodes = 0
@@ -261,7 +259,7 @@ class AdaptiveRLAgent:
         
         return torch.tensor(state_vector[:64], dtype=torch.float32).to(self.device)
     
-    def select_action(self, context: BattleContext, training: bool = True) -> Tuple[int, float]:
+    def select_action(self, context: BattleContext, training: bool = True) -> tuple[int, float]:
         """
         Выбрать действие на основе текущего состояния.
         Возвращает действие и его вероятность.
@@ -291,7 +289,7 @@ class AdaptiveRLAgent:
         self.memory['dones'].append(done)
         self.memory['log_probs'].append(log_prob)
     
-    def update(self, batch_size: int = 64) -> Dict[str, float]:
+    def update(self, batch_size: int = 64) -> dict[str, float]:
         """
         Обновить модель используя PPO-like алгоритм.
         Возвращает метрики обучения.
@@ -406,7 +404,7 @@ class AdaptiveRLAgent:
             (1.0 if skill.discovery_state == SkillDiscoveryState.OPTIMIZED else 0.5) * 0.2
         )
     
-    def learn_enemy_pattern(self, enemy_id: str, behavior: Dict) -> None:
+    def learn_enemy_pattern(self, enemy_id: str, behavior: dict) -> None:
         """Изучить паттерн поведения врага."""
         if enemy_id not in self.enemy_patterns:
             self.enemy_patterns[enemy_id] = []
@@ -417,7 +415,7 @@ class AdaptiveRLAgent:
         if len(self.enemy_patterns[enemy_id]) > 1000:
             self.enemy_patterns[enemy_id] = self.enemy_patterns[enemy_id][-500:]
     
-    def get_adaptation_strategy(self, enemy_id: str) -> Dict[str, float]:
+    def get_adaptation_strategy(self, enemy_id: str) -> dict[str, float]:
         """Получить стратегию адаптации к конкретному врагу."""
         if enemy_id not in self.enemy_patterns or len(self.enemy_patterns[enemy_id]) < 5:
             return {'aggression': 0.5, 'caution': 0.5, 'exploration': 0.5}
@@ -501,7 +499,7 @@ class AdaptiveRLAgent:
             return False
     
     def record_combat_result(self, won: bool, damage_dealt: float, 
-                            damage_taken: float, skills_used: List[str]):
+                            damage_taken: float, skills_used: list[str]):
         """Записать результат боя для анализа."""
         combat_record = {
             'timestamp': len(self.combat_history),

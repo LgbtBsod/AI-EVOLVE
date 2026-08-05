@@ -2,25 +2,26 @@
 """Единая система искусственного интеллекта
 Объединяет все AI возможности в одной системе с машинным обучением"""
 
+import json
+import logging
+import math
+import pickle
+import random
+import threading
+import time
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, List, Optional, Any, Callable, Tuple, Union
-import logging
-import random
-import time
-import math
-import threading
-import numpy as np
-import json
-import pickle
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import Any
+
+import numpy as np
 
 # Импорт ML-фреймворка обязателен по ТЗ (без fallback)
 import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
+from torch import nn, optim
+
 TORCH_AVAILABLE = True
 
 try:
@@ -32,7 +33,8 @@ except ImportError:
     logging.info("Scikit-learn не установлен - некоторые AI функции будут недоступны")
 
 from src.core.architecture import BaseComponent, ComponentType, Priority
-from src.core.constants import AIState, AIBehavior, constants_manager, TIME_CONSTANTS
+from src.core.constants import AIBehavior, AIState
+
 
 # = ТИПЫ AI
 class AIType(Enum):
@@ -95,13 +97,13 @@ class MemoryEntry:
     """Запись в памяти"""
     memory_type: MemoryType
     timestamp: float
-    context: Dict[str, Any]
+    context: dict[str, Any]
     action: str
-    outcome: Dict[str, Any]
+    outcome: dict[str, Any]
     success: bool
     learning_value: float = 0.5  # Ценность для обучения (0.0 - 1.0)
     
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             'memory_type': self.memory_type.value,
             'timestamp': self.timestamp,
@@ -119,11 +121,11 @@ class GenerationMemory:
     entity_id: str
     entity_type: str
     start_time: float
-    end_time: Optional[float] = None
+    end_time: float | None = None
     total_experience: float = 0.0
-    memories: List[MemoryEntry] = field(default_factory=list)
-    final_stats: Dict[str, Any] = field(default_factory=dict)
-    cause_of_death: Optional[str] = None
+    memories: list[MemoryEntry] = field(default_factory=list)
+    final_stats: dict[str, Any] = field(default_factory=dict)
+    cause_of_death: str | None = None
 
 @dataclass
 class AIEntity:
@@ -132,26 +134,26 @@ class AIEntity:
     ai_type: AIType
     current_state: AIState
     priority: AIPriority
-    position: Tuple[float, float, float]
-    target_position: Optional[Tuple[float, float, float]] = None
-    target_entity: Optional[str] = None
+    position: tuple[float, float, float]
+    target_position: tuple[float, float, float] | None = None
+    target_entity: str | None = None
     health: float = 100.0
     max_health: float = 100.0
     speed: float = 1.0
     detection_range: float = 10.0
     attack_range: float = 2.0
-    memory: Dict[str, Any] = field(default_factory=dict)
-    behavior_data: Dict[str, Any] = field(default_factory=dict)
-    learning_data: Dict[str, Any] = field(default_factory=dict)
-    neural_network: Optional[Any] = None
+    memory: dict[str, Any] = field(default_factory=dict)
+    behavior_data: dict[str, Any] = field(default_factory=dict)
+    learning_data: dict[str, Any] = field(default_factory=dict)
+    neural_network: Any | None = None
     last_update: float = field(default_factory=time.time)
-    experience_buffer: List[Dict[str, Any]] = field(default_factory=list)
+    experience_buffer: list[dict[str, Any]] = field(default_factory=list)
     learning_rate: float = 0.001
     exploration_rate: float = 0.1
     generation_id: int = 1
     total_experience: float = 0.0
-    memory_entries: List[MemoryEntry] = field(default_factory=list)
-    personality_traits: Dict[str, float] = field(default_factory=dict)
+    memory_entries: list[MemoryEntry] = field(default_factory=list)
+    personality_traits: dict[str, float] = field(default_factory=dict)
 
 @dataclass
 class AIBehavior:
@@ -159,15 +161,15 @@ class AIBehavior:
     behavior_id: str
     name: str
     description: str
-    conditions: Dict[str, Any] = field(default_factory=dict)
-    actions: List[str] = field(default_factory=list)
+    conditions: dict[str, Any] = field(default_factory=dict)
+    actions: list[str] = field(default_factory=list)
     priority: int = 0
     cooldown: float = 0.0
     last_execution: float = 0.0
     success_rate: float = 0.5
     learning_enabled: bool = True
-    model_path: Optional[str] = None
-    personality_requirements: Dict[str, float] = field(default_factory=dict)
+    model_path: str | None = None
+    personality_requirements: dict[str, float] = field(default_factory=dict)
 
 @dataclass
 class AIDecision:
@@ -175,12 +177,12 @@ class AIDecision:
     entity_id: str
     behavior_id: str
     action: str
-    target: Optional[str] = None
-    position: Optional[Tuple[float, float, float]] = None
+    target: str | None = None
+    position: tuple[float, float, float] | None = None
     confidence: float = 1.0
     timestamp: float = field(default_factory=time.time)
-    learning_data: Dict[str, Any] = field(default_factory=dict)
-    personality_influence: Dict[str, float] = field(default_factory=dict)
+    learning_data: dict[str, Any] = field(default_factory=dict)
+    personality_influence: dict[str, float] = field(default_factory=dict)
 
 @dataclass
 class LearningExperience:
@@ -230,27 +232,27 @@ class AISystem(BaseComponent):
         self.settings = AISettings()
         
         # AI сущности
-        self.ai_entities: Dict[str, AIEntity] = {}
-        self.entity_behaviors: Dict[str, List[AIBehavior]] = {}
+        self.ai_entities: dict[str, AIEntity] = {}
+        self.entity_behaviors: dict[str, list[AIBehavior]] = {}
         
         # Поведения и решения
-        self.behaviors: Dict[str, AIBehavior] = {}
-        self.decisions: List[AIDecision] = []
+        self.behaviors: dict[str, AIBehavior] = {}
+        self.decisions: list[AIDecision] = []
         
         # Машинное обучение
-        self.global_memory: Dict[str, Any] = {}
-        self.experience_pool: Dict[str, List[LearningExperience]] = {}
-        self.learning_data: Dict[str, Any] = {}
-        self.models: Dict[str, Any] = {}
-        self.scalers: Dict[str, Any] = {}
+        self.global_memory: dict[str, Any] = {}
+        self.experience_pool: dict[str, list[LearningExperience]] = {}
+        self.learning_data: dict[str, Any] = {}
+        self.models: dict[str, Any] = {}
+        self.scalers: dict[str, Any] = {}
         
         # Память поколений
-        self.generation_memories: Dict[int, GenerationMemory] = {}
+        self.generation_memories: dict[int, GenerationMemory] = {}
         self.current_generation: int = 1
         
         # Многопоточность
-        self.executor: Optional[ThreadPoolExecutor] = None
-        self.update_thread: Optional[threading.Thread] = None
+        self.executor: ThreadPoolExecutor | None = None
+        self.update_thread: threading.Thread | None = None
         self.running = False
         
         # Статистика
@@ -266,10 +268,10 @@ class AISystem(BaseComponent):
         }
         
         # Callbacks
-        self.behavior_callbacks: Dict[str, Callable] = {}
-        self.decision_callbacks: List[Callable] = []
-        self.learning_callbacks: List[Callable] = []
-        self.memory_callbacks: List[Callable] = []
+        self.behavior_callbacks: dict[str, Callable] = {}
+        self.decision_callbacks: list[Callable] = []
+        self.learning_callbacks: list[Callable] = []
+        self.memory_callbacks: list[Callable] = []
         
         self.logger = logging.getLogger(__name__)
     
@@ -427,7 +429,7 @@ class AISystem(BaseComponent):
         }
     
     def register_entity(self, entity_id: str, ai_type: AIType, 
-                       position: Tuple[float, float, float], **kwargs) -> bool:
+                       position: tuple[float, float, float], **kwargs) -> bool:
         """Регистрация AI сущности с машинным обучением"""
         try:
             if len(self.ai_entities) >= self.settings.max_entities:
@@ -498,7 +500,7 @@ class AISystem(BaseComponent):
             self.logger.error(f"Ошибка создания нейронной сети: {e}")
             return None
     
-    def make_decision(self, entity_id: str) -> Optional[AIDecision]:
+    def make_decision(self, entity_id: str) -> AIDecision | None:
         """Принятие решения с использованием машинного обучения и личности"""
         try:
             if entity_id not in self.ai_entities:
@@ -549,8 +551,8 @@ class AISystem(BaseComponent):
             self.logger.error(f"Ошибка принятия решения для {entity_id}: {e}")
             return None
     
-    def _select_behavior_with_personality(self, entity: AIEntity, behaviors: List[AIBehavior], 
-                                        state: np.ndarray) -> Optional[AIBehavior]:
+    def _select_behavior_with_personality(self, entity: AIEntity, behaviors: list[AIBehavior], 
+                                        state: np.ndarray) -> AIBehavior | None:
         """Выбор поведения с учетом личности и условий"""
         try:
             available_behaviors = []
@@ -630,9 +632,7 @@ class AISystem(BaseComponent):
         """Проверка условий поведения"""
         try:
             for condition, value in behavior.conditions.items():
-                if condition == "state" and entity.current_state != value:
-                    return False
-                elif condition == "has_target" and bool(entity.target_entity) != value:
+                if condition == "state" and entity.current_state != value or condition == "has_target" and bool(entity.target_entity) != value:
                     return False
                 elif condition == "target_in_range" and entity.target_position:
                     distance = self._calculate_distance(entity.position, entity.target_position)
@@ -661,13 +661,13 @@ class AISystem(BaseComponent):
             self.logger.error(f"Ошибка проверки условий поведения: {e}")
             return False
     
-    def _calculate_distance(self, pos1: Tuple[float, float, float], 
-                           pos2: Tuple[float, float, float]) -> float:
+    def _calculate_distance(self, pos1: tuple[float, float, float], 
+                           pos2: tuple[float, float, float]) -> float:
         """Расчет расстояния между точками"""
         return math.sqrt(sum((a - b) ** 2 for a, b in zip(pos1, pos2)))
     
     def _select_action_ml(self, entity: AIEntity, behavior: AIBehavior, 
-                          state: np.ndarray) -> Tuple[str, float]:
+                          state: np.ndarray) -> tuple[str, float]:
         """Выбор действия с помощью машинного обучения"""
         try:
             if not behavior.actions:
@@ -697,7 +697,7 @@ class AISystem(BaseComponent):
             self.logger.error(f"Ошибка выбора действия: {e}")
             return "idle", 1.0
     
-    def _predict_behavior_scores(self, entity: AIEntity, behaviors: List[AIBehavior], 
+    def _predict_behavior_scores(self, entity: AIEntity, behaviors: list[AIBehavior], 
                                 state: np.ndarray) -> np.ndarray:
         """Предсказание оценок для поведений"""
         try:
@@ -714,7 +714,7 @@ class AISystem(BaseComponent):
             self.logger.error(f"Ошибка предсказания оценок: {e}")
             return np.array([1.0] * len(behaviors))
     
-    def _predict_action_pytorch(self, model_info: Dict[str, Any], state: np.ndarray) -> Tuple[int, float]:
+    def _predict_action_pytorch(self, model_info: dict[str, Any], state: np.ndarray) -> tuple[int, float]:
         """Предсказание действия с помощью PyTorch"""
         try:
             model = model_info['model']
@@ -730,7 +730,7 @@ class AISystem(BaseComponent):
             self.logger.error(f"Ошибка предсказания PyTorch: {e}")
             return 0, 1.0
     
-    def _predict_action_sklearn(self, model_info: Dict[str, Any], state: np.ndarray) -> Tuple[int, float]:
+    def _predict_action_sklearn(self, model_info: dict[str, Any], state: np.ndarray) -> tuple[int, float]:
         """Предсказание действия с помощью Scikit-learn"""
         try:
             model = model_info['model']
@@ -747,8 +747,8 @@ class AISystem(BaseComponent):
             self.logger.error(f"Ошибка предсказания Scikit-learn: {e}")
             return 0, 1.0
     
-    def add_memory_entry(self, entity_id: str, memory_type: MemoryType, context: Dict[str, Any], 
-                        action: str, outcome: Dict[str, Any], success: bool, learning_value: float = 0.5):
+    def add_memory_entry(self, entity_id: str, memory_type: MemoryType, context: dict[str, Any], 
+                        action: str, outcome: dict[str, Any], success: bool, learning_value: float = 0.5):
         """Добавление записи в память сущности"""
         try:
             if entity_id not in self.ai_entities:
@@ -981,7 +981,7 @@ class AISystem(BaseComponent):
         except Exception as e:
             self.logger.error(f"Ошибка загрузки моделей: {e}")
     
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Получение статистики AI системы"""
         return {
             "total_entities": self.stats["total_entities"],
@@ -1034,11 +1034,11 @@ class AISystem(BaseComponent):
             except Exception as e:
                 self.logger.error(f"Ошибка в callback памяти: {e}")
     
-    def get_entity_state(self, entity_id: str) -> Optional[AIEntity]:
+    def get_entity_state(self, entity_id: str) -> AIEntity | None:
         """Получение состояния AI сущности"""
         return self.ai_entities.get(entity_id)
     
-    def get_all_entities(self) -> Dict[str, AIEntity]:
+    def get_all_entities(self) -> dict[str, AIEntity]:
         """Получение всех AI сущностей"""
         return self.ai_entities.copy()
     

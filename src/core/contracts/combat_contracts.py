@@ -3,14 +3,22 @@
 Интегрируют ML-агентов для принятия решений в реальном времени.
 """
 
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, field
 import logging
+from dataclasses import dataclass, field
+from typing import Any
 
-from src.core.contracts.smart_contracts import SmartContract, ContractResult, ContractStatus, register_contract
+from src.core.contracts.smart_contracts import (
+    ContractResult,
+    ContractStatus,
+    SmartContract,
+    register_contract,
+)
 from src.ml_agents.adaptive_agent import (
-    AdaptiveRLAgent, BattleContext, EntityState, 
-    SkillInfo, WeaponInfo, ActionType, SkillDiscoveryState
+    ActionType,
+    AdaptiveRLAgent,
+    BattleContext,
+    EntityState,
+    SkillDiscoveryState,
 )
 
 logger = logging.getLogger(__name__)
@@ -20,12 +28,12 @@ logger = logging.getLogger(__name__)
 class CombatAction:
     """Действие в бою."""
     action_type: ActionType
-    target_id: Optional[str] = None
-    skill_id: Optional[str] = None
-    weapon_id: Optional[str] = None
-    direction: Optional[tuple] = None
+    target_id: str | None = None
+    skill_id: str | None = None
+    weapon_id: str | None = None
+    direction: tuple | None = None
     priority: int = 0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @register_contract
@@ -40,7 +48,7 @@ class AttackContract(SmartContract):
     """
     
     def __init__(self, attacker_id: str, target_id: str, 
-                 attack_type: str = "melee", skill_id: Optional[str] = None):
+                 attack_type: str = "melee", skill_id: str | None = None):
         super().__init__(f"attack_{attacker_id}_{target_id}")
         
         self.attacker_id = attacker_id
@@ -49,13 +57,13 @@ class AttackContract(SmartContract):
         self.skill_id = skill_id
         
         # Контекст будет установлен перед выполнением
-        self.attacker_state: Optional[EntityState] = None
-        self.target_state: Optional[EntityState] = None
+        self.attacker_state: EntityState | None = None
+        self.target_state: EntityState | None = None
         self.distance: float = 0.0
         self.has_los: bool = False
-        self.ml_agent: Optional[AdaptiveRLAgent] = None
+        self.ml_agent: AdaptiveRLAgent | None = None
     
-    def execute(self) -> ContractResult[Dict]:
+    def execute(self) -> ContractResult[dict]:
         """Выполнить атаку."""
         if not self.attacker_state or not self.target_state:
             return ContractResult(
@@ -138,10 +146,10 @@ class DefenseContract(SmartContract):
         self.incoming_damage = incoming_damage
         self.attack_type = attack_type
         
-        self.defender_state: Optional[EntityState] = None
-        self.ml_agent: Optional[AdaptiveRLAgent] = None
+        self.defender_state: EntityState | None = None
+        self.ml_agent: AdaptiveRLAgent | None = None
     
-    def execute(self) -> ContractResult[Dict]:
+    def execute(self) -> ContractResult[dict]:
         """Выполнить защиту."""
         if not self.defender_state:
             return ContractResult(
@@ -220,17 +228,17 @@ class SkillUsageContract(SmartContract):
     """
     
     def __init__(self, caster_id: str, skill_id: str, 
-                 target_ids: Optional[List[str]] = None):
+                 target_ids: list[str] | None = None):
         super().__init__(f"skill_{caster_id}_{skill_id}")
         
         self.caster_id = caster_id
         self.skill_id = skill_id
         self.target_ids = target_ids or []
         
-        self.caster_state: Optional[EntityState] = None
-        self.ml_agent: Optional[AdaptiveRLAgent] = None
+        self.caster_state: EntityState | None = None
+        self.ml_agent: AdaptiveRLAgent | None = None
     
-    def execute(self) -> ContractResult[Dict]:
+    def execute(self) -> ContractResult[dict]:
         """Использовать скилл."""
         if not self.caster_state:
             return ContractResult(
@@ -307,10 +315,10 @@ class CombatContractExecutor:
     """
     
     def __init__(self):
-        self.active_combats: Dict[str, Dict] = {}
+        self.active_combats: dict[str, dict] = {}
     
-    def start_combat(self, combat_id: str, participants: List[str],
-                    ml_agents: Dict[str, AdaptiveRLAgent]):
+    def start_combat(self, combat_id: str, participants: list[str],
+                    ml_agents: dict[str, AdaptiveRLAgent]):
         """Начать бой."""
         self.active_combats[combat_id] = {
             'participants': participants,
@@ -320,8 +328,8 @@ class CombatContractExecutor:
         }
         logger.info(f"Бой {combat_id} начат с участниками: {participants}")
     
-    def execute_combat_round(self, combat_id: str) -> List[ContractResult]:
-        """Выполнить раунд боя."""
+    def execute_combat_round(self, combat_id: str) -> list[ContractResult]:
+        """Выполнить раунд боя с участием ML-агентов."""
         if combat_id not in self.active_combats:
             logger.error(f"Бой {combat_id} не найден")
             return []
@@ -329,20 +337,106 @@ class CombatContractExecutor:
         combat = self.active_combats[combat_id]
         results = []
         
-        # Каждый участник делает действие
+        # Каждый участник делает действие через ML-агента
         for participant_id in combat['participants']:
             ml_agent = combat['ml_agents'].get(participant_id)
             
             if ml_agent:
-                # TODO: Получить контекст боя и выбрать действие через ML
-                # Для примера - простая атака
-                pass
+                # Получаем контекст боя для принятия решения
+                combat_context = self._get_combat_context(combat_id, participant_id)
+                
+                # ML-агент выбирает действие на основе контекста
+                action = ml_agent.select_combat_action(combat_context)
+                
+                # Выполняем действие и записываем результат
+                result = self._execute_combat_action(combat_id, participant_id, action)
+                if result:
+                    results.append(result)
+                    logger.debug(f"Участник {participant_id} выполнил действие: {action}")
         
         combat['turn'] += 1
         
         return results
     
-    def end_combat(self, combat_id: str, winner_id: Optional[str] = None):
+    def _get_combat_context(self, combat_id: str, participant_id: str) -> dict[str, Any]:
+        """Получить контекст боя для участника."""
+        combat = self.active_combats.get(combat_id)
+        if not combat:
+            return {}
+        
+        # Собираем информацию о состоянии боя
+        return {
+            'combat_id': combat_id,
+            'participant_id': participant_id,
+            'turn': combat['turn'],
+            'participants': list(combat['participants']),
+            'health_states': {
+                pid: combat['entities'].get(pid, {}).get('health', 100)
+                for pid in combat['participants']
+            },
+            'active_effects': combat.get('active_effects', {}),
+        }
+    
+    def _execute_combat_action(self, combat_id: str, participant_id: str, action: str) -> ContractResult | None:
+        """Выполнить действие в бою и вернуть результат."""
+        try:
+            combat = self.active_combats.get(combat_id)
+            if not combat:
+                return None
+            
+            # Простая реализация действий
+            if action == "attack":
+                # Выбираем случайную цель среди противников
+                targets = [p for p in combat['participants'] if p != participant_id]
+                if targets:
+                    target_id = targets[0]  # В реальной игре нужен более умный выбор
+                    damage = combat['entities'].get(participant_id, {}).get('damage', 10)
+                    
+                    # Применяем урон цели
+                    entity = combat['entities'].get(target_id, {})
+                    current_health = entity.get('health', 100)
+                    entity['health'] = max(0, current_health - damage)
+                    
+                    logger.info(f"{participant_id} атакует {target_id} на {damage} урона")
+                    
+                    return ContractResult(
+                        success=True,
+                        data={'action': 'attack', 'target': target_id, 'damage': damage}
+                    )
+            
+            elif action == "defend":
+                # Увеличиваем защиту на этот ход
+                entity = combat['entities'].get(participant_id, {})
+                entity['defense_bonus'] = entity.get('defense_bonus', 0) + 5
+                
+                logger.info(f"{participant_id} защищается")
+                
+                return ContractResult(
+                    success=True,
+                    data={'action': 'defend', 'defense_bonus': 5}
+                )
+            
+            elif action == "heal":
+                # Лечим себя
+                entity = combat['entities'].get(participant_id, {})
+                heal_amount = entity.get('heal_power', 15)
+                current_health = entity.get('health', 100)
+                entity['health'] = min(100, current_health + heal_amount)
+                
+                logger.info(f"{participant_id} лечится на {heal_amount}")
+                
+                return ContractResult(
+                    success=True,
+                    data={'action': 'heal', 'amount': heal_amount}
+                )
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Ошибка выполнения действия в бою: {e}")
+            return None
+    
+    def end_combat(self, combat_id: str, winner_id: str | None = None):
         """Закончить бой."""
         if combat_id not in self.active_combats:
             return

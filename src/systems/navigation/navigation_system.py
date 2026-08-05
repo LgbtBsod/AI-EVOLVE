@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Система навигации и поиска пути для персонажей
 Использует упрощенный A* алгоритм с поддержкой динамических препятствий
 """
 
-import math
 import heapq
-from typing import Dict, List, Optional, Tuple, Set
+import math
 from dataclasses import dataclass, field
+from typing import Optional
 
 
 @dataclass
@@ -32,7 +31,7 @@ class Node:
 class PathResult:
     """Результат поиска пути"""
     success: bool
-    path: List[Tuple[float, float]] = field(default_factory=list)
+    path: list[tuple[float, float]] = field(default_factory=list)
     distance: float = 0.0
     error_message: str = ""
 
@@ -47,15 +46,15 @@ class NavigationSystem:
         self.grid_resolution = grid_resolution
         
         # Препятствия (статические и динамические)
-        self.static_obstacles: List[Dict] = []  # {x, y, radius}
-        self.dynamic_obstacles: List[Dict] = []  # {x, y, radius, entity_id}
+        self.static_obstacles: list[dict] = []  # {x, y, radius}
+        self.dynamic_obstacles: list[dict] = []  # {x, y, radius, entity_id}
         
         # Кэш путей для оптимизации
-        self.path_cache: Dict[str, PathResult] = {}
+        self.path_cache: dict[str, PathResult] = {}
         self.cache_max_size = 100
         
         # Цели для исследования
-        self.exploration_targets: List[Tuple[float, float]] = []
+        self.exploration_targets: list[tuple[float, float]] = []
         
     def add_static_obstacle(self, x: float, y: float, radius: float):
         """Добавить статическое препятствие"""
@@ -74,7 +73,7 @@ class NavigationSystem:
             if obs['entity_id'] != entity_id
         ]
         
-    def find_path(self, start: Tuple[float, float], end: Tuple[float, float], 
+    def find_path(self, start: tuple[float, float], end: tuple[float, float], 
                   avoidance_radius: float = 1.0) -> PathResult:
         """
         Найти путь от start до end с обходом препятствий
@@ -113,8 +112,8 @@ class NavigationSystem:
         self._cache_result(cache_key, result)
         return result
     
-    def _find_path_astar(self, start: Tuple[float, float], end: Tuple[float, float],
-                         avoidance_radius: float) -> List[Tuple[float, float]]:
+    def _find_path_astar(self, start: tuple[float, float], end: tuple[float, float],
+                         avoidance_radius: float) -> list[tuple[float, float]]:
         """Упрощенный A* поиск пути"""
         # Создаем узлы для ключевых точек
         nodes = self._create_waypoint_graph(start, end, avoidance_radius)
@@ -130,7 +129,7 @@ class NavigationSystem:
         
         # A* алгоритм
         open_set = [start_node]
-        closed_set: Set[Tuple[float, float]] = set()
+        closed_set: set[tuple[float, float]] = set()
         
         while open_set:
             current = heapq.heappop(open_set)
@@ -167,8 +166,8 @@ class NavigationSystem:
         
         return []
     
-    def _create_waypoint_graph(self, start: Tuple[float, float], end: Tuple[float, float],
-                                avoidance_radius: float) -> Dict[str, Node]:
+    def _create_waypoint_graph(self, start: tuple[float, float], end: tuple[float, float],
+                                avoidance_radius: float) -> dict[str, Node]:
         """Создать граф промежуточных точек для поиска пути"""
         nodes = {}
         
@@ -200,8 +199,8 @@ class NavigationSystem:
         
         return nodes
     
-    def _get_neighbors(self, node: Node, nodes: Dict[str, Node], 
-                       avoidance_radius: float) -> List[Node]:
+    def _get_neighbors(self, node: Node, nodes: dict[str, Node], 
+                       avoidance_radius: float) -> list[Node]:
         """Получить доступных соседей узла"""
         neighbors = []
         
@@ -218,7 +217,7 @@ class NavigationSystem:
         
         return neighbors
     
-    def _has_line_of_sight(self, start: Tuple[float, float], end: Tuple[float, float],
+    def _has_line_of_sight(self, start: tuple[float, float], end: tuple[float, float],
                            avoidance_radius: float) -> bool:
         """Проверить есть ли прямая видимость между точками"""
         # Дискретизируем линию и проверяем каждое звено
@@ -261,8 +260,8 @@ class NavigationSystem:
         half_size = self.world_size / 2
         return -half_size <= x <= half_size and -half_size <= y <= half_size
     
-    def _calculate_distance(self, point1: Tuple[float, float], 
-                            point2: Tuple[float, float]) -> float:
+    def _calculate_distance(self, point1: tuple[float, float], 
+                            point2: tuple[float, float]) -> float:
         """Вычислить расстояние между двумя точками"""
         dx = point2[0] - point1[0]
         dy = point2[1] - point1[1]
@@ -277,8 +276,8 @@ class NavigationSystem:
         
         self.path_cache[key] = result
     
-    def get_exploration_target(self, current_pos: Tuple[float, float], 
-                               known_targets: List[Tuple[float, float]]) -> Optional[Tuple[float, float]]:
+    def get_exploration_target(self, current_pos: tuple[float, float], 
+                               known_targets: list[tuple[float, float]]) -> tuple[float, float] | None:
         """
         Получить цель для исследования
         Возвращает ближайшую неизвестную точку или случайную точку для исследования
@@ -308,7 +307,7 @@ class NavigationSystem:
         """Очистить кэш путей"""
         self.path_cache.clear()
     
-    def update_dynamic_obstacles(self, entities: List[Dict]):
+    def update_dynamic_obstacles(self, entities: list[dict]):
         """Обновить позиции динамических препятствий"""
         self.dynamic_obstacles.clear()
         for entity in entities:

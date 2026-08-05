@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Простая база данных для хранения игровых сессий и статистики
 Использует SQLite для легковесного хранения
 """
 
-import sqlite3
 import json
-import time
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, asdict
-from datetime import datetime
 import logging
+import sqlite3
+import time
+from dataclasses import dataclass
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +20,7 @@ class GameSession:
     session_id: str
     player_id: str
     start_time: float
-    end_time: Optional[float] = None
+    end_time: float | None = None
     character_class: str = ""
     level_reached: int = 1
     enemies_defeated: int = 0
@@ -31,7 +29,7 @@ class GameSession:
     distance_traveled: float = 0.0
     death_count: int = 0
     exit_found: bool = False
-    session_data: Dict[str, Any] = None
+    session_data: dict[str, Any] = None
     
     def __post_init__(self):
         if self.session_data is None:
@@ -44,10 +42,10 @@ class MLTrainingData:
     record_id: int
     session_id: str
     timestamp: float
-    state_vector: List[float]
+    state_vector: list[float]
     action_taken: int
     reward: float
-    next_state: List[float]
+    next_state: list[float]
     done: bool
 
 
@@ -58,7 +56,7 @@ class GameDatabase:
     
     def __init__(self, db_path: str = "saves/game_database.db"):
         self.db_path = db_path
-        self.conn: Optional[sqlite3.Connection] = None
+        self.conn: sqlite3.Connection | None = None
         self._initialize_database()
     
     def _initialize_database(self):
@@ -191,7 +189,7 @@ class GameDatabase:
             logger.error(f"Error updating session: {e}")
             return False
     
-    def get_session(self, session_id: str) -> Optional[GameSession]:
+    def get_session(self, session_id: str) -> GameSession | None:
         """Получить данные сессии по ID"""
         try:
             cursor = self.conn.cursor()
@@ -205,7 +203,7 @@ class GameDatabase:
             logger.error(f"Error getting session: {e}")
             return None
     
-    def get_all_sessions(self, player_id: Optional[str] = None) -> List[GameSession]:
+    def get_all_sessions(self, player_id: str | None = None) -> list[GameSession]:
         """Получить все сессии (опционально для игрока)"""
         try:
             cursor = self.conn.cursor()
@@ -239,9 +237,9 @@ class GameDatabase:
     
     # === ML Training Data ===
     
-    def add_training_record(self, session_id: str, state_vector: List[float],
+    def add_training_record(self, session_id: str, state_vector: list[float],
                            action_taken: int, reward: float,
-                           next_state: List[float], done: bool) -> bool:
+                           next_state: list[float], done: bool) -> bool:
         """Добавить запись для обучения ML"""
         try:
             cursor = self.conn.cursor()
@@ -265,8 +263,8 @@ class GameDatabase:
             logger.error(f"Error adding training record: {e}")
             return False
     
-    def get_training_data(self, session_id: Optional[str] = None, 
-                         limit: int = 1000) -> List[MLTrainingData]:
+    def get_training_data(self, session_id: str | None = None, 
+                         limit: int = 1000) -> list[MLTrainingData]:
         """Получить данные для обучения"""
         try:
             cursor = self.conn.cursor()
@@ -302,7 +300,7 @@ class GameDatabase:
     
     def log_npc_interaction(self, session_id: str, npc_id: str,
                            dialogue_outcome: str, player_charisma: float,
-                           information_gained: Optional[Dict] = None,
+                           information_gained: dict | None = None,
                            triggered_encounter: bool = False) -> bool:
         """Записать взаимодействие с NPC"""
         try:
@@ -329,7 +327,7 @@ class GameDatabase:
     
     # === Statistics ===
     
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Получить общую статистику"""
         try:
             cursor = self.conn.cursor()
@@ -359,12 +357,17 @@ class GameDatabase:
             return {}
     
     def _get_ml_records_count(self) -> int:
-        """Получить количество записей ML обучения"""
+        """Получить количество записей ML обучения
+        
+        Returns:
+            int: Количество записей в таблице ml_training_data
+        """
         try:
             cursor = self.conn.cursor()
             cursor.execute('SELECT COUNT(*) FROM ml_training_data')
             return cursor.fetchone()[0]
-        except:
+        except sqlite3.Error as e:
+            logger.warning(f"Database error while counting ML records: {e}")
             return 0
     
     def close(self):

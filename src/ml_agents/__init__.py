@@ -3,23 +3,23 @@
 """
 
 from .adaptive_agent import (
-    AdaptiveRLAgent,
-    AdaptiveNeuralNetwork,
     ActionType,
+    AdaptiveNeuralNetwork,
+    AdaptiveRLAgent,
+    BattleContext,
+    EntityState,
     SkillDiscoveryState,
     SkillInfo,
     WeaponInfo,
-    EntityState,
-    BattleContext
 )
 
 __all__ = [
-    'AdaptiveRLAgent',
-    'AdaptiveNeuralNetwork',
     'ActionType',
+    'AdaptiveNeuralNetwork',
+    'AdaptiveRLAgent',
+    'BattleContext',
+    'EntityState',
     'SkillDiscoveryState',
     'SkillInfo',
-    'WeaponInfo',
-    'EntityState',
-    'BattleContext'
+    'WeaponInfo'
 ]
