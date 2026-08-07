@@ -14,6 +14,7 @@ from src.core.state_manager import StateManager, StateWrapper
 from src.core.di_container import DIContainer, ServiceLifetime, get_container, register_systems
 from src.core.circuit_breaker import CircuitBreaker, CircuitState, circuit_breaker, CircuitBreakerError
 from src.core.cache import LRUCache, cached
+from src.core.event_system import EventSystem
 from src.core.interfaces import (
     IHealthComponent, IDamageDealer, ICombatStats
 )

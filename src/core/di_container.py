@@ -10,12 +10,15 @@ Refactored for Python 3.14 Best Practices:
 """
 from __future__ import annotations
 
+import logging
 import threading
 from contextlib import contextmanager
 from typing import Any, Callable, TypeVar
 
 from dependency_injector import containers, providers
 from dependency_injector.wiring import Provide, inject
+
+logger = logging.getLogger(__name__)
 
 T = TypeVar('T')
 

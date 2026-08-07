@@ -15,8 +15,11 @@ import threading
 import time
 from typing import Any, Callable, TypeVar
 
-from cachetools import TTLCache, cached, keys
+from cachetools import TTLCache, keys
 from cachetools.keys import hashkey
+
+# Import cached from cachetools with alias to avoid name collision
+from cachetools import cached as cachetools_cached
 
 T = TypeVar('T')
 
@@ -46,7 +49,9 @@ class EnhancedTTLCache:
         self.capacity = max_size  # Alias for compatibility
         
         # Use cachetools.TTLCache which is highly optimized
-        self._cache: TTLCache[Any, Any] = TTLCache(maxsize=max_size, ttl=default_ttl or 0)
+        # Use a very large TTL for 'no expiration' instead of 0 (which causes immediate expiration)
+        _ttl = default_ttl if default_ttl is not None else 63072000  # ~2 years as 'infinity'
+        self._cache: TTLCache[Any, Any] = TTLCache(maxsize=max_size, ttl=_ttl)
         self._lock = threading.RLock()
         
         # Statistics
@@ -174,10 +179,12 @@ def cached_enhanced(
         ... def expensive_computation(x: int) -> int:
         ...     return x ** 2
     """
-    cache = TTLCache(maxsize=max_size, ttl=ttl or 0)
+    # Use a very large TTL for 'no expiration' instead of 0 (which causes immediate expiration)
+    _ttl = ttl if ttl is not None else 63072000  # ~2 years as 'infinity'
+    cache = TTLCache(maxsize=max_size, ttl=_ttl)
     
     def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        @cached(cache, key=key_func or (lambda *args, **kwargs: hashkey(*args, **kwargs)))
+        @cachetools_cached(cache, key=key_func or (lambda *args, **kwargs: hashkey(*args, **kwargs)))
         def wrapper(*args: Any, **kwargs: Any) -> T:
             return func(*args, **kwargs)
         
@@ -185,3 +192,7 @@ def cached_enhanced(
         return wrapper
     
     return decorator
+
+
+# Alias for cached decorator to maintain API compatibility
+cached = cached_enhanced
