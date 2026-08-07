@@ -21,7 +21,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, Optional, TypeVar
 
 logger = logging.getLogger(__name__)
 
@@ -56,8 +56,8 @@ class StateMetadata:
     key: str
     state_type: StateType
     visibility: StateVisibility = StateVisibility.PUBLIC
-    created_at: float = field(default_factory=time.time)
-    updated_at: float = field(default_factory=time.time)
+    created_at: float = field(default_factory=time.perf_counter)
+    updated_at: float = field(default_factory=time.perf_counter)
     version: int = 0
     owner: str = "system"
     tags: list[str] = field(default_factory=list)
@@ -231,10 +231,14 @@ class StateManager:
             
             wrapper = self._states[key]
             
+            # Check TTL and delete if expired
             if wrapper.metadata.ttl is not None:
-                age = time.perf_counter() - wrapper.metadata.updated_at
+                now = time.perf_counter()
+                age = now - wrapper.metadata.updated_at
                 if age > wrapper.metadata.ttl:
-                    logger.debug(f"Состояние {key} истекло (TTL: {wrapper.metadata.ttl}s)")
+                    logger.debug(f"Состояние {key} истекло (TTL: {wrapper.metadata.ttl}s, age: {age:.3f}s)")
+                    # Delete expired state to prevent stale data
+                    self.delete_state(key)
                     return default
             
             return wrapper.value
@@ -453,117 +457,6 @@ class StateManager:
             logger.exception(f"Ошибка импорта JSON: {e}")
             return False
     
-    def _cleanup_loop(self) -> None:
-        while self._is_running:
-            time.sleep(60.0)
-            
-            with self._lock:
-                expired_keys = []
-                now = time.perf_counter()
-                
-                for key, wrapper in self._states.items():
-                    if wrapper.metadata.ttl is not None:
-                        age = now - wrapper.metadata.updated_at
-                        if age > wrapper.metadata.ttl:
-                            expired_keys.append(key)
-                
-                for key in expired_keys:
-                    self.delete_state(key)
-                
-                if expired_keys:
-                    logger.debug(f"Удалено {len(expired_keys)} истекших состояний")
-    
-    def _save_state(self, key: str) -> bool:
-        try:
-            if key not in self._states:
-                return False
-            
-            wrapper = self._states[key]
-            file_path = self._storage_path / f"{key}.json"
-            
-            data = {
-                'value': wrapper.value,
-                'metadata': {
-                    'type': wrapper.metadata.state_type.value,
-                    'version': wrapper.metadata.version,
-                    'owner': wrapper.metadata.owner,
-                    'tags': wrapper.metadata.tags,
-                    'created_at': wrapper.metadata.created_at,
-                    'updated_at': wrapper.metadata.updated_at
-                }
-            }
-            
-            file_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(file_path, 'w') as f:
-                json.dump(data, f, indent=2)
-            
-            logger.debug(f"Состояние {key} сохранено в {file_path}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Ошибка сохранения состояния {key}: {e}")
-            return False
-    
-    def _save_persistent_states(self) -> None:
-        with self._lock:
-            persistent_keys = [
-                key for key, wrapper in self._states.items()
-                if wrapper.metadata.is_persistent
-            ]
-            
-            for key in persistent_keys:
-                self._save_state(key)
-            
-            logger.info(f"Сохранено {len(persistent_keys)} персистентных состояний")
-    
-    def _load_persistent_states(self) -> None:
-        if not self._storage_path.exists():
-            logger.debug("Путь хранения не существует, пропускаем загрузку")
-            return
-        
-        loaded_count = 0
-        for file_path in self._storage_path.glob("*.json"):
-            try:
-                with open(file_path, 'r') as f:
-                    data = json.load(f)
-                
-                key = file_path.stem
-                value = data.get('value')
-                metadata = data.get('metadata', {})
-                
-                state_type_str = metadata.get('type', 'system_state')
-                state_type = next(
-                    (st for st in StateType if st.value == state_type_str),
-                    StateType.SYSTEM_STATE
-                )
-                
-                self.set_state(
-                    key=key,
-                    value=value,
-                    state_type=state_type,
-                    owner=metadata.get('owner', 'system'),
-                    tags=metadata.get('tags', []),
-                    is_persistent=True
-                )
-                
-                loaded_count += 1
-                
-            except Exception as e:
-                logger.error(f"Ошибка загрузки состояния из {file_path}: {e}")
-        
-        logger.info(f"Загружено {loaded_count} персистентных состояний")
-    
-    def _delete_persistent_state(self, key: str) -> bool:
-        try:
-            file_path = self._storage_path / f"{key}.json"
-            if file_path.exists():
-                file_path.unlink()
-                logger.debug(f"Файл состояния {key} удален")
-            return True
-        except Exception as e:
-            logger.error(f"Ошибка удаления файла состояния {key}: {e}")
-            return False
-
     def export_states(self, filter_func: Optional[Callable[[str, StateWrapper], bool]] = None) -> Dict[str, Any]:
         """Экспорт состояний в словарь"""
         with self._lock:
