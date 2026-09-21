@@ -1,4 +1,3 @@
-```
 # Python
 __pycache__/
 *.py[cod]
@@ -48,4 +47,11 @@ pytestdebug.log
 # OS
 .DS_Store
 Thumbs.db
-```
+
+# Dev tooling output (tools/dev_probe.py + ad hoc verification screenshots
+# at the repo root). Deliberately NOT a blanket *.png/*.jpg - real game
+# assets under src/assets/ must stay trackable.
+/dev_probe_output/
+/*.jpg
+/*.jpeg
+/*.png
