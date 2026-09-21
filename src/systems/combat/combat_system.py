@@ -141,12 +141,16 @@ class CombatSystem:
         '_sessions'
     )
     
-    def __init__(self, attribute_system: AttributeSystem | None = None) -> None:
+    def __init__(
+        self,
+        attribute_system: AttributeSystem | None = None,
+        rng=None,
+    ) -> None:
         self._sessions: dict[str, CombatSession] = {}
         self._attribute_system = attribute_system
         self._damage_formulas: dict[str, Callable[..., float]] = {}
         self._event_handlers: list[Callable[[DamageInfo], None]] = []
-        self._rng = None  # RNGManager будет внедрен
+        self._rng = rng  # RNGManager (см. src.core.rng_manager.get_default_rng)
         
         self._setup_default_formulas()
     

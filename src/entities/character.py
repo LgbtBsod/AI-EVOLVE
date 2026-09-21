@@ -9,6 +9,8 @@ from typing import Any
 from panda3d.core import CardMaker, TransparencyAttrib
 
 from ..core.constants import EntityType
+from ..systems.combat.combat_system import CombatStats
+from ..ui.health_bar import HealthBar
 from .base_entity import BaseEntity
 
 logger = logging.getLogger(__name__)
@@ -50,6 +52,7 @@ class Character(BaseEntity):
         'game',
         'head',
         'health',
+        'health_bar',
         'health_regen',
         'is_player',
         'last_ai_update',
@@ -109,7 +112,11 @@ class Character(BaseEntity):
         # Инициализируем базовую сущность
         entity_type = EntityType.PLAYER if is_player else EntityType.NPC
         super().__init__(character_id, entity_type, f"character_{character_id}")
-        
+        # BaseEntity.__init__ ставит self.is_alive как атрибут (bool), но Character
+        # ниже определяет is_alive() как метод (на основе self.health) — атрибут
+        # экземпляра иначе навсегда перекрывает метод класса.
+        del self.is_alive
+
         self.game = game
         self.x = x
         self.y = y
@@ -117,7 +124,8 @@ class Character(BaseEntity):
         self.character_class = character_class
         self.color = color
         self.node = None
-        
+        self.health_bar = None
+
         # Базовые характеристики
         self.level = 1
         self.experience = 0
@@ -254,10 +262,13 @@ class Character(BaseEntity):
         
         character.setPos(self.x, self.y, self.z)
         self.node = character
-        
+
+        self.health_bar = HealthBar(width=self.size * 1.1)
+        self.health_bar.create(self.node, z_offset=self.size * 1.9 + 0.3)
+
         # Запускаем анимации
         self._start_animations()
-        
+
         return character
         
     def _create_detailed_body(self, parent):
@@ -622,28 +633,42 @@ class Character(BaseEntity):
             else:
                 return False
             distance = math.sqrt((self.x - target_x)**2 + (self.y - target_y)**2)
-            
+
             if distance <= self.attack_range:
-                # Рассчитываем урон
-                base_damage = self.physical_damage
-                
-                # Проверяем критический удар
-                is_critical = random.random() * 100 < self.critical_chance
-                if is_critical:
-                    base_damage *= (self.critical_damage / 100)
-                    logger.info("Critical hit!")
-                
-                # Атакуем цель
-                target.take_damage(base_damage, "physical")
+                combat_system = getattr(self.game, "combat_system", None)
+                if not combat_system:
+                    logger.warning("No combat_system on game object, attack skipped")
+                    return False
+
+                damage_info = combat_system.execute_attack(self, target)
                 self.attack_cooldown = self.attack_cooldown_time
-                logger.info(f"Player attacked enemy for {base_damage:.1f} damage!")
-                return True
+
+                if damage_info.is_dodged:
+                    logger.info("Enemy dodged the attack!")
+                else:
+                    crit_note = " (critical!)" if damage_info.is_critical else ""
+                    logger.info(f"Player attacked enemy for {damage_info.damage:.1f} damage!{crit_note}")
+                return not damage_info.is_dodged
         return False
-        
+
+    def get_combat_stats(self) -> CombatStats:
+        """Боевые характеристики в формате, ожидаемом CombatSystem."""
+        return CombatStats(
+            physical_damage=self.physical_damage,
+            magical_damage=self.magical_damage,
+            defense=self.defense,
+            attack_speed=self.attack_speed,
+            critical_chance=self.critical_chance / 100.0,
+            critical_damage=self.critical_damage / 100.0,
+            dodge_chance=self.dodge_chance / 100.0,
+            magic_resistance=self.magic_resistance,
+            range=self.attack_range,
+        )
+
     def is_alive(self):
         """Проверка, жив ли персонаж"""
         return self.health > 0
-        
+
     def take_damage(self, damage, damage_type="physical"):
         """Получение урона"""
         actual_damage = max(1, damage - self.defense)
@@ -995,6 +1020,9 @@ class Character(BaseEntity):
     
     def destroy(self):
         """Уничтожение персонажа"""
+        if self.health_bar:
+            self.health_bar.destroy()
+            self.health_bar = None
         if self.node:
             self.node.removeNode()
             self.node = None

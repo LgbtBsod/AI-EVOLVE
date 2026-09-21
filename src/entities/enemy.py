@@ -7,11 +7,14 @@ import time
 
 from panda3d.core import CardMaker
 
+from ..systems.combat.combat_system import CombatStats
+from ..ui.health_bar import HealthBar
+
 logger = logging.getLogger(__name__)
 
 class EnhancedEnemy:
     """Улучшенный класс врага с правильным рендерингом"""
-    
+
     def __init__(self, game, x=0, y=0, z=0, enemy_type="basic", color=(1, 0, 0, 1)):
         self.game = game
         self.x = x
@@ -20,7 +23,8 @@ class EnhancedEnemy:
         self.enemy_type = enemy_type
         self.color = color
         self.node = None
-        
+        self.health_bar = None
+
         # Базовые характеристики в зависимости от типа
         self._setup_enemy_type()
         
@@ -133,6 +137,10 @@ class EnhancedEnemy:
         
         enemy.setPos(self.x, self.y, self.z)
         self.node = enemy
+
+        self.health_bar = HealthBar(width=self.size * 1.1)
+        self.health_bar.create(self.node, z_offset=self.size * 1.9 + 0.3)
+
         return enemy
         
     def create_visible_cube(self, parent, name, x, y, z, width, height, depth, color):
@@ -270,21 +278,35 @@ class EnhancedEnemy:
             distance = self.get_distance_to(target)
             
             if distance <= self.attack_range:
-                # Рассчитываем урон
-                base_damage = self.physical_damage
-                
-                # Проверяем критический удар
-                is_critical = random.random() * 100 < self.critical_chance
-                if is_critical:
-                    base_damage *= (self.critical_damage / 100)
-                    logger.info("Enemy critical hit!")
-                
-                # Атакуем цель
-                target.take_damage(base_damage, "physical")
+                combat_system = getattr(self.game, "combat_system", None)
+                if not combat_system:
+                    logger.warning("No combat_system on game object, attack skipped")
+                    return False
+
+                damage_info = combat_system.execute_attack(self, target)
                 self.last_attack_time = current_time
-                logger.info(f"Enemy attacked player for {base_damage:.1f} damage!")
-                return True
+
+                if damage_info.is_dodged:
+                    logger.info("Player dodged the enemy's attack!")
+                else:
+                    crit_note = " (critical!)" if damage_info.is_critical else ""
+                    logger.info(f"Enemy attacked player for {damage_info.damage:.1f} damage!{crit_note}")
+                return not damage_info.is_dodged
         return False
+
+    def get_combat_stats(self) -> CombatStats:
+        """Боевые характеристики в формате, ожидаемом CombatSystem."""
+        return CombatStats(
+            physical_damage=self.physical_damage,
+            magical_damage=getattr(self, "magical_damage", 0.0),
+            defense=self.defense,
+            attack_speed=1.0 / max(self.attack_cooldown, 0.01),
+            critical_chance=self.critical_chance / 100.0,
+            critical_damage=self.critical_damage / 100.0,
+            dodge_chance=self.dodge_chance / 100.0,
+            magic_resistance=self.magic_resistance,
+            range=self.attack_range,
+        )
     
     def update_ai(self, player, dt=0.016):
         """Обновление ИИ врага"""
@@ -348,6 +370,9 @@ class EnhancedEnemy:
     
     def destroy(self):
         """Уничтожение врага"""
+        if self.health_bar:
+            self.health_bar.destroy()
+            self.health_bar = None
         if self.node:
             self.node.removeNode()
             self.node = None

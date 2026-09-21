@@ -1,0 +1,4 @@
+# Panda3D 1.10.16 does not ship wheels for Python 3.14+/3.15 yet — that's why
+# this project runs on Python 3.13 specifically (see run_game.bat, which
+# creates a venv with "py -3.13").
+panda3d>=1.10.16,<2.0

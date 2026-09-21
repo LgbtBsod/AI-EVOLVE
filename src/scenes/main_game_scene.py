@@ -12,24 +12,26 @@ logger = logging.getLogger(__name__)
 class EnhancedGameScene:
     """Улучшенная игровая сцена с правильным рендерингом"""
     
-    def __init__(self, game):
+    def __init__(self, game, dev_mode: bool = False):
         self.game = game
+        self.dev_mode = dev_mode
         self.player = None
         self.enemies = []
         self.hud = None
         self.world_objects = []
         self.is_paused = False
-        
-        # Настройки мира
-        # Базовый размер был 50; увеличиваем линейный масштаб в 100 раз,
-        # что даёт рост площади примерно в 10 000 раз.
-        self.world_size = 50 * 100
+
+        # Настройки мира.
+        # Полноразмерная карта (50 * 100) огромна относительно скорости героя (8/с) —
+        # первая встреча с врагом занимает минуты. dev_mode даёт компактную карту
+        # для быстрой итерации при разработке/тестировании.
+        self.world_size = (50 * 8) if dev_mode else (50 * 100)
         self.enemy_spawn_rate = 0.1  # Вероятность появления врага за кадр
         self.max_enemies = 10
-        
+
         # Время
         self.last_enemy_spawn = 0
-        self.enemy_spawn_interval = 3.0  # Интервал между появлениями врагов
+        self.enemy_spawn_interval = 1.5 if dev_mode else 3.0  # Интервал между появлениями врагов
         
         # Система создания объектов игроком
         self.player_created_objects = []
@@ -475,7 +477,10 @@ class EnhancedGameScene:
             self.player.health = min(self.player.max_health, self.player.health + self.player.health_regen * dt)
             self.player.mana = min(self.player.max_mana, self.player.mana + self.player.mana_regen * dt)
             self.player.stamina = min(self.player.max_stamina, self.player.stamina + self.player.stamina_regen * dt)
-            
+
+            if self.player.health_bar:
+                self.player.health_bar.update(self.player.health / self.player.max_health)
+
             # Обновляем ИИ персонажа
             ai_known_exits = list(self.known_exit_positions) + list(self.echo_trail_points)
             self.player.update_ai(
@@ -495,6 +500,8 @@ class EnhancedGameScene:
         for enemy in self.enemies[:]:  # Используем копию списка для безопасного удаления
             if enemy.is_alive():
                 enemy.update_ai(self.player, dt)
+                if enemy.health_bar:
+                    enemy.health_bar.update(enemy.health / enemy.max_health)
             else:
                 # Удаляем мертвых врагов
                 enemy.destroy()
