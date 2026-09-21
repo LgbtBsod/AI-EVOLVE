@@ -20,6 +20,22 @@
    меньше картинок — меньше токенов на разбор.
 6. Собирает WARNING/ERROR из лога игры в summary.md — не нужно отдельно
    перехватывать stdout.
+7. summary.md ГАРАНТИРОВАН на любом исходе — нормальном завершении,
+   исключении внутри сэмплинга, Escape или закрытии окна (finish()
+   вызывается один раз из try/finally вокруг game.run(), а не из середины
+   логики сэмплинга) — и начинается со строки "Status: OK/CRASHED/STOPPED
+   EARLY" плюс кодом возврата процесса (0 - чисто, 1 - краш), чтобы можно
+   было проверить исход одной командой, не открывая файл.
+8. --seed сидирует и random, и RNGManager проекта (если есть) - без этого
+   два прогона "до/после фикса" нельзя честно сравнить, потому что криты/
+   промахи/точки спавна каждый раз разные. ВАЖНО: это снижает разброс
+   между прогонами (одинаковая стартовая точка RNG), но НЕ гарантирует
+   побитово одинаковый повтор - blukanie/wander врагов дёргает random()
+   каждый игровой кадр, а dt игры завязан на реальное время рендера
+   (game.taskMgr), которое от прогона к прогону чуть плавает. Честная
+   побитовая детерминированность потребовала бы фиксированного шага
+   времени (ClockObject.MNonRealTime) - пока не реализовано, это
+   следующий кандидат, если понадобится точное сравнение "до/после".
 
 Результат одного прогона — ОДИН файл summary.md, с него и надо начинать
 чтение. state.jsonl / game.log / frame_NNN.json — только если summary на
@@ -28,6 +44,7 @@
 Использование (этот проект):
     .venv/Scripts/python.exe tools/dev_probe.py --duration 30
     .venv/Scripts/python.exe tools/dev_probe.py --action-at 1:1 --action-at 1:2 --action-at 1:3
+    .venv/Scripts/python.exe tools/dev_probe.py --seed 42 --duration 20   # воспроизводимый прогон
 
 Переиспользование в другом Panda3D-проекте:
     - Всё, что касается запуска окна (screenshot+пиксельная проекция через
@@ -51,8 +68,11 @@ import argparse
 import importlib
 import json
 import logging
+import random
 import sys
+import tempfile
 import time
+import traceback
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -64,6 +84,22 @@ LOW_HP_FRACTION = 0.2
 PINNED_SECONDS_THRESHOLD = 5.0
 
 
+def _parse_action_at(value):
+    """argparse type= for --action-at: validates SEC:KEY at parse time instead
+    of blowing up later with a raw ValueError from an unpacking/float() failure
+    deep inside the sampling loop."""
+    sec_str, sep, key = value.partition(":")
+    if not sep:
+        raise argparse.ArgumentTypeError(f"expected SEC:KEY (e.g. 1.5:1), got {value!r}")
+    try:
+        sec = float(sec_str)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a number before ':', got {sec_str!r} in {value!r}")
+    if not key:
+        raise argparse.ArgumentTypeError(f"KEY after ':' is empty in {value!r}")
+    return (sec, key)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         description="Agent-oriented playtest probe: annotated screenshots + one summary.md"
@@ -72,9 +108,9 @@ def parse_args():
     parser.add_argument("--sample-interval", type=float, default=1.0, help="seconds between cheap state samples")
     parser.add_argument("--full", action="store_true", help="use the full-size map instead of the dev map")
     parser.add_argument("--out", type=str, default=None,
-                         help="output directory (default: dev_probe_output/<timestamp>/)")
+                         help="output directory (default: a fresh dev_probe_output/<timestamp>_xxxxxxxx/ dir)")
     parser.add_argument(
-        "--action-at", action="append", default=[], metavar="SEC:KEY",
+        "--action-at", action="append", default=[], type=_parse_action_at, metavar="SEC:KEY",
         help="simulate pressing KEY at time SEC (e.g. 1:1 to spawn near hero at t=1s). Repeatable.",
     )
     parser.add_argument("--screenshot-interval", type=float, default=0.0,
@@ -83,10 +119,29 @@ def parse_args():
                          help="module to import for the game entry point (default: this project's main.py)")
     parser.add_argument("--game-class", type=str, default="Game",
                          help="class inside --entry-module to instantiate (default: Game)")
-    parser.add_argument("--game-kwargs", type=str, default=None,
+    parser.add_argument("--game-kwargs", type=json.loads, default=None,
                          help='JSON object of kwargs for the game class, e.g. \'{"dev_mode": true}\'. '
-                              "Defaults to {\"dev_mode\": not --full} for this project.")
-    return parser.parse_args()
+                              "Defaults to {\"dev_mode\": not --full} for this project. "
+                              "(json.loads as the argparse type: malformed JSON fails cleanly at parse time.)")
+    parser.add_argument("--seed", type=int, default=None,
+                         help="seed Python's random module + the game's RNGManager (if present) to reduce "
+                              "run-to-run variance for before/after comparisons. NOT byte-exact reproduction: "
+                              "per-frame random calls (e.g. enemy wander jitter) still depend on wall-clock "
+                              "frame timing, which isn't fixed by this flag")
+    args = parser.parse_args()
+
+    if args.duration <= 0:
+        parser.error("--duration must be > 0")
+    if args.sample_interval <= 0:
+        parser.error("--sample-interval must be > 0")
+    if args.sample_interval > args.duration:
+        parser.error(f"--sample-interval ({args.sample_interval}) must be <= --duration ({args.duration}), "
+                      "otherwise the run ends before a single sample is taken")
+    if args.screenshot_interval < 0:
+        parser.error("--screenshot-interval must be >= 0 (0 disables periodic screenshots)")
+    if args.game_kwargs is not None and not isinstance(args.game_kwargs, dict):
+        parser.error(f"--game-kwargs must be a JSON object, got {type(args.game_kwargs).__name__}")
+    return args
 
 
 def get_entities(game):
@@ -183,8 +238,17 @@ class WarningCollector(logging.Handler):
 
 def main():
     args = parse_args()
-    out_dir = Path(args.out) if args.out else ROOT / "dev_probe_output" / time.strftime("%Y%m%d_%H%M%S")
-    out_dir.mkdir(parents=True, exist_ok=True)
+    if args.out:
+        out_dir = Path(args.out)
+        out_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        # tempfile.mkdtemp atomically creates a guaranteed-new directory - a
+        # plain "dev_probe_output/<timestamp>/" name collides if two runs start
+        # within the same second (mkdir(exist_ok=True) would then silently mix
+        # both runs' frames/state.jsonl/summary.md together).
+        base_dir = ROOT / "dev_probe_output"
+        base_dir.mkdir(parents=True, exist_ok=True)
+        out_dir = Path(tempfile.mkdtemp(prefix=f"{time.strftime('%Y%m%d_%H%M%S')}_", dir=str(base_dir)))
 
     log_format = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s", datefmt="%H:%M:%S")
     warning_collector = WarningCollector()
@@ -193,14 +257,26 @@ def main():
     file_handler = logging.FileHandler(out_dir / "game.log", encoding="utf-8")
     file_handler.setFormatter(log_format)
     logging.getLogger().addHandler(file_handler)
+    # Must set this explicitly: importing --entry-module below may call its own
+    # logging.basicConfig(level=INFO), which is a documented no-op once the root
+    # logger already has handlers (which it does, from the two addHandler calls
+    # just above) - without this line game.log would silently only ever contain
+    # WARNING+ despite looking like it captures everything.
+    logging.getLogger().setLevel(logging.INFO)
 
-    scheduled_actions = sorted(
-        (float(sec_str), key) for sec_str, key in (spec.split(":", 1) for spec in args.action_at)
-    )
+    if args.seed is not None:
+        random.seed(args.seed)
+        try:
+            from src.core.rng_manager import RNGConfig, RNGManager, set_default_rng
+            set_default_rng(RNGManager(RNGConfig(seed=args.seed, use_deterministic=True)))
+        except ImportError:
+            print("(!) src.core.rng_manager not importable - only Python's random module was seeded")
+
+    scheduled_actions = sorted(args.action_at)  # already (float, key) tuples - validated by _parse_action_at
     fired_actions = set()
 
     if args.game_kwargs is not None:
-        game_kwargs = json.loads(args.game_kwargs)
+        game_kwargs = args.game_kwargs  # already a dict - validated in parse_args()
     elif args.entry_module == "main" and args.game_class == "Game":
         game_kwargs = {"dev_mode": not args.full}  # this project's convention
     else:
@@ -240,6 +316,8 @@ def main():
     sample_count = 0
     last_periodic_shot = -1e9
     death_reported = False
+    run_state = {"completed": False, "last_elapsed": 0.0, "error": None}
+    finished = {"done": False}
 
     def log_event(elapsed, text):
         line = f"[{elapsed:6.1f}s] {text}"
@@ -279,8 +357,26 @@ def main():
         log_event(elapsed, f"SCREENSHOT {shot_path.name} — {reason}")
 
     def sample(task):
-        nonlocal low_hp_since, pinned_reported, sample_count, kill_count, last_periodic_shot, death_reported
         elapsed = time.perf_counter() - start_time
+        run_state["last_elapsed"] = elapsed
+        try:
+            return _sample_body(elapsed, task)
+        except SystemExit:
+            raise
+        except Exception as exc:
+            # Panda3D's task manager swallows plain Exceptions raised from a task
+            # callback (logs ":task(error)" and just stops rescheduling that one
+            # task) instead of letting them propagate - without this, a bug in
+            # here would silently hang the game forever with no summary.md ever
+            # written, instead of failing loudly. sys.exit (unlike Exception) is
+            # NOT swallowed, so it reliably reaches the try/finally around
+            # game.run() below.
+            run_state["error"] = traceback.format_exc()
+            log_event(elapsed, f"FATAL: sample() crashed: {exc!r}")
+            sys.exit(1)
+
+    def _sample_body(elapsed, task):
+        nonlocal low_hp_since, pinned_reported, sample_count, kill_count, last_periodic_shot, death_reported
         sample_count += 1
 
         for idx, (sec, key) in enumerate(scheduled_actions):
@@ -334,25 +430,29 @@ def main():
                     death_reported = True
                     log_event(elapsed, "ANOMALY: player died")
                 take_screenshot(elapsed, "player dead")
+                # Смерть залипающая (Character.is_defeated) - обнуляем pinned-таймер,
+                # чтобы старый low_hp_since не триггернул "pinned... without dying"
+                # уже ПОСЛЕ того, как смерть уже была зафиксирована выше.
+                low_hp_since = None
             else:
                 death_reported = False
 
-            if hp_fraction < LOW_HP_FRACTION:
-                if low_hp_since is None:
-                    low_hp_since = elapsed
-                    log_event(elapsed, f"player HP dropped below {int(LOW_HP_FRACTION * 100)}%")
-                elif not pinned_reported and elapsed - low_hp_since >= PINNED_SECONDS_THRESHOLD:
-                    pinned_reported = True
-                    log_event(
-                        elapsed,
-                        f"ANOMALY: player pinned under {int(LOW_HP_FRACTION * 100)}% HP for "
-                        f"{elapsed - low_hp_since:.1f}s straight",
-                    )
-                if not is_dead:
+                if hp_fraction < LOW_HP_FRACTION:
+                    if low_hp_since is None:
+                        low_hp_since = elapsed
+                        log_event(elapsed, f"player HP dropped below {int(LOW_HP_FRACTION * 100)}%")
+                    elif not pinned_reported and elapsed - low_hp_since >= PINNED_SECONDS_THRESHOLD:
+                        pinned_reported = True
+                        log_event(
+                            elapsed,
+                            f"ANOMALY: player pinned under {int(LOW_HP_FRACTION * 100)}% HP for "
+                            f"{elapsed - low_hp_since:.1f}s straight",
+                        )
                     take_screenshot(elapsed, f"player HP below {int(LOW_HP_FRACTION * 100)}% ({player.health:.1f})")
-            elif low_hp_since is not None:
-                log_event(elapsed, "player HP recovered above threshold")
-                low_hp_since = None
+                elif low_hp_since is not None:
+                    log_event(elapsed, "player HP recovered above threshold")
+                    low_hp_since = None
+                    pinned_reported = False  # a second, independent low-HP episode can fire again
 
             if min_hp_seen["value"] is None or player.health < min_hp_seen["value"]:
                 min_hp_seen["value"] = player.health
@@ -360,11 +460,18 @@ def main():
 
         if elapsed >= args.duration:
             take_screenshot(elapsed, "run end")
-            finish()
+            run_state["completed"] = True
             sys.exit(0)
         return task.again
 
     def finish():
+        # Called exactly once, from the try/finally around game.run() below - not
+        # from _sample_body - so it fires on every exit path: normal completion,
+        # an exception caught above, Escape (main.py binds it to sys.exit), or the
+        # window's own close button (Panda3D's default handler also exits).
+        if finished["done"]:
+            return
+        finished["done"] = True
         state_log.close()
         final_player = next((e for e, is_player in get_entities(game) if is_player), None)
         hits = [e for e in combat_events if not e["dodged"]]
@@ -374,10 +481,23 @@ def main():
         dmg_dealt = sum(e["damage"] for e in hits if e["source"] == player_id)
         dmg_taken = sum(e["damage"] for e in hits if e["target"] == player_id)
 
+        if run_state["error"]:
+            status = "CRASHED"
+        elif run_state["completed"]:
+            status = "OK"
+        else:
+            status = "STOPPED EARLY"
+
         lines = [
             f"# Dev Probe Summary — {time.strftime('%Y-%m-%d %H:%M:%S')}",
             "",
-            f"Config: duration={args.duration}s dev_map={not args.full} "
+            f"Status: {status}" + (
+                "" if status == "OK" else
+                f" (stopped at t={run_state['last_elapsed']:.1f}s of {args.duration}s configured"
+                f"{' - see Crash traceback below' if status == 'CRASHED' else ' - Escape or window closed?'})"
+            ),
+            "",
+            f"Config: duration={args.duration}s dev_map={not args.full} seed={args.seed} "
             f"actions={[f'{s}s:{k}' for s, k in scheduled_actions]}",
             "",
             "## Timeline",
@@ -409,7 +529,13 @@ def main():
             lines.append("- None.")
         lines.append("")
         if warning_collector.records:
-            lines += ["## Warnings / errors", *warning_collector.records[:30], ""]
+            shown = warning_collector.records[:30]
+            lines += ["## Warnings / errors", *shown]
+            if len(warning_collector.records) > len(shown):
+                lines.append(f"... {len(warning_collector.records) - len(shown)} more, truncated - see game.log")
+            lines.append("")
+        if run_state["error"]:
+            lines += ["## Crash traceback", "```", run_state["error"].rstrip(), "```", ""]
         lines.append("## Screenshots (each has a matching frame_NNN.json with per-entity screen_xy pixels)")
         lines += [f"- {name} — {reason}" for name, reason in screenshots]
         lines += [
@@ -419,10 +545,13 @@ def main():
         ]
 
         (out_dir / "summary.md").write_text("\n".join(lines), encoding="utf-8")
-        print(f"\nDone. Read {out_dir / 'summary.md'} first.")
+        print(f"\n{status}. Read {out_dir / 'summary.md'} first.")
 
-    game.taskMgr.doMethodLater(args.sample_interval, sample, "dev_probe_sample")
-    game.run()
+    try:
+        game.taskMgr.doMethodLater(args.sample_interval, sample, "dev_probe_sample")
+        game.run()
+    finally:
+        finish()
 
 
 if __name__ == "__main__":

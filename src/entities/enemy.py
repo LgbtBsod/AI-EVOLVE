@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import itertools
 import logging
 import math
 import random
@@ -11,6 +12,9 @@ from ..systems.combat.combat_system import CombatStats
 from ..ui.health_bar import HealthBar
 
 logger = logging.getLogger(__name__)
+
+# Monotonic, never reused - see the matching comment in entities/character.py.
+_enemy_id_counter = itertools.count(1)
 
 class EnhancedEnemy:
     """Улучшенный класс врага с правильным рендерингом"""
@@ -29,7 +33,7 @@ class EnhancedEnemy:
         self._setup_enemy_type()
         
         # ID сущности для систем
-        self.entity_id = f"enemy_{id(self)}"
+        self.entity_id = f"enemy_{next(_enemy_id_counter)}"
         
         # AI состояние
         self.state = "idle"  # idle, chasing, attacking, dead
