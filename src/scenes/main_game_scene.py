@@ -467,13 +467,17 @@ class EnhancedGameScene:
             return
             
         # Обновляем игрока
-        if self.player:
+        if self.player and self.player.is_alive():
             # Обновляем кулдаун атаки
             if self.player.attack_cooldown > 0:
                 self.player.attack_cooldown -= dt
             self.player.attack_cooldown = max(self.player.attack_cooldown, 0)
-                
-            # Восстанавливаем характеристики
+
+            # Восстанавливаем характеристики.
+            # Реген применяется только живому игроку - иначе он безусловно
+            # тянет health выше 0 каждый кадр и is_alive() мерцает обратно
+            # в True сразу после смерти (герой "оживает" сам и продолжает
+            # драться вместо честной смерти).
             self.player.health = min(self.player.max_health, self.player.health + self.player.health_regen * dt)
             self.player.mana = min(self.player.max_mana, self.player.mana + self.player.mana_regen * dt)
             self.player.stamina = min(self.player.max_stamina, self.player.stamina + self.player.stamina_regen * dt)
@@ -492,10 +496,12 @@ class EnhancedGameScene:
                 known_exit_positions=ai_known_exits,
                 hint_positions=self._get_hint_positions()
             )
-            
+
             # Автоматическое использование скилов
             self.player.use_skill_automatically(self.enemies, dt)
-            
+        elif self.player and self.player.health_bar:
+            self.player.health_bar.update(0.0)
+
         # Обновляем врагов
         for enemy in self.enemies[:]:  # Используем копию списка для безопасного удаления
             if enemy.is_alive():

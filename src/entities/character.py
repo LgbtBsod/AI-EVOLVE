@@ -53,6 +53,7 @@ class Character(BaseEntity):
         'head',
         'health',
         'health_bar',
+        'is_defeated',
         'health_regen',
         'is_player',
         'last_ai_update',
@@ -125,6 +126,7 @@ class Character(BaseEntity):
         self.color = color
         self.node = None
         self.health_bar = None
+        self.is_defeated = False
 
         # Базовые характеристики
         self.level = 1
@@ -666,13 +668,22 @@ class Character(BaseEntity):
         )
 
     def is_alive(self):
-        """Проверка, жив ли персонаж"""
-        return self.health > 0
+        """Проверка, жив ли персонаж.
+
+        is_defeated - залипающий флаг: без него реген здоровья в
+        main_game_scene.update() (безусловный, каждый кадр) тянет health
+        обратно выше 0 сразу после смерти, и is_alive() мерцает обратно в
+        True - персонаж "оживает" сам собой и продолжает драться."""
+        return self.health > 0 and not self.is_defeated
 
     def take_damage(self, damage, damage_type="physical"):
         """Получение урона"""
+        if self.is_defeated:
+            return True
         actual_damage = max(1, damage - self.defense)
         self.health = max(0, self.health - actual_damage)
+        if self.health <= 0:
+            self.is_defeated = True
         return self.health <= 0
         
     def update_ai(self, enemies, items, dt, exit_position=None, vision_range: float = 0.0,
