@@ -1,0 +1,11 @@
+# Optional dependencies for tools/dev_probe.py only - the game itself
+# (requirements.txt at repo root) does not need any of this.
+#
+# Pillow unlocks two checks dev_probe.py otherwise skips gracefully:
+#   - blank/solid-color screenshot detection (catches a broken render even
+#     when game state looks perfectly healthy)
+#   - a timelapse.gif stitched from all captured screenshots
+#
+# Install with:
+#   .venv/Scripts/python.exe -m pip install -r tools/requirements-dev.txt
+pillow

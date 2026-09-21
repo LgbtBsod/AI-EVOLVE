@@ -30,12 +30,18 @@
    два прогона "до/после фикса" нельзя честно сравнить, потому что криты/
    промахи/точки спавна каждый раз разные. ВАЖНО: это снижает разброс
    между прогонами (одинаковая стартовая точка RNG), но НЕ гарантирует
-   побитово одинаковый повтор - blukanie/wander врагов дёргает random()
-   каждый игровой кадр, а dt игры завязан на реальное время рендера
-   (game.taskMgr), которое от прогона к прогону чуть плавает. Честная
-   побитовая детерминированность потребовала бы фиксированного шага
-   времени (ClockObject.MNonRealTime) - пока не реализовано, это
-   следующий кандидат, если понадобится точное сравнение "до/после".
+   побитово одинаковый повтор - блуждание врагов дёргает random() каждый
+   игровой кадр, а dt игры завязан на реальное время рендера, которое от
+   прогона к прогону чуть плавает. Честная побитовая детерминированность
+   потребовала бы фиксированного шага времени (ClockObject.MNonRealTime) -
+   пока не реализовано, это следующий кандидат, если понадобится точное
+   сравнение "до/после".
+9. (опционально, нужен Pillow: pip install -r tools/requirements-dev.txt)
+   Детект "пустого"/залитого одним цветом кадра - ловит поломку рендера,
+   которую внутреннее состояние игры не увидит (HP/позиции продолжают
+   честно считаться, даже если окно рисует чёрный экран). Плюс
+   timelapse.gif, склеенный из всех скриншотов прогона, чтобы пролистать
+   партию одним файлом вместо N картинок.
 
 Результат одного прогона — ОДИН файл summary.md, с него и надо начинать
 чтение. state.jsonl / game.log / frame_NNN.json — только если summary на
@@ -74,6 +80,12 @@ import tempfile
 import time
 import traceback
 from pathlib import Path
+
+try:
+    from PIL import Image, ImageStat
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -225,6 +237,50 @@ def world_to_screen(game, node_path):
     return [x, y]
 
 
+BLANK_FRAME_STDDEV_THRESHOLD = 2.0  # out of 0-255; a real scene has far more variance than this
+
+
+def analyze_screenshot(path):
+    """Optional (needs Pillow) visual sanity check that catches rendering
+    failures game state alone can't: a crashed graphics context, an empty
+    scene graph, or a window stuck on a loading/black screen all still leave
+    game logic (HP, positions, combat) running fine, so state.jsonl alone
+    would report a perfectly healthy run while the window shows nothing."""
+    if not PIL_AVAILABLE:
+        return {}
+    try:
+        with Image.open(path) as img:
+            stddev = ImageStat.Stat(img.convert("L")).stddev[0]
+    except Exception:
+        return {}
+    return {"pixel_stddev": round(stddev, 2), "likely_blank": stddev < BLANK_FRAME_STDDEV_THRESHOLD}
+
+
+def _build_timelapse_gif(out_dir, frame_names, max_width=640, frame_duration_ms=400):
+    """Optional (needs Pillow): stitch every captured screenshot into one GIF
+    so a human can scrub through the whole run instead of opening N separate
+    files. Downscaled to keep the file small - this is a scrubbing aid, not a
+    replacement for the full-resolution frame_NNN.jpg files."""
+    if not PIL_AVAILABLE or len(frame_names) < 2:
+        return None
+    frames = []
+    try:
+        for name in frame_names:
+            with Image.open(out_dir / name) as img:
+                img = img.convert("RGB")
+                if img.width > max_width:
+                    img = img.resize((max_width, int(img.height * max_width / img.width)))
+                frames.append(img.copy())
+        gif_path = out_dir / "timelapse.gif"
+        frames[0].save(
+            gif_path, save_all=True, append_images=frames[1:],
+            duration=frame_duration_ms, loop=0, optimize=True,
+        )
+        return gif_path.name
+    except Exception:
+        return None
+
+
 class WarningCollector(logging.Handler):
     """Собирает WARNING+ из лога игры, чтобы не парсить stdout отдельно."""
 
@@ -318,6 +374,7 @@ def main():
     death_reported = False
     run_state = {"completed": False, "last_elapsed": 0.0, "error": None}
     finished = {"done": False}
+    blank_frame_count = 0
 
     def log_event(elapsed, text):
         line = f"[{elapsed:6.1f}s] {text}"
@@ -336,15 +393,26 @@ def main():
             labels[eid].update(label_text(entity, is_player))
 
     def take_screenshot(elapsed, reason):
+        nonlocal blank_frame_count
         idx = len(screenshots) + 1
         shot_path = out_dir / f"frame_{idx:03d}.jpg"
         game.screenshot(namePrefix=Filename.from_os_specific(str(shot_path)), defaultFilename=False)
+
+        visual = analyze_screenshot(shot_path)
+        if visual.get("likely_blank"):
+            blank_frame_count += 1
+            log_event(
+                elapsed,
+                f"ANOMALY: {shot_path.name} looks blank/solid-color (pixel stddev="
+                f"{visual['pixel_stddev']}) - rendering may be broken even though game state looks fine",
+            )
 
         entities = get_entities(game)
         sidecar = {
             "t": round(elapsed, 2),
             "reason": reason,
             "screen_size": [game.win.getXSize(), game.win.getYSize()],
+            **visual,
             "entities": [
                 {**entity_state(e, is_player), "screen_xy": world_to_screen(game, e.node)}
                 for e, is_player in entities if getattr(e, "node", None)
@@ -525,7 +593,13 @@ def main():
             lines.append("- Player was pinned under low HP for an extended period without dying (see ANOMALY in timeline).")
         if warning_collector.records:
             lines.append(f"- {len(warning_collector.records)} WARNING/ERROR log line(s) captured (see below).")
-        if not pinned_reported and not warning_collector.records:
+        if blank_frame_count:
+            lines.append(f"- {blank_frame_count} screenshot(s) looked blank/solid-color - rendering may be broken "
+                          "despite game state looking healthy (needs Pillow to detect; see per-frame pixel_stddev "
+                          "in frame_NNN.json).")
+        elif not PIL_AVAILABLE:
+            lines.append("- Blank-frame visual check skipped (Pillow not installed: pip install pillow).")
+        if not pinned_reported and not warning_collector.records and not blank_frame_count and PIL_AVAILABLE:
             lines.append("- None.")
         lines.append("")
         if warning_collector.records:
@@ -538,7 +612,12 @@ def main():
             lines += ["## Crash traceback", "```", run_state["error"].rstrip(), "```", ""]
         lines.append("## Screenshots (each has a matching frame_NNN.json with per-entity screen_xy pixels)")
         lines += [f"- {name} — {reason}" for name, reason in screenshots]
+
+        timelapse_name = _build_timelapse_gif(out_dir, [name for name, _ in screenshots])
         lines += [
+            "",
+            f"Timelapse GIF of all screenshots above: {timelapse_name}" if timelapse_name else
+            "Timelapse GIF: skipped (needs Pillow and 2+ screenshots)",
             "",
             f"Raw per-tick state: state.jsonl ({sample_count} samples)",
             "Full game log: game.log",
