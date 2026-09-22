@@ -207,6 +207,22 @@ class LifecycleMixin:
     def state(self) -> LifecycleState:
         return self._state
     
+    @property
+    def system_state(self) -> LifecycleState:
+        """Алиас для совместимости со старым кодом"""
+        return self._state
+    
+    @system_state.setter
+    def system_state(self, value: LifecycleState) -> None:
+        """Установка состояния с проверкой переходов"""
+        # Разрешаем прямые переходы для совместимости со старым кодом
+        # но логируем предупреждение если переход нестандартный
+        if not self._transition_to(value):
+            # Если переход недопустим - форсируем его для обратной совместимости
+            old_state = self._state
+            self._state = value
+            logger.debug(f"Форсированный переход состояния (legacy): {old_state.name} -> {new_state.name}")
+    
     def _transition_to(self, new_state: LifecycleState) -> bool:
         """Безопасный переход между состояниями"""
         valid_transitions: dict[LifecycleState, list[LifecycleState]] = {
