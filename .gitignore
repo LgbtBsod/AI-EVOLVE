@@ -55,3 +55,7 @@ Thumbs.db
 /*.jpg
 /*.jpeg
 /*.png
+
+# Personal dev_probe.py baseline snapshot (--save-baseline) - whatever run
+# a developer happened to save locally, not a project artifact to share.
+tools/dev_probe_baseline.json

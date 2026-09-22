@@ -40,12 +40,27 @@
    Детект "пустого"/залитого одним цветом кадра - ловит поломку рендера,
    которую внутреннее состояние игры не увидит (HP/позиции продолжают
    честно считаться, даже если окно рисует чёрный экран). Плюс
-   timelapse.gif, склеенный из всех скриншотов прогона, чтобы пролистать
-   партию одним файлом вместо N картинок.
+   contact_sheet.jpg (одна картинка-сетка вместо N скриншотов - открывать
+   первой для общей визуальной проверки) и timelapse.gif (для человека,
+   не для агента - см. комментарий у "## Screenshots" в finish()).
+10. Повторы с одинаковым `kind` (например 20 тиков подряд "player dead")
+    сворачиваются в списке скриншотов до первого+последнего кадра, а живой
+    stdout - до 2 строк + одна пометка "further ... suppressed" (см.
+    log_event). Ничего не удаляется с диска - только то, что стоит открыть
+    по умолчанию.
+
+ВАЖНО - для логических правок (формулы урона/крита, is_alive()/is_defeated,
+AI-таргетинг/движение) СНАЧАЛА запускай tools/combat_smoke_test.py: без окна,
+без скриншотов, доли секунды вместо реального --duration секунд с открытым
+Panda3D. Он уже сейчас проверяет ровно то, что раньше приходилось выяснять
+через этот файл (death-latch регрессию, floor урона, крит/додж через
+CombatSystem, AI retreat/targeting). Возвращайся к dev_probe.py, когда нужна
+именно визуальная/рендер/сценовая проверка, а не просто "правильно ли считает
+формула".
 
 Результат одного прогона — ОДИН файл summary.md, с него и надо начинать
-чтение. state.jsonl / game.log / frame_NNN.json — только если summary на
-что-то указывает и нужно копнуть глубже.
+чтение. state.jsonl / game.log / frame_NNN.json / panda3d.log — только если
+summary на что-то указывает и нужно копнуть глубже.
 
 Использование (этот проект):
     .venv/Scripts/python.exe tools/dev_probe.py --duration 30
@@ -79,10 +94,14 @@ import sys
 import tempfile
 import time
 import traceback
+from collections import Counter
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _dev_probe_compare import diff_is_empty, diff_summaries, format_diff  # noqa: E402
+
 try:
-    from PIL import Image, ImageStat
+    from PIL import Image, ImageDraw, ImageStat
     PIL_AVAILABLE = True
 except ImportError:
     PIL_AVAILABLE = False
@@ -90,7 +109,7 @@ except ImportError:
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from panda3d.core import Filename, Point2, TextNode  # noqa: E402
+from panda3d.core import Filename, Point2, TextNode, loadPrcFileData  # noqa: E402
 
 LOW_HP_FRACTION = 0.2
 PINNED_SECONDS_THRESHOLD = 5.0
@@ -114,7 +133,11 @@ def _parse_action_at(value):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Agent-oriented playtest probe: annotated screenshots + one summary.md"
+        description="Agent-oriented playtest probe: annotated screenshots + one summary.md",
+        epilog="For logic-only changes (combat formulas, is_alive()/is_defeated latching, AI "
+               "targeting/movement math), run tools/combat_smoke_test.py FIRST instead: no window, "
+               "no screenshots, sub-second. Reach for this full windowed run only when the change "
+               "needs visual/rendering/timing verification.",
     )
     parser.add_argument("--duration", type=float, default=30.0, help="total seconds to run")
     parser.add_argument("--sample-interval", type=float, default=1.0, help="seconds between cheap state samples")
@@ -140,6 +163,16 @@ def parse_args():
                               "run-to-run variance for before/after comparisons. NOT byte-exact reproduction: "
                               "per-frame random calls (e.g. enemy wander jitter) still depend on wall-clock "
                               "frame timing, which isn't fixed by this flag")
+    parser.add_argument("--verbosity", type=int, choices=[0, 1, 2], default=1,
+                         help="stdout noise level: 0 = only the final RESULT line, 1 (default) = anomalies/"
+                              "fatal errors too, 2 = every event (screenshots, kills, HP crossings). "
+                              "summary.md's Timeline always has everything regardless of this flag - this "
+                              "only controls what's echoed live to the console you're reading right now")
+    parser.add_argument("--save-baseline", action="store_true",
+                         help="also save this run's summary.json as tools/dev_probe_baseline.json. Every "
+                              "later run auto-compares against it (see '## vs baseline' in summary.md) - "
+                              "save once after confirming a run is good, then every subsequent run's own "
+                              "output already carries the before/after verdict without a separate diff step")
     args = parser.parse_args()
 
     if args.duration <= 0:
@@ -240,20 +273,47 @@ def world_to_screen(game, node_path):
 BLANK_FRAME_STDDEV_THRESHOLD = 2.0  # out of 0-255; a real scene has far more variance than this
 
 
+def _average_hash(gray_img, size=8):
+    """Cheap 64-bit perceptual hash (resize to size x size, threshold against
+    the mean) - not robust like a real pHash, but enough to tell "visually
+    near-identical" from "visibly different" between two frames, which is all
+    the redundancy check below needs. tobytes() (not getdata(), deprecated in
+    newer Pillow) gives one 0-255 byte per pixel directly for 'L' mode."""
+    pixels = gray_img.resize((size, size)).tobytes()
+    avg = sum(pixels) / len(pixels)
+    bits = 0
+    for i, p in enumerate(pixels):
+        if p >= avg:
+            bits |= (1 << i)
+    return bits
+
+
+def _hamming(a, b):
+    return bin(a ^ b).count("1")
+
+
 def analyze_screenshot(path):
     """Optional (needs Pillow) visual sanity check that catches rendering
     failures game state alone can't: a crashed graphics context, an empty
     scene graph, or a window stuck on a loading/black screen all still leave
     game logic (HP, positions, combat) running fine, so state.jsonl alone
-    would report a perfectly healthy run while the window shows nothing."""
+    would report a perfectly healthy run while the window shows nothing.
+    Also returns a cheap perceptual hash (`phash`) so callers can tell two
+    frames apart without a second image decode."""
     if not PIL_AVAILABLE:
         return {}
     try:
         with Image.open(path) as img:
-            stddev = ImageStat.Stat(img.convert("L")).stddev[0]
+            gray = img.convert("L")
+            stddev = ImageStat.Stat(gray).stddev[0]
+            phash = _average_hash(gray)
     except Exception:
         return {}
-    return {"pixel_stddev": round(stddev, 2), "likely_blank": stddev < BLANK_FRAME_STDDEV_THRESHOLD}
+    return {
+        "pixel_stddev": round(stddev, 2),
+        "likely_blank": stddev < BLANK_FRAME_STDDEV_THRESHOLD,
+        "phash": phash,
+    }
 
 
 def _build_timelapse_gif(out_dir, frame_names, max_width=640, frame_duration_ms=400):
@@ -277,6 +337,60 @@ def _build_timelapse_gif(out_dir, frame_names, max_width=640, frame_duration_ms=
             duration=frame_duration_ms, loop=0, optimize=True,
         )
         return gif_path.name
+    except Exception:
+        return None
+
+
+def _group_consecutive_by_kind(shots):
+    """Collapse consecutive screenshots sharing the same non-None `kind` into
+    one group. Same idea as log_event's live-suppression, applied to the
+    persisted summary.md listing/contact sheet instead of stdout. Works with
+    or without Pillow - grouping is driven by the `kind` tag set at the
+    take_screenshot() call site (e.g. "dead_screenshot"), not pixel data."""
+    groups = []
+    i, n = 0, len(shots)
+    while i < n:
+        kind = shots[i]["kind"]
+        j = i + 1
+        if kind is not None:
+            while j < n and shots[j]["kind"] == kind:
+                j += 1
+        groups.append(shots[i:j])
+        i = j
+    return groups
+
+
+def _build_contact_sheet(out_dir, shots, cell_width=200):
+    """Optional (needs Pillow): tile representative screenshots into one grid
+    image with captions, so a routine "does this run look sane" pass costs one
+    Read instead of one per frame - open the matching frame_NNN.jpg at full
+    resolution only when a specific cell looks wrong. `shots` should already be
+    the reduced representative list (see finish()), not every raw frame - a
+    long dead/pinned stretch would otherwise make the sheet as expensive to
+    read as opening every frame individually."""
+    if not PIL_AVAILABLE or not shots:
+        return None
+    try:
+        thumbs = []
+        for s in shots:
+            with Image.open(out_dir / s["name"]) as img:
+                img = img.convert("RGB")
+                h = max(1, int(img.height * cell_width / img.width))
+                thumbs.append((img.resize((cell_width, h)), f"{s['name']} t={s['t']:.1f}s", s["reason"][:36]))
+        cols = min(4, len(thumbs))
+        rows = -(-len(thumbs) // cols)
+        cap_h = 32
+        cell_h = thumbs[0][0].height + cap_h
+        sheet = Image.new("RGB", (cell_width * cols, cell_h * rows), (25, 25, 25))
+        draw = ImageDraw.Draw(sheet)
+        for i, (thumb, caption, reason) in enumerate(thumbs):
+            x, y = (i % cols) * cell_width, (i // cols) * cell_h
+            sheet.paste(thumb, (x, y))
+            draw.text((x + 3, y + thumb.height + 2), caption, fill=(255, 255, 0))
+            draw.text((x + 3, y + thumb.height + 16), reason, fill=(210, 210, 210))
+        sheet_path = out_dir / "contact_sheet.jpg"
+        sheet.save(sheet_path, quality=85)
+        return sheet_path.name
     except Exception:
         return None
 
@@ -305,6 +419,13 @@ def main():
         base_dir = ROOT / "dev_probe_output"
         base_dir.mkdir(parents=True, exist_ok=True)
         out_dir = Path(tempfile.mkdtemp(prefix=f"{time.strftime('%Y%m%d_%H%M%S')}_", dir=str(base_dir)))
+
+    # Panda3D's own startup chatter ("Known pipe types", "all display modules
+    # loaded") goes through its internal Notify system, not Python's logging -
+    # WarningCollector/file_handler below never see it, so it's paid as fixed
+    # stdout noise on every single run regardless of --duration. Must be set
+    # before the entry module (which constructs ShowBase) is even imported.
+    loadPrcFileData("", f"notify-output {(out_dir / 'panda3d.log').as_posix()}")
 
     log_format = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s", datefmt="%H:%M:%S")
     warning_collector = WarningCollector()
@@ -372,13 +493,39 @@ def main():
     sample_count = 0
     last_periodic_shot = -1e9
     death_reported = False
+    death_event_count = 0
     run_state = {"completed": False, "last_elapsed": 0.0, "error": None}
     finished = {"done": False}
     blank_frame_count = 0
+    live_repeat = {"kind": None, "count": 0}
+    last_phash = {"value": None}
 
-    def log_event(elapsed, text):
+    def log_event(elapsed, text, level=2, kind=None):
+        # level 0 = always printed (fatal), 1 = anomalies, 2 = routine/frequent.
+        # summary.md's Timeline gets every line regardless - this only decides
+        # what's echoed live, since that's what a driving agent pays to read
+        # back from the tool call every single run.
+        #
+        # `kind`, when given, groups repeats of the "same kind of thing" (e.g.
+        # every per-tick screenshot during a pinned/dead stretch): the first 2
+        # print live, the 3rd prints one "suppressing further..." note, and the
+        # rest are silent live (still fully in the timeline) until a different
+        # kind interrupts the streak. There's no live terminal here to overwrite
+        # a line on (this output is read back later from a buffered tool-call
+        # result), so collapsing-after-N is the workable equivalent.
         line = f"[{elapsed:6.1f}s] {text}"
         timeline.append(line)
+        if level > args.verbosity:
+            return
+        if kind is not None and kind == live_repeat["kind"]:
+            live_repeat["count"] += 1
+            if live_repeat["count"] <= 2:
+                print(line)
+            elif live_repeat["count"] == 3:
+                print(f"[{elapsed:6.1f}s] ... further '{kind}' lines suppressed live (all still in summary.md)")
+            return
+        live_repeat["kind"] = kind
+        live_repeat["count"] = 1
         print(line)
 
     def ensure_labels():
@@ -392,19 +539,31 @@ def main():
                 labels[eid] = EntityLabel(node, z_offset=z_offset)
             labels[eid].update(label_text(entity, is_player))
 
-    def take_screenshot(elapsed, reason):
+    def take_screenshot(elapsed, reason, kind=None):
         nonlocal blank_frame_count
         idx = len(screenshots) + 1
         shot_path = out_dir / f"frame_{idx:03d}.jpg"
         game.screenshot(namePrefix=Filename.from_os_specific(str(shot_path)), defaultFilename=False)
 
         visual = analyze_screenshot(shot_path)
+        if visual.get("phash") is not None:
+            # kind-based grouping (below/_group_consecutive_by_kind) is the
+            # main redundancy signal and works without Pillow, but where a
+            # phash IS available this gives a real pixel-level second opinion
+            # per frame instead of leaving the computed hash unused - a small
+            # Hamming distance means the frame barely changed even if its
+            # `kind` differs (e.g. the tail end of a fight settling down).
+            visual["visually_similar_to_previous"] = (
+                last_phash["value"] is not None and _hamming(visual["phash"], last_phash["value"]) <= 4
+            )
+            last_phash["value"] = visual["phash"]
         if visual.get("likely_blank"):
             blank_frame_count += 1
             log_event(
                 elapsed,
                 f"ANOMALY: {shot_path.name} looks blank/solid-color (pixel stddev="
                 f"{visual['pixel_stddev']}) - rendering may be broken even though game state looks fine",
+                level=1,
             )
 
         entities = get_entities(game)
@@ -421,8 +580,12 @@ def main():
         (out_dir / f"frame_{idx:03d}.json").write_text(
             json.dumps(sidecar, ensure_ascii=False, indent=1), encoding="utf-8"
         )
-        screenshots.append((shot_path.name, reason))
-        log_event(elapsed, f"SCREENSHOT {shot_path.name} — {reason}")
+        screenshots.append({"name": shot_path.name, "reason": reason, "kind": kind, "t": elapsed})
+        # kind groups repeats of the SAME situation (e.g. "player dead" fires
+        # every tick by design - see the no-dedup comment below) even though
+        # `reason` itself carries a different HP number each time and would
+        # never look like a "repeat" to a naive text comparison.
+        log_event(elapsed, f"SCREENSHOT {shot_path.name} — {reason}", kind=kind)
 
     def sample(task):
         elapsed = time.perf_counter() - start_time
@@ -440,11 +603,11 @@ def main():
             # NOT swallowed, so it reliably reaches the try/finally around
             # game.run() below.
             run_state["error"] = traceback.format_exc()
-            log_event(elapsed, f"FATAL: sample() crashed: {exc!r}")
+            log_event(elapsed, f"FATAL: sample() crashed: {exc!r}", level=0)
             sys.exit(1)
 
     def _sample_body(elapsed, task):
-        nonlocal low_hp_since, pinned_reported, sample_count, kill_count, last_periodic_shot, death_reported
+        nonlocal low_hp_since, pinned_reported, sample_count, kill_count, last_periodic_shot, death_reported, death_event_count
         sample_count += 1
 
         for idx, (sec, key) in enumerate(scheduled_actions):
@@ -496,8 +659,9 @@ def main():
             if is_dead:
                 if not death_reported:
                     death_reported = True
-                    log_event(elapsed, "ANOMALY: player died")
-                take_screenshot(elapsed, "player dead")
+                    death_event_count += 1
+                    log_event(elapsed, "ANOMALY: player died", level=1)
+                take_screenshot(elapsed, "player dead", kind="dead_screenshot")
                 # Смерть залипающая (Character.is_defeated) - обнуляем pinned-таймер,
                 # чтобы старый low_hp_since не триггернул "pinned... without dying"
                 # уже ПОСЛЕ того, как смерть уже была зафиксирована выше.
@@ -515,8 +679,12 @@ def main():
                             elapsed,
                             f"ANOMALY: player pinned under {int(LOW_HP_FRACTION * 100)}% HP for "
                             f"{elapsed - low_hp_since:.1f}s straight",
+                            level=1,
                         )
-                    take_screenshot(elapsed, f"player HP below {int(LOW_HP_FRACTION * 100)}% ({player.health:.1f})")
+                    take_screenshot(
+                        elapsed, f"player HP below {int(LOW_HP_FRACTION * 100)}% ({player.health:.1f})",
+                        kind="low_hp_screenshot",
+                    )
                 elif low_hp_since is not None:
                     log_event(elapsed, "player HP recovered above threshold")
                     low_hp_since = None
@@ -556,6 +724,61 @@ def main():
         else:
             status = "STOPPED EARLY"
 
+        min_hp = min_hp_seen["value"] if min_hp_seen["value"] is not None else (final_player.health if final_player else None)
+        min_hp_t = min_hp_seen["t"]
+        end_hp = final_player.health if final_player else None
+
+        # Categorized counts, not raw timestamped lines - a before/after diff
+        # comparing these survives run-to-run timing jitter that would make a
+        # line-by-line timeline diff flag nearly everything as "changed" just
+        # because elapsed timestamps shifted a few tenths of a second.
+        event_counts = {
+            "enemy_killed": kill_count,
+            "anomaly_died": death_event_count,
+            "anomaly_pinned": 1 if pinned_reported else 0,
+            "anomaly_blank_frame": blank_frame_count,
+            "warning": len(warning_collector.records),
+        }
+        screenshot_reason_counts = dict(Counter(s["kind"] or s["reason"] for s in screenshots))
+
+        summary_data = {
+            "status": status,
+            "seed": args.seed,
+            "dev_map": not args.full,
+            "duration_configured": args.duration,
+            "elapsed": round(run_state["last_elapsed"], 2),
+            "dmg_dealt": round(dmg_dealt, 2),
+            "dmg_taken": round(dmg_taken, 2),
+            "kill_count": kill_count,
+            "hits": len(hits),
+            "dodges": len(dodges),
+            "crits": len(crits),
+            "min_hp": round(min_hp, 2) if min_hp is not None else None,
+            "min_hp_t": min_hp_t,
+            "end_hp": round(end_hp, 2) if end_hp is not None else None,
+            "pinned_reported": pinned_reported,
+            "warning_count": len(warning_collector.records),
+            "blank_frame_count": blank_frame_count,
+            "sample_count": sample_count,
+            "event_counts": event_counts,
+            "screenshot_reason_counts": screenshot_reason_counts,
+        }
+        (out_dir / "summary.json").write_text(json.dumps(summary_data, indent=1), encoding="utf-8")
+
+        baseline_path = ROOT / "tools" / "dev_probe_baseline.json"
+        baseline_diff_text = None
+        baseline_changed = None
+        if baseline_path.exists():
+            try:
+                baseline_data = json.loads(baseline_path.read_text(encoding="utf-8"))
+                baseline_diff = diff_summaries(baseline_data, summary_data)
+                baseline_diff_text = format_diff(baseline_diff, before_label="baseline", after_label="this run")
+                baseline_changed = not diff_is_empty(baseline_diff)
+            except Exception as exc:
+                baseline_diff_text = f"(could not compare against {baseline_path.name}: {exc!r})"
+        if args.save_baseline:
+            baseline_path.write_text(json.dumps(summary_data, indent=1), encoding="utf-8")
+
         lines = [
             f"# Dev Probe Summary — {time.strftime('%Y-%m-%d %H:%M:%S')}",
             "",
@@ -580,14 +803,14 @@ def main():
         ]
         if final_player:
             p = final_player
-            min_hp = min_hp_seen["value"] if min_hp_seen["value"] is not None else p.health
-            min_t = min_hp_seen["t"] if min_hp_seen["t"] is not None else 0.0
             lines += [
                 "## Player HP",
-                f"start: {p.max_health}/{p.max_health}  min: {min_hp:.1f} (at t={min_t:.1f}s)  "
+                f"start: {p.max_health}/{p.max_health}  min: {min_hp:.1f} (at t={min_hp_t or 0.0:.1f}s)  "
                 f"end: {p.health:.1f}/{p.max_health}",
                 "",
             ]
+        if baseline_diff_text is not None:
+            lines += ["## vs baseline (tools/dev_probe_baseline.json)", baseline_diff_text, ""]
         lines.append("## Issues detected")
         if pinned_reported:
             lines.append("- Player was pinned under low HP for an extended period without dying (see ANOMALY in timeline).")
@@ -610,21 +833,66 @@ def main():
             lines.append("")
         if run_state["error"]:
             lines += ["## Crash traceback", "```", run_state["error"].rstrip(), "```", ""]
-        lines.append("## Screenshots (each has a matching frame_NNN.json with per-entity screen_xy pixels)")
-        lines += [f"- {name} — {reason}" for name, reason in screenshots]
 
-        timelapse_name = _build_timelapse_gif(out_dir, [name for name, _ in screenshots])
+        # Consecutive same-`kind` screenshots (e.g. a 20-tick "player dead"
+        # stretch) collapse to their first+last representative here - opening
+        # every one of those is rarely useful, and doing so anyway is still
+        # possible: every raw frame_NNN.jpg/.json stays on disk untouched.
+        groups = _group_consecutive_by_kind(screenshots)
+        representative_shots = []
+        lines.append("## Screenshots (each has a matching frame_NNN.json with per-entity screen_xy pixels)")
+        for group in groups:
+            if len(group) <= 2:
+                for s in group:
+                    lines.append(f"- {s['name']} — {s['reason']}")
+                representative_shots.extend(group)
+            else:
+                first, last = group[0], group[-1]
+                lines.append(f"- {first['name']} — {first['reason']}")
+                lines.append(f"  ... {len(group) - 2} more '{first['kind']}' frame(s) omitted (same situation, "
+                              f"still in state.jsonl/frame_NNN.jpg on disk if needed) ...")
+                lines.append(f"- {last['name']} — {last['reason']}")
+                representative_shots.extend([first, last])
+
+        # For an agent's routine "does this look sane" pass: contact_sheet.jpg
+        # is the one image worth Read-ing - it's built from representative_shots
+        # (redundant runs already collapsed above), captioned per cell, so it
+        # answers that question in one vision call instead of one per frame.
+        # timelapse.gif is a human-scrubbing convenience (open in an image
+        # viewer that plays GIFs) - it is NOT a substitute for contact_sheet.jpg
+        # for an agent reading it back through a single-frame image Read.
+        contact_sheet_name = _build_contact_sheet(out_dir, representative_shots)
+        timelapse_name = _build_timelapse_gif(out_dir, [s["name"] for s in screenshots])
         lines += [
             "",
-            f"Timelapse GIF of all screenshots above: {timelapse_name}" if timelapse_name else
-            "Timelapse GIF: skipped (needs Pillow and 2+ screenshots)",
+            f"Contact sheet (open this first for a whole-run visual check): {contact_sheet_name}" if contact_sheet_name
+            else "Contact sheet: skipped (needs Pillow)",
+            f"Timelapse GIF (human scrubbing convenience, not a whole-run overview image): {timelapse_name}"
+            if timelapse_name else "Timelapse GIF: skipped (needs Pillow and 2+ screenshots)",
             "",
             f"Raw per-tick state: state.jsonl ({sample_count} samples)",
             "Full game log: game.log",
+            "Panda3D's own engine output: panda3d.log",
+            "Machine-readable numbers (for tools/dev_probe_diff.py or your own scripting): summary.json",
         ]
 
         (out_dir / "summary.md").write_text("\n".join(lines), encoding="utf-8")
-        print(f"\n{status}. Read {out_dir / 'summary.md'} first.")
+        # Always printed regardless of --verbosity: one grep-able line with the
+        # handful of numbers that answer "did this run look fine" without
+        # opening summary.md at all - useful for a quick before/after smoke
+        # check where the agent only needs to know pass/fail, not the story.
+        print(
+            f"RESULT status={status} kills={kill_count} dmg_dealt={dmg_dealt:.1f} "
+            f"dmg_taken={dmg_taken:.1f} warnings={len(warning_collector.records)} "
+            f"blank_frames={blank_frame_count} pinned={pinned_reported} "
+            f"elapsed={run_state['last_elapsed']:.1f}s"
+        )
+        if baseline_diff_text is not None:
+            tag = "CHANGED" if baseline_changed else "no change"
+            print(f"vs baseline: {tag} (see '## vs baseline' in summary.md for details)")
+        if args.save_baseline:
+            print(f"Saved this run as the new baseline: {baseline_path}")
+        print(f"Read {out_dir / 'summary.md'} for the full story.")
 
     try:
         game.taskMgr.doMethodLater(args.sample_interval, sample, "dev_probe_sample")
