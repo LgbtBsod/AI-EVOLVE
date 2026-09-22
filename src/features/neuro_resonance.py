@@ -10,7 +10,7 @@ from enum import Enum
 from typing import Any
 
 from src.core.architecture import BaseComponent, ComponentType, Priority
-from src.core.event_system import Event, EventSystem
+from src.core.event_system import EventData as Event, EventSystem
 
 
 class ResonanceState(Enum):

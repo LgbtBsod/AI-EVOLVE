@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 class ComponentType(Enum):
     """Типы компонентов системы"""
+    CORE = "core"  # Ядерные компоненты (GameCore, DatabaseCore)
     SYSTEM = "system"
     MANAGER = "manager"
     SERVICE = "service"
@@ -40,6 +41,7 @@ class ComponentType(Enum):
     ADAPTER = "adapter"
     ENTITY = "entity"
     COMPONENT = "component"
+    PLUGIN = "plugin"  # Плагины/фичи
 
 
 class Priority(Enum):

@@ -161,6 +161,25 @@ class StateManager:
             logger.exception(f"Ошибка завершения StateManager: {e}")
             return False
     
+    
+    # Aliases for BaseComponent lifecycle compatibility
+    def start(self) -> bool:
+        """Start the state manager (alias for initialize)."""
+        return self.initialize()
+    
+    def stop(self) -> bool:
+        """Stop the state manager (alias for shutdown)."""
+        return self.shutdown()
+    
+    def destroy(self) -> bool:
+        """Destroy the state manager (alias for shutdown)."""
+        return self.shutdown()
+
+    
+    def update(self, delta_time: float) -> None:
+        """Update the state manager (cleanup old states)."""
+        pass
+
     def set_state(
         self,
         key: str,
