@@ -1,43 +1,50 @@
-```
-# Python compiled files
-*.pyc
+```gitignore
+# Python
 __pycache__/
-
-# Database files
-saves/*.db
-
-# Reports and logs
-tools/memory_reports/*.json
-tools/performance_reports/*.json
-*.log
-
-# Environment files
-.env
-.env.local
-*.env.*
-
-# Dependencies
-.venv/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
 venv/
-node_modules/
-
-# Editors
-.vscode/
-.idea/
-
-# Build artifacts
-dist/
-build/
-target/
-
-# Cache directories
+.venv/
+.venv-bak/
+.venv-py3/
+.venv-py3-bak/
+.python-version
 .mypy_cache/
 .pytest_cache/
 .coverage
 coverage/
 htmlcov/
+.tox/
+.hypothesis/
 
-# System files
+# Build artifacts
+build/
+dist/
+*.egg
+*.egg-info/
+.eggs/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# OS
 .DS_Store
 Thumbs.db
 ```
