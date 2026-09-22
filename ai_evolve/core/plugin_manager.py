@@ -26,10 +26,16 @@ class PluginManager:
         self._plugin_order.append(plugin.name)
         plugin.register_events(self.event_system)
     
-    def initialize_all(self):
+    def initialize_all(self) -> bool:
         """Initialize all registered plugins."""
         for name in self._plugin_order:
-            self.plugins[name].initialize()
+            plugin = self.plugins[name]
+            if not plugin.is_initialized:
+                success = plugin.on_init(None)  # Pass game_core as None for now
+                if not success:
+                    return False
+                plugin.is_initialized = True
+        return True
     
     def update_all(self, delta_time: float):
         """Update all initialized plugins."""

@@ -37,9 +37,10 @@ class SceneManagerPlugin(GamePlugin):
         self.current_scene: Optional[BaseScene] = None
         self.next_scene: Optional[str] = None
     
-    def on_init(self):
+    def on_init(self, game_core=None):
         """Initialize scene manager."""
         print("[SceneManager] Initialized")
+        return True
     
     def on_update(self, delta_time: float):
         """Update current scene."""

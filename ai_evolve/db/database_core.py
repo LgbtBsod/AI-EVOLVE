@@ -38,6 +38,15 @@ class TestResult(Base):
     metrics = Column(Text, nullable=True)  # JSON string
     timestamp = Column(DateTime, nullable=False)
 
+class Entity(Base):
+    """Базовая сущность игры."""
+    __tablename__ = 'entities'
+    id = Column(Integer, primary_key=True)
+    name = Column(String(100), nullable=False)
+    entity_type = Column(String(50), nullable=False)
+    health = Column(Float, default=100.0)
+    level = Column(Integer, default=1)
+
 # Example model for testing
 class GameEntity(Base):
     __tablename__ = 'game_entities'

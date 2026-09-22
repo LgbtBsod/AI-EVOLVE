@@ -333,9 +333,10 @@ class ToughnessPlugin(GamePlugin):
             auto_recover_on_break_end=True
         )
     
-    def on_init(self):
+    def on_init(self, game_core=None):
         """Initialize toughness system."""
         print("[ToughnessPlugin] Initialized with advanced stance system")
+        return True
     
     def on_update(self, delta_time: float):
         """Update all toughness components."""

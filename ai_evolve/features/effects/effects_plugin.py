@@ -402,8 +402,10 @@ class EffectsPlugin(GamePlugin):
         self.components: Dict[str, EffectComponent] = {}
         self.custom_effects: Dict[EffectType, EffectConfig] = {}
     
-    def on_init(self):
+    def on_init(self, game_core=None):
+        """Initialize effects system."""
         print("[EffectsPlugin] Initialized with combo system")
+        return True
     
     def on_update(self, delta_time: float):
         for component in self.components.values():
