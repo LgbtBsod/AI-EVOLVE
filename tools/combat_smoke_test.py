@@ -187,7 +187,7 @@ def test_crit_and_dodge_via_combat_system():
     # execute_attack() calls rng.random() exactly twice per attack, in order:
     # crit check then dodge check (verified by reading combat_system.py).
     game = make_game(rng=FakeRNG([0.0, 1.0]))  # 0.0 -> crit; 1.0 -> not dodged
-    player = make_player(game, physical_damage=20, defense=0, critical_chance=100.0, critical_damage=200.0)
+    player = make_player(game, physical_damage=20, defense=0, critical_chance=1.0, critical_damage=2.0)
     enemy = make_enemy(game, x=1.0, enemy_type="basic")
     enemy.defense = 0
     enemy.dodge_chance = 0.0
@@ -201,7 +201,7 @@ def test_crit_and_dodge_via_combat_system():
     game2 = make_game(rng=FakeRNG([1.0, 0.0]))  # 1.0 -> not crit; 0.0 -> dodged (needs dodge_chance>0)
     player2 = make_player(game2, physical_damage=20, defense=0)
     enemy2 = make_enemy(game2, x=1.0, enemy_type="basic")
-    enemy2.dodge_chance = 50.0  # -> 0.5 fraction; FakeRNG's 0.0 < 0.5 -> dodge
+    enemy2.dodge_chance = 0.5  # -> 0.5 fraction; FakeRNG's 0.0 < 0.5 -> dodge
     hp_before2 = enemy2.health
     info2 = game2.combat_system.execute_attack(player2, enemy2)
     check("forced dodge (FakeRNG) deals zero damage and leaves HP untouched",

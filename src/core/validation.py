@@ -62,6 +62,22 @@ class CombatStats(BaseModel):
     defense: float = Field(default=0, ge=0, description="Защита")
     speed: float = Field(default=1.0, gt=0, description="Скорость")
     
+    # Дополнительные поля для полной совместимости с формулами боя
+    physical_damage: float = Field(default=10.0, ge=0, description="Физический урон")
+    magical_damage: float = Field(default=5.0, ge=0, description="Магический урон")
+    attack_speed: float = Field(default=1.0, gt=0, description="Скорость атаки")
+    critical_chance: float = Field(default=0.05, ge=0, le=1, description="Шанс крита")
+    critical_damage: float = Field(default=1.5, ge=1, description="Множитель крита")
+    dodge_chance: float = Field(default=0.05, ge=0, le=1, description="Шанс уворота")
+    block_chance: float = Field(default=0.05, ge=0, le=1, description="Шанс блока")
+    magic_resistance: float = Field(default=0.0, ge=0, description="Магическая защита")
+    accuracy: float = Field(default=0.8, ge=0, le=1, description="Точность")
+    initiative: float = Field(default=10.0, ge=0, description="Инициатива")
+    range: float = Field(default=2.0, ge=0, description="Дальность атаки")
+    damage_modifier: float = Field(default=1.0, ge=0, description="Модификатор урона")
+    defense_modifier: float = Field(default=1.0, ge=0, description="Модификатор защиты")
+    speed_modifier: float = Field(default=1.0, ge=0, description="Модификатор скорости")
+    
     @model_validator(mode='after')
     def clamp_health_to_max(self):
         """Обрезает health до max_health если превышает."""

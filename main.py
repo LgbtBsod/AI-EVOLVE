@@ -41,6 +41,9 @@ logger = logging.getLogger("main")
 loadPrcFileData("", "window-title AI-EVOLVE (dev build)")
 loadPrcFileData("", "win-size 1280 720")
 loadPrcFileData("", "sync-video 1")
+# Поддержка headless-режима для тестов без дисплея
+loadPrcFileData("", "load-display panda3d_glxdisplay.so")  # Попробовать GLX сначала
+loadPrcFileData("", "show-frame-rate-meter 0")
 
 
 class Game(ShowBase):
@@ -54,7 +57,12 @@ class Game(ShowBase):
     - Plugins: фичи как плагины
     """
 
-    def __init__(self, dev_mode: bool = False):
+    def __init__(self, dev_mode: bool = False, headless: bool = False):
+        if headless:
+            # Offscreen buffer mode for headless testing
+            loadPrcFileData("", "window-type offscreen")
+            loadPrcFileData("", "use-direct false")
+        
         super().__init__()
         self.showbase = self
         self.disableMouse()

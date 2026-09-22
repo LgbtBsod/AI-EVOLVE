@@ -25,8 +25,8 @@ class CharacterBaseStats:
     magical_damage: float = 0.0
     attack_speed: float = 1.0
     attack_range: float = 2.0
-    critical_chance: float = 5.0
-    critical_damage: float = 150.0
+    critical_chance: float = 0.05
+    critical_damage: float = 1.5
     dodge_chance: float = 0.0
     magic_resistance: float = 0.0
     speed: float = 8.0
