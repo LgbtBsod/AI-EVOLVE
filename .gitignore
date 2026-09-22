@@ -1,35 +1,43 @@
 ```
-# Python
-__pycache__/
+# Python compiled files
 *.pyc
-*.pyo
-*.pyd
+__pycache__/
 
-# Performance and memory reports
-tools/performance_reports/
-tools/memory_reports/
+# Database files
+saves/*.db
 
-# Environment
-.env
-.env.local
-.env.*
-
-# Logs
+# Reports and logs
+tools/memory_reports/*.json
+tools/performance_reports/*.json
 *.log
 
-# Coverage
+# Environment files
+.env
+.env.local
+*.env.*
+
+# Dependencies
+.venv/
+venv/
+node_modules/
+
+# Editors
+.vscode/
+.idea/
+
+# Build artifacts
+dist/
+build/
+target/
+
+# Cache directories
+.mypy_cache/
+.pytest_cache/
 .coverage
 coverage/
 htmlcov/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*.tmp
-
-# OS
+# System files
 .DS_Store
 Thumbs.db
 ```
