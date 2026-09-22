@@ -31,7 +31,7 @@ class ToughnessConfig:
     recovery_delay: float = 3.0  # Задержка перед началом восстановления после удара
     break_duration: float = 5.0  # Длительность состояния BROKEN
     damage_taken_multiplier_broken: float = 0.25  # +25% урона когда сломан
-    toughness_from_hp_ratio: float = 0.2  # 20% от макс HP при каждом пробиве
+    toughness_from_hp_ratio: float = 0.05  # 5% от макс HP при каждом пробиве (накопительно)
     max_toughness_cap_ratio: float = 0.2  # Максимум 20% от HP
     auto_recover_on_break_end: bool = True  # Авто-восстановление до full после BREAK
 
@@ -299,6 +299,8 @@ class ToughnessComponent(BaseComponent):
     
     def _exit_break_state(self, current_time: float) -> None:
         """Выход из состояния BROKEN"""
+        previous_state = self._state
+        
         if self._config.auto_recover_on_break_end:
             # Полное восстановление стойкости
             old_toughness = self._current_toughness
@@ -314,14 +316,14 @@ class ToughnessComponent(BaseComponent):
                 )
                 self.on_toughness_recovered(event)
         
-        # Переход в состояние RECOVERING (не сразу NORMAL)
-        self._set_state(StanceState.RECOVERING)
+        # Переход в NORMAL сразу после восстановления
+        self._set_state(StanceState.NORMAL)
         
         # Сброс таймера для восстановления
         self._break_start_time = current_time
         
         if self.on_state_changed:
-            self.on_state_changed(StanceState.RECOVERING)
+            self.on_state_changed(StanceState.NORMAL)
     
     def _recover_toughness(self, delta_time: float, current_time: float) -> None:
         """Восстановление стойкости со временем"""

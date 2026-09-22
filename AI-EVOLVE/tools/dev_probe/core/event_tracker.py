@@ -1,119 +1,146 @@
-"""Event Tracker - отслеживание событий игры."""
-import time
-from collections import Counter, defaultdict
-from dataclasses import dataclass, field
+"""Event Tracker - Отслеживание событий игры."""
+
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Dict, List, Any, Optional, Callable
+from dataclasses import dataclass, field
+import time
 
 
 class EventType(Enum):
-    """Типы отслеживаемых событий."""
-    COMBAT_START = "combat_start"
-    COMBAT_END = "combat_end"
+    """Типы событий."""
+    # Бой
     DAMAGE_DEALT = "damage_dealt"
     DAMAGE_TAKEN = "damage_taken"
-    EFFECT_APPLIED = "effect_applied"
-    EFFECT_EXPIRED = "effect_expired"
+    CRITICAL_HIT = "critical_hit"
+    HEALING_DONE = "healing_done"
+    HEALING_RECEIVED = "healing_received"
+    
+    # Стойкость
     TOUGHNESS_DAMAGE = "toughness_damage"
     TOUGHNESS_BREAK = "toughness_break"
-    TOUGHNESS_RECOVERED = "toughness_recovered"
-    ENTITY_DIED = "entity_died"
-    ENTITY_SPAWNED = "entity_spawned"
-    ANOMALY_DETECTED = "anomaly_detected"
+    TOUGHNESS_RECOVERY = "toughness_recovery"
+    
+    # Эффекты
+    EFFECT_APPLIED = "effect_applied"
+    EFFECT_EXPIRED = "effect_expired"
+    EFFECT_STACKED = "effect_stacked"
+    EFFECT_REMOVED = "effect_removed"
+    
+    # Продвинутые механики
+    DODGE_PERFORMED = "dodge_performed"
+    PARRY_PERFORMED = "parry_performed"
+    COMBO_STARTED = "combo_started"
+    COMBO_FINISHED = "combo_finished"
+    
+    # Обучение
+    LEVEL_UP = "level_up"
+    SKILL_LEARNED = "skill_learned"
+    XP_GAINED = "xp_gained"
+    
+    # Предметы
+    ITEM_PICKED = "item_picked"
+    ITEM_USED = "item_used"
+    ITEM_DROPPED = "item_dropped"
+    
+    # Сессия
+    SESSION_START = "session_start"
+    SESSION_END = "session_end"
+    QUEST_COMPLETED = "quest_completed"
 
 
 @dataclass
-class TrackedEvent:
-    """Представление отслеженного события."""
+class GameEvent:
+    """Событие игры."""
     event_type: EventType
-    timestamp: float
-    frame: int
     data: Dict[str, Any]
-    source_entity_id: Optional[str] = None
-    target_entity_id: Optional[str] = None
+    timestamp: float = field(default_factory=time.time)
+    source_id: Optional[str] = None
+    target_id: Optional[str] = None
+    frame: int = 0
 
 
 class EventTracker:
-    """Отслеживает и агрегирует события игры для анализа."""
+    """Отслеживание и анализ событий игры."""
     
     def __init__(self):
-        self.events: List[TrackedEvent] = []
-        self.event_counts: Counter = Counter()
-        self.handlers: Dict[EventType, List[Callable]] = defaultdict(list)
-        self.start_time: float = 0.0
-        self.current_frame: int = 0
-        
-    def start_tracking(self, timestamp: float = 0.0):
-        """Начать отслеживание событий."""
-        self.start_time = timestamp
-        self.events.clear()
-        self.event_counts.clear()
-        
+        self.events: List[GameEvent] = []
+        self.handlers: Dict[EventType, List[Callable]] = {}
+        self.tracking_active = False
+        self.start_time: Optional[float] = None
+    
+    def start_tracking(self):
+        """Начать отслеживание."""
+        self.tracking_active = True
+        self.start_time = time.time()
+        self.events = []
+    
+    def stop_tracking(self):
+        """Остановить отслеживание."""
+        self.tracking_active = False
+    
     def register_handler(self, event_type: EventType, handler: Callable):
-        """Зарегистрировать обработчик для типа событий."""
+        """Зарегистрировать обработчик события."""
+        if event_type not in self.handlers:
+            self.handlers[event_type] = []
         self.handlers[event_type].append(handler)
-        
+    
     def track_event(
         self,
         event_type: EventType,
         data: Dict[str, Any],
         source_id: Optional[str] = None,
         target_id: Optional[str] = None,
+        frame: int = 0
     ):
-        """Отследить событие.
+        """Отследить событие."""
+        if not self.tracking_active:
+            return
         
-        Args:
-            event_type: Тип события
-            data: Данные события
-            source_id: ID источника (кто вызвал)
-            target_id: ID цели (на кого направлено)
-        """
-        elapsed = time.time() - self.start_time if self.start_time else 0.0
-        
-        event = TrackedEvent(
+        event = GameEvent(
             event_type=event_type,
-            timestamp=elapsed,
-            frame=self.current_frame,
             data=data,
-            source_entity_id=source_id,
-            target_entity_id=target_id,
+            source_id=source_id,
+            target_id=target_id,
+            frame=frame
         )
         
         self.events.append(event)
-        self.event_counts[event_type.value] += 1
         
-        # Вызвать зарегистрированные обработчики
-        for handler in self.handlers.get(event_type, []):
-            try:
-                handler(event)
-            except Exception as e:
-                print(f"Error in event handler for {event_type}: {e}")
+        # Вызвать обработчики
+        if event_type in self.handlers:
+            for handler in self.handlers[event_type]:
+                try:
+                    handler(event)
+                except Exception as e:
+                    print(f"Error in event handler: {e}")
     
-    def update_frame(self, frame: int):
-        """Обновить текущий номер кадра."""
-        self.current_frame = frame
-    
-    def get_events_by_type(self, event_type: EventType) -> List[TrackedEvent]:
-        """Получить все события указанного типа."""
-        return [e for e in self.events if e.event_type == event_type]
-    
-    def get_events_for_entity(self, entity_id: str) -> List[TrackedEvent]:
-        """Получить все события для сущности (как источник или цель)."""
-        return [
-            e for e in self.events
-            if e.source_entity_id == entity_id or e.target_entity_id == entity_id
-        ]
+    def get_events(
+        self,
+        event_type: Optional[EventType] = None,
+        source_id: Optional[str] = None,
+        target_id: Optional[str] = None,
+        time_range: Optional[tuple] = None
+    ) -> List[GameEvent]:
+        """Получить события с фильтрацией."""
+        result = self.events
+        
+        if event_type:
+            result = [e for e in result if e.event_type == event_type]
+        if source_id:
+            result = [e for e in result if e.source_id == source_id]
+        if target_id:
+            result = [e for e in result if e.target_id == target_id]
+        if time_range:
+            result = [e for e in result if time_range[0] <= e.timestamp <= time_range[1]]
+        
+        return result
     
     def get_damage_stats(self) -> Dict[str, Any]:
-        """Получить статистику по урону.
-        
-        Returns:
-            Словарь со статистикой урона
-        """
-        damage_events = self.get_events_by_type(EventType.DAMAGE_DEALT)
+        """Получить статистику урона."""
+        damage_events = [e for e in self.events if e.event_type == EventType.DAMAGE_DEALT]
         
         if not damage_events:
-            return {"total_damage": 0, "hit_count": 0, "avg_damage": 0}
+            return {"total_damage": 0, "hit_count": 0, "crit_count": 0}
         
         total_damage = sum(e.data.get("damage", 0) for e in damage_events)
         crit_count = sum(1 for e in damage_events if e.data.get("is_critical", False))
@@ -121,62 +148,90 @@ class EventTracker:
         return {
             "total_damage": total_damage,
             "hit_count": len(damage_events),
-            "avg_damage": total_damage / len(damage_events) if damage_events else 0,
             "crit_count": crit_count,
-            "crit_rate": crit_count / len(damage_events) if damage_events else 0,
+            "avg_damage": total_damage / len(damage_events) if damage_events else 0,
+            "crit_rate": crit_count / len(damage_events) if damage_events else 0
         }
     
     def get_toughness_stats(self) -> Dict[str, Any]:
-        """Получить статистику по стойкости.
-        
-        Returns:
-            Словарь со статистикой стойкости
-        """
-        break_events = self.get_events_by_type(EventType.TOUGHNESS_BREAK)
-        toughness_dmg_events = self.get_events_by_type(EventType.TOUGHNESS_DAMAGE)
+        """Получить статистику стойкости."""
+        toughness_damage_events = [e for e in self.events if e.event_type == EventType.TOUGHNESS_DAMAGE]
+        break_events = [e for e in self.events if e.event_type == EventType.TOUGHNESS_BREAK]
         
         return {
+            "total_toughness_damage": sum(e.data.get("toughness_damage", 0) for e in toughness_damage_events),
             "total_breaks": len(break_events),
-            "total_toughness_damage": sum(
-                e.data.get("toughness_damage", 0) for e in toughness_dmg_events
-            ),
-            "entities_broken": list(set(
-                e.target_entity_id for e in break_events if e.target_entity_id
-            )),
+            "break_events": [
+                {
+                    "timestamp": e.timestamp,
+                    "frame": e.frame,
+                    "source_id": e.source_id,
+                    "target_id": e.target_id
+                }
+                for e in break_events
+            ]
         }
     
     def get_effect_stats(self) -> Dict[str, Any]:
-        """Получить статистику по эффектам.
-        
-        Returns:
-            Словарь со статистикой эффектов
-        """
-        applied_events = self.get_events_by_type(EventType.EFFECT_APPLIED)
-        expired_events = self.get_events_by_type(EventType.EFFECT_EXPIRED)
-        
-        effects_by_tag = defaultdict(int)
-        for event in applied_events:
-            tags = event.data.get("tags", [])
-            for tag in tags:
-                effects_by_tag[str(tag)] += 1
+        """Получить статистику эффектов."""
+        applied = [e for e in self.events if e.event_type == EventType.EFFECT_APPLIED]
+        expired = [e for e in self.events if e.event_type == EventType.EFFECT_EXPIRED]
+        removed = [e for e in self.events if e.event_type == EventType.EFFECT_REMOVED]
         
         return {
-            "total_applied": len(applied_events),
-            "total_expired": len(expired_events),
-            "active_effects": len(applied_events) - len(expired_events),
-            "effects_by_tag": dict(effects_by_tag),
+            "total_applied": len(applied),
+            "total_expired": len(expired),
+            "total_removed": len(removed),
+            "effects_by_type": self._count_by_field(applied, "effect_id")
         }
     
+    def _count_by_field(self, events: List[GameEvent], field_name: str) -> Dict[str, int]:
+        """Подсчитать события по полю."""
+        counts = {}
+        for e in events:
+            key = e.data.get(field_name, "unknown") if field_name != "event_type" else e.event_type
+            counts[key] = counts.get(key, 0) + 1
+        return counts
+    
     def get_summary(self) -> Dict[str, Any]:
-        """Получить сводку по всем событиям.
+        """Получить сводку по всем событиям."""
+        if not self.events:
+            return {"total_events": 0}
         
-        Returns:
-            Словарь со сводной статистикой
-        """
+        event_counts = self._count_by_field(self.events, "event_type")
+        
         return {
             "total_events": len(self.events),
-            "event_counts": dict(self.event_counts),
-            "damage_stats": self.get_damage_stats(),
-            "toughness_stats": self.get_toughness_stats(),
-            "effect_stats": self.get_effect_stats(),
+            "tracking_duration": time.time() - self.start_time if self.start_time else 0,
+            "events_by_type": {k.value if hasattr(k, 'value') else k: v for k, v in event_counts.items()},
+            "unique_sources": len(set(e.source_id for e in self.events if e.source_id)),
+            "unique_targets": len(set(e.target_id for e in self.events if e.target_id))
         }
+    
+    def export_events(self, filepath: str, format: str = "json"):
+        """Экспорт событий в файл."""
+        import json
+        
+        events_data = [
+            {
+                "event_type": e.event_type.value,
+                "data": e.data,
+                "timestamp": e.timestamp,
+                "source_id": e.source_id,
+                "target_id": e.target_id,
+                "frame": e.frame
+            }
+            for e in self.events
+        ]
+        
+        with open(filepath, 'w') as f:
+            if format == "json":
+                json.dump(events_data, f, indent=2)
+            elif format == "csv":
+                # CSV экспорт
+                if events_data:
+                    keys = events_data[0].keys()
+                    f.write(",".join(keys) + "\n")
+                    for e in events_data:
+                        values = [str(e.get(k, "")) for k in keys]
+                        f.write(",".join(values) + "\n")

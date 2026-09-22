@@ -1,19 +1,22 @@
-"""
-Plugin system for Dev Probe.
-Allows modular analysis of game state through plugins.
-"""
-from .base import DevProbePlugin, PluginReport, PluginManager
+"""DevProbe Plugins Package."""
 
-# Import built-in plugins
+from .base import DevProbePlugin, PluginReport
 from .toughness_plugin import ToughnessPlugin
 from .effects_plugin import EffectsPlugin
 from .combat_plugin import CombatPlugin
+from .learning_plugin import LearningPlugin
+from .session_content_plugin import SessionContentPlugin
+from .advanced_mechanics_plugin import AdvancedMechanicsPlugin
+from .db_sync_plugin import DBSyncPlugin
 
 __all__ = [
-    'DevProbePlugin',
-    'PluginReport', 
-    'PluginManager',
-    'ToughnessPlugin',
-    'EffectsPlugin',
-    'CombatPlugin',
+    "DevProbePlugin",
+    "PluginReport",
+    "ToughnessPlugin",
+    "EffectsPlugin",
+    "CombatPlugin",
+    "LearningPlugin",
+    "SessionContentPlugin",
+    "AdvancedMechanicsPlugin",
+    "DBSyncPlugin"
 ]
