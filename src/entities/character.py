@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""
+Character entity with data-driven stats and component-based architecture.
+
+REFACTORING: 
+- Lazy Panda3D imports for headless testing
+- HealthComponent integration for damage handling
+- Stats loaded from JSON configs via StatsLoader
+"""
 
 import itertools
 import logging
@@ -7,10 +15,19 @@ import random
 import time
 from typing import Any
 
-from panda3d.core import CardMaker, TransparencyAttrib
+# Lazy import for headless testing support
+try:
+    from panda3d.core import CardMaker, TransparencyAttrib
+    PANDA3D_AVAILABLE = True
+except ImportError:
+    PANDA3D_AVAILABLE = False
+    CardMaker = None
+    TransparencyAttrib = None
 
 from ..core.constants import EntityType
-from ..systems.combat.combat_system import AttackType, CombatStats
+from ..core.stats_loader import StatsLoader
+from ..core.validation import CombatStats
+from ..systems.combat.components import HealthComponent
 from ..ui.health_bar import HealthBar
 from .base_entity import BaseEntity
 
@@ -117,7 +134,7 @@ class Character(BaseEntity):
     
     def __init__(self, character_id: str, game, x: float = 0, y: float = 0, z: float = 0, 
                  character_class: str = "warrior", color: tuple[float, float, float, float] = (1, 1, 1, 1), 
-                 is_player: bool = False) -> None:
+                 is_player: bool = False, level: int = 1) -> None:
         # Инициализируем базовую сущность
         entity_type = EntityType.PLAYER if is_player else EntityType.NPC
         super().__init__(character_id, entity_type, f"character_{character_id}")
@@ -136,37 +153,47 @@ class Character(BaseEntity):
         self.health_bar = None
         self.is_defeated = False
 
-        # Базовые характеристики
-        self.level = 1
-        self.experience = 0
-        self.experience_to_next_level = 100
+        # Загружаем статы из конфига через StatsLoader (data-driven approach)
+        stats_loader = StatsLoader.get_instance()
+        class_stats = stats_loader.get_stats_for_class(character_class, level)
         
-        # Здоровье, мана, выносливость
-        self.max_health = 100
+        # Базовые характеристики
+        self.level = level
+        self.experience = 0
+        self.experience_to_next_level = stats_loader.get_exp_required(level)
+        
+        # Здоровье, мана, выносливость - из конфига
+        self.max_health = class_stats.health
         self.health = self.max_health
-        self.max_mana = 50
+        self.max_mana = class_stats.mana
         self.mana = self.max_mana
-        self.max_stamina = 100
+        self.max_stamina = class_stats.stamina
         self.stamina = self.max_stamina
         
-        # Боевые характеристики
-        self.physical_damage = 20
-        self.magical_damage = 0
-        self.defense = 5
-        self.attack_speed = 1.0
-        self.attack_range = 2.0
-        self.critical_chance = 5.0
-        self.critical_damage = 150.0
-        self.dodge_chance = 0.0
-        self.magic_resistance = 0.0
+        # Боевые характеристики - из конфига
+        self.physical_damage = class_stats.physical_damage
+        self.magical_damage = class_stats.magical_damage
+        self.defense = class_stats.defense
+        self.attack_speed = class_stats.attack_speed
+        self.attack_range = class_stats.attack_range
+        self.critical_chance = class_stats.critical_chance
+        self.critical_damage = class_stats.critical_damage
+        self.dodge_chance = class_stats.dodge_chance
+        self.magic_resistance = class_stats.magic_resistance
         # Скорость передвижения героя. Для демонстрации поискового поведения
         # делаем её повыше, чтобы движение было явно заметно.
-        self.speed = 8.0
+        self.speed = class_stats.speed
         
-        # Восстановление
-        self.health_regen = 1.0
-        self.mana_regen = 5.0
-        self.stamina_regen = 10.0
+        # Восстановление - из конфига
+        self.health_regen = class_stats.health_regen
+        self.mana_regen = class_stats.mana_regen
+        self.stamina_regen = class_stats.stamina_regen
+        
+        # Компонент здоровья для интеграции с новой боевой системой
+        self._health_component = HealthComponent(
+            name=f"character_{character_id}",
+            max_health=self.max_health
+        )
         
         # Кулдаун атаки
         self.attack_cooldown = 0
@@ -704,13 +731,31 @@ class Character(BaseEntity):
         return self.health > 0 and not self.is_defeated
 
     def take_damage(self, damage, damage_type="physical"):
-        """Получение урона"""
+        """Получение урона с использованием HealthComponent.
+        
+        REFACTORED: Теперь использует HealthComponent для консистентности
+        с компонентной архитектурой и лучшей тестируемости.
+        """
         if self.is_defeated:
             return True
-        actual_damage = max(1, damage - self.defense)
-        self.health = max(0, self.health - actual_damage)
+        
+        # Используем HealthComponent для обработки урона
+        actual_damage = self._health_component.take_damage(damage)
+        
+        # Синхронизируем legacy атрибут health с компонентом
+        self.health = self._health_component.current_health
+        
+        # Применяем защиту (legacy логика для обратной совместимости)
+        # В будущем полностью перейдём на CombatStatsComponent
+        if actual_damage > 0 and self.defense > 0:
+            mitigation = min(self.defense, actual_damage * 0.5)  # Защита снижает до 50% урона
+            self.health = max(0, self.health + mitigation)
+            actual_damage -= mitigation
+        
         if self.health <= 0:
             self.is_defeated = True
+            logger.debug(f"Character {self.entity_id} defeated after taking {damage} damage")
+        
         return self.health <= 0
         
     def update_ai(self, enemies, items, dt, exit_position=None, vision_range: float = 0.0,

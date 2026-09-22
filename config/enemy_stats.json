@@ -1,0 +1,58 @@
+{
+  "enemies": {
+    "slime": {
+      "health": 50,
+      "damage": 8,
+      "defense": 2,
+      "speed": 3.0,
+      "exp_reward": 20,
+      "level": 1
+    },
+    "goblin": {
+      "health": 70,
+      "damage": 12,
+      "defense": 4,
+      "speed": 5.0,
+      "exp_reward": 35,
+      "level": 2
+    },
+    "orc": {
+      "health": 120,
+      "damage": 18,
+      "defense": 8,
+      "speed": 4.0,
+      "exp_reward": 60,
+      "level": 4
+    },
+    "skeleton": {
+      "health": 60,
+      "damage": 15,
+      "defense": 3,
+      "speed": 6.0,
+      "exp_reward": 40,
+      "level": 3
+    },
+    "dragon": {
+      "health": 500,
+      "damage": 45,
+      "defense": 25,
+      "speed": 7.0,
+      "exp_reward": 500,
+      "level": 10
+    },
+    "boss_demon": {
+      "health": 1000,
+      "damage": 60,
+      "defense": 35,
+      "speed": 6.0,
+      "exp_reward": 1500,
+      "level": 15
+    }
+  },
+  "scaling": {
+    "health_per_level": 15,
+    "damage_per_level": 5,
+    "defense_per_level": 2,
+    "exp_multiplier": 1.3
+  }
+}
