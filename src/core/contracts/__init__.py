@@ -1,36 +1,36 @@
 """
-Пакет смарт-контрактов для стандартизации игровых механик.
+Contracts Package
+
+Smart contracts for standardized game mechanics.
+Provides type-safe interfaces for combat, skills, and other systems.
 """
 
-from .combat_contracts import (
+from src.core.contracts.combat_contracts import (
     AttackContract,
     CombatAction,
     CombatContractExecutor,
     DefenseContract,
     SkillUsageContract,
 )
-from .smart_contracts import (
-    ContractCondition,
-    ContractRegistry,
+from src.core.contracts.smart_contracts import (
     ContractResult,
     ContractStatus,
     SmartContract,
+    ContractRegistry,
     register_contract,
 )
 
 __all__ = [
-    # Base contracts
-    'SmartContract',
-    'ContractResult',
-    'ContractStatus',
-    'ContractCondition',
-    'ContractRegistry',
-    'register_contract',
-    
-    # Combat contracts
-    'AttackContract',
-    'DefenseContract',
-    'SkillUsageContract',
-    'CombatContractExecutor',
-    'CombatAction'
+    # Smart Contracts Base
+    "SmartContract",
+    "ContractResult",
+    "ContractStatus",
+    "register_contract",
+    "ContractRegistry",
+    # Combat Contracts
+    "CombatAction",
+    "AttackContract",
+    "DefenseContract",
+    "SkillUsageContract",
+    "CombatContractExecutor",
 ]

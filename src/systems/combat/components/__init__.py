@@ -6,5 +6,5 @@ from .health_component import HealthComponent
 __all__ = [
     "CombatStatsComponent",
     "DamageComponent",
-    "HealthComponent"
+    "HealthComponent",
 ]

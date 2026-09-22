@@ -1,4 +1,12 @@
 #!/usr/bin/env python3
+"""
+Enemy entity with data-driven stats and component-based architecture.
+
+REFACTORING: 
+- Lazy Panda3D imports for headless testing
+- HealthComponent integration for damage handling
+- Stats loaded from JSON configs via StatsLoader
+"""
 
 import itertools
 import logging
@@ -6,8 +14,16 @@ import math
 import random
 import time
 
-from panda3d.core import CardMaker
+# Lazy import for headless testing support
+try:
+    from panda3d.core import CardMaker
+    PANDA3D_AVAILABLE = True
+except ImportError:
+    PANDA3D_AVAILABLE = False
+    CardMaker = None
 
+from ..core.stats_loader import StatsLoader
+from ..systems.combat.components import HealthComponent
 from ..systems.combat.combat_system import CombatStats
 from ..ui.health_bar import HealthBar
 
@@ -19,18 +35,34 @@ _enemy_id_counter = itertools.count(1)
 class EnhancedEnemy:
     """Улучшенный класс врага с правильным рендерингом"""
 
-    def __init__(self, game, x=0, y=0, z=0, enemy_type="basic", color=(1, 0, 0, 1)):
+    def __init__(self, game, x=0, y=0, z=0, enemy_type="slime", level=None, color=None):
         self.game = game
         self.x = x
         self.y = y
         self.z = z
         self.enemy_type = enemy_type
-        self.color = color
-        self.node = None
-        self.health_bar = None
-
-        # Базовые характеристики в зависимости от типа
-        self._setup_enemy_type()
+        
+        # Загружаем статы врага из конфига (data-driven approach)
+        stats_loader = StatsLoader.get_instance()
+        
+        # Если уровень не указан, используем уровень из конфига для этого типа
+        if level is None:
+            enemy_data = stats_loader.get_enemy_stats(enemy_type)
+            level = enemy_data.get("level", 1)
+        
+        self.level = level
+        enemy_stats = stats_loader.get_enemy_stats(enemy_type, level)
+        
+        # Применяем статы из конфига
+        self.max_health = enemy_stats.get("health", 50)
+        self.health = self.max_health
+        self.physical_damage = enemy_stats.get("damage", 10)
+        self.defense = enemy_stats.get("defense", 2)
+        self.experience_reward = enemy_stats.get("exp_reward", 20)
+        self.move_speed = enemy_stats.get("speed", 4.0)
+        
+        # Размер и цвет на основе типа (визуальные параметры)
+        self._setup_visuals(enemy_type, color)
         
         # ID сущности для систем
         self.entity_id = f"enemy_{next(_enemy_id_counter)}"
@@ -42,7 +74,6 @@ class EnhancedEnemy:
         self.attack_cooldown = 1.0
         
         # Движение и зоны обнаружения/атаки
-        self.move_speed = 4.0
         # Зона отслеживания должна быть заметно больше, чтобы враги
         # реагировали на появление героя в заметном радиусе.
         self.detection_range = 20.0
@@ -52,56 +83,36 @@ class EnhancedEnemy:
         self.spawn_x = self.x
         self.spawn_y = self.y
         
-    def _setup_enemy_type(self):
-        """Настройка характеристик в зависимости от типа врага"""
-        if self.enemy_type == "basic":
-            self.level = 1
-            self.max_health = 50
-            self.health = self.max_health
-            self.physical_damage = 15
-            self.defense = 2
-            self.experience_reward = 25
-            self.size = 0.8
-            self.color = (1, 0, 0, 1)  # Красный
-        elif self.enemy_type == "strong":
-            self.level = 3
-            self.max_health = 120
-            self.health = self.max_health
-            self.physical_damage = 30
-            self.defense = 5
-            self.experience_reward = 75
-            self.size = 1.2
-            self.color = (0.8, 0.2, 0.2, 1)  # Темно-красный
-        elif self.enemy_type == "elite":
-            self.level = 5
-            self.max_health = 200
-            self.health = self.max_health
-            self.physical_damage = 45
-            self.defense = 8
-            self.experience_reward = 150
-            self.size = 1.5
-            self.color = (0.6, 0.1, 0.6, 1)  # Фиолетовый
-        elif self.enemy_type == "boss":
-            self.level = 10
-            self.max_health = 500
-            self.health = self.max_health
-            self.physical_damage = 80
-            self.defense = 15
-            self.experience_reward = 500
-            self.size = 2.0
-            self.color = (0.3, 0.1, 0.1, 1)  # Очень темно-красный
-        else:
-            # Дефолтные значения
-            self.level = 1
-            self.max_health = 50
-            self.health = self.max_health
-            self.physical_damage = 15
-            self.defense = 2
-            self.experience_reward = 25
-            self.size = 0.8
-            self.color = (1, 0, 0, 1)
+        # Компонент здоровья для интеграции с новой боевой системой
+        self._health_component = HealthComponent(
+            name=f"enemy_{self.entity_id}",
+            max_health=self.max_health
+        )
         
-        # Дополнительные характеристики
+    def _setup_visuals(self, enemy_type: str, color: tuple | None) -> None:
+        """Настройка визуальных параметров (размер, цвет) на основе типа врага"""
+        # Визуальные параметры - не влияют на баланс
+        visuals = {
+            "slime": {"size": 0.6, "color": (0.2, 0.8, 0.2, 1)},      # Зеленый
+            "goblin": {"size": 0.8, "color": (0.3, 0.6, 0.3, 1)},     # Темно-зеленый
+            "orc": {"size": 1.4, "color": (0.4, 0.5, 0.4, 1)},        # Серо-зеленый
+            "skeleton": {"size": 0.9, "color": (0.9, 0.9, 0.85, 1)},  # Костяной
+            "dragon": {"size": 2.5, "color": (0.8, 0.2, 0.1, 1)},     # Красно-оранжевый
+            "boss_demon": {"size": 3.0, "color": (0.5, 0.1, 0.1, 1)}, # Темно-красный
+            # Legacy types for backwards compatibility
+            "basic": {"size": 0.8, "color": (1, 0, 0, 1)},
+            "strong": {"size": 1.2, "color": (0.8, 0.2, 0.2, 1)},
+            "elite": {"size": 1.5, "color": (0.6, 0.1, 0.6, 1)},
+            "boss": {"size": 2.0, "color": (0.3, 0.1, 0.1, 1)},
+        }
+        
+        visual_data = visuals.get(enemy_type, {"size": 0.8, "color": (1, 0, 0, 1)})
+        self.size = visual_data["size"]
+        self.color = color if color else visual_data["color"]
+        self.node = None
+        self.health_bar = None
+        
+        # Дополнительные характеристики (дефолтные)
         self.critical_chance = 5.0
         self.critical_damage = 150.0
         self.dodge_chance = 0.0
