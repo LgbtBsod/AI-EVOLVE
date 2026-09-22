@@ -1,0 +1,41 @@
+19:01:58 INFO main: === Инициализация ядра игры ===
+19:01:58 INFO src.core.game_core: GameCore создан
+19:01:58 INFO src.database.db_core: DatabaseCore создан с URL: sqlite:///saves/game_database.db
+19:01:58 INFO src.core.event_system: EventSystem initialized with blinker
+19:01:58 INFO src.core.state_manager: StateManager инициализирован (путь: saves/states)
+19:01:58 INFO src.core.game_core: Зависимости GameCore установлены
+19:01:58 INFO src.core.game_core: === Инициализация GameCore ===
+19:01:58 INFO src.database.db_core: === Инициализация DatabaseCore ===
+19:01:58 INFO src.database.db_core: Таблицы БД созданы успешно
+19:01:58 WARNING src.core.architecture: Недопустимый переход состояния: UNINITIALIZED -> READY
+19:01:58 INFO src.database.db_core: DatabaseCore успешно инициализирован
+19:01:58 INFO src.core.event_system: EventSystem successfully initialized
+19:01:58 INFO src.core.state_manager: Загружено 0 персистентных состояний
+19:01:58 INFO src.core.state_manager: StateManager успешно инициализирован
+19:01:58 WARNING src.core.architecture: Недопустимый переход состояния: UNINITIALIZED -> READY
+19:01:58 INFO src.core.game_core: GameCore успешно инициализирован
+19:01:58 INFO main: === Подключение модулей ===
+19:01:58 WARNING src.core.architecture: Недопустимый переход состояния: UNINITIALIZED -> UNINITIALIZED
+19:01:58 INFO src.scenes.scene_manager: Архитектурные компоненты установлены в SceneManager
+19:01:58 INFO src.core.game_core: SceneManager подключен к GameCore
+19:01:58 INFO main: === Регистрация плагинов ===
+19:01:58 INFO src.core.base_plugin: Плагин combat_plugin v1.0.0 создан
+19:01:58 INFO src.features.combat_plugin: Инициализация CombatPlugin...
+19:01:58 WARNING src.core.architecture: Недопустимый переход состояния: UNINITIALIZED -> READY
+19:01:58 INFO src.features.combat_plugin: CombatPlugin успешно инициализирован
+19:01:58 INFO src.core.game_core: Плагин combat зарегистрирован успешно
+19:01:58 INFO src.core.game_core: === Запуск GameCore ===
+19:01:58 INFO src.database.db_core: === Запуск DatabaseCore ===
+19:01:58 INFO src.database.db_core: DatabaseCore успешно запущен
+19:01:58 INFO src.core.event_system: EventSystem successfully initialized
+19:01:58 INFO src.core.state_manager: Загружено 0 персистентных состояний
+19:01:58 INFO src.core.state_manager: StateManager успешно инициализирован
+19:01:58 INFO src.features.combat_plugin: Запуск CombatPlugin...
+19:01:58 INFO src.features.combat_plugin: CombatPlugin успешно запущен
+19:01:58 INFO src.scenes.scene_manager: Запуск SceneManager...
+19:01:58 ERROR src.scenes.scene_manager: SceneManager не готов к запуску
+19:01:58 WARNING src.core.game_core: Не удалось запустить SceneManager
+19:01:58 INFO src.core.game_core: GameCore успешно запущен
+19:01:58 INFO main: Dev mode: loading game_world directly
+19:01:58 WARNING src.scenes.scene_manager: Сцена с ID game_world не найдена
+19:01:58 INFO main: Game started with GameCore architecture (dev_mode=True). Plugins loaded: ['combat']. 1/2/3 = spawn enemy/trap/chest, space/mouse1 = force attack, Esc = quit.
