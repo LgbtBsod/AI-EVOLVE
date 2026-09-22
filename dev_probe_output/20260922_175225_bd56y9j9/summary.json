@@ -1,0 +1,33 @@
+{
+ "status": "OK",
+ "seed": null,
+ "dev_map": true,
+ "duration_configured": 5.0,
+ "elapsed": 5.24,
+ "dmg_dealt": 0,
+ "dmg_taken": 0,
+ "kill_count": 0,
+ "hits": 0,
+ "dodges": 0,
+ "crits": 0,
+ "min_hp": 120,
+ "min_hp_t": 1.000798606999524,
+ "end_hp": 120,
+ "pinned_reported": false,
+ "warning_count": 6,
+ "blank_frame_count": 0,
+ "sample_count": 5,
+ "event_counts": {
+  "enemy_killed": 0,
+  "anomaly_died": 0,
+  "anomaly_pinned": 0,
+  "anomaly_blank_frame": 0,
+  "warning": 6
+ },
+ "screenshot_reason_counts": {
+  "run start": 1,
+  "run end": 1
+ },
+ "visual_analysis": {},
+ "auto_hypothesis": null
+}

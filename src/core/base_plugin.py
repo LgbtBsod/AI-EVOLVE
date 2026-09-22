@@ -67,6 +67,9 @@ class BasePlugin(BaseComponent):
         self.version = version
         self._dependencies = dependencies or []
         
+        # Aliases for backward compatibility
+        self.name = self.plugin_name
+        
         # Ссылки на ядра (устанавливаются GameCore при регистрации)
         self.game_core: Any = None
         self.database_core: Any = None
