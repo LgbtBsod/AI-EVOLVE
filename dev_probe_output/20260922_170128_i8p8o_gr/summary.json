@@ -1,0 +1,30 @@
+{
+ "status": "STOPPED EARLY",
+ "seed": 42,
+ "dev_map": true,
+ "duration_configured": 20.0,
+ "elapsed": 0.0,
+ "dmg_dealt": 0,
+ "dmg_taken": 0,
+ "kill_count": 0,
+ "hits": 0,
+ "dodges": 0,
+ "crits": 0,
+ "min_hp": null,
+ "min_hp_t": null,
+ "end_hp": null,
+ "pinned_reported": false,
+ "warning_count": 0,
+ "blank_frame_count": 0,
+ "sample_count": 0,
+ "event_counts": {
+  "enemy_killed": 0,
+  "anomaly_died": 0,
+  "anomaly_pinned": 0,
+  "anomaly_blank_frame": 0,
+  "warning": 0
+ },
+ "screenshot_reason_counts": {},
+ "visual_analysis": {},
+ "auto_hypothesis": null
+}

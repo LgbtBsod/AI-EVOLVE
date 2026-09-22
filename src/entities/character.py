@@ -28,6 +28,7 @@ from ..core.constants import EntityType
 from ..core.stats_loader import StatsLoader
 from ..core.validation import CombatStats
 from ..systems.combat.components import HealthComponent
+from ..systems.combat.combat_system import AttackType
 from ..ui.health_bar import HealthBar
 from .base_entity import BaseEntity
 
@@ -265,8 +266,8 @@ class Character(BaseEntity):
             self.health = self.max_health
             self.physical_damage = 20
             self.defense = 4
-            self.critical_chance = 15.0
-            self.dodge_chance = 10.0
+            self.critical_chance = 0.15  # 15% в формате 0-1
+            self.dodge_chance = 0.10     # 10% в формате 0-1
             self.speed = 7.0
             self.color = (0.2, 0.8, 0.2, 1)  # Зеленый
             self.size = 0.95
@@ -702,16 +703,32 @@ class Character(BaseEntity):
                 return base_value
             return effects.get_modified_stat(self.entity_id, stat_type, base_value)
 
+        # Получаем текущее здоровье из HealthComponent
+        current_health = self._health.current_health if hasattr(self, '_health') and self._health else self.max_health
+        max_health = self._health.max_health if hasattr(self, '_health') and self._health else self.max_health
+        
+        # Возвращаем полный CombatStats со всеми полями для совместимости с combat_system.py
         return CombatStats(
-            physical_damage=mod("physical_damage", self.physical_damage),
-            magical_damage=mod("magical_damage", self.magical_damage),
+            health=current_health,
+            max_health=max_health,
+            damage=mod("physical_damage", self.physical_damage),
             defense=mod("defense", self.defense),
-            attack_speed=self.attack_speed,
-            critical_chance=mod("critical_chance", self.critical_chance) / 100.0,
-            critical_damage=self.critical_damage / 100.0,
-            dodge_chance=mod("dodge_chance", self.dodge_chance) / 100.0,
-            magic_resistance=mod("magic_resistance", self.magic_resistance),
-            range=self.attack_range,
+            speed=self.speed,
+            # Добавляем недостающие поля для совместимости с формулами боя
+            physical_damage=mod("physical_damage", self.physical_damage),
+            magical_damage=mod("magical_damage", getattr(self, 'magical_damage', 5.0)),
+            attack_speed=mod("attack_speed", getattr(self, 'attack_speed', 1.0)),
+            critical_chance=mod("critical_chance", getattr(self, 'critical_chance', 0.05)),
+            critical_damage=mod("critical_damage", getattr(self, 'critical_damage', 1.5)),
+            dodge_chance=mod("dodge_chance", getattr(self, 'dodge_chance', 0.05)),
+            block_chance=mod("block_chance", getattr(self, 'block_chance', 0.05)),
+            magic_resistance=mod("magic_resistance", getattr(self, 'magic_resistance', 0.0)),
+            accuracy=mod("accuracy", getattr(self, 'accuracy', 0.8)),
+            initiative=mod("initiative", getattr(self, 'initiative', 10.0)),
+            range=getattr(self, 'attack_range', 2.0),
+            damage_modifier=mod("damage_modifier", getattr(self, 'damage_modifier', 1.0)),
+            defense_modifier=mod("defense_modifier", getattr(self, 'defense_modifier', 1.0)),
+            speed_modifier=mod("speed_modifier", getattr(self, 'speed_modifier', 1.0)),
         )
 
     def get_effective_speed(self) -> float:

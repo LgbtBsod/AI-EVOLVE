@@ -214,21 +214,23 @@ class CombatSystem:
             return DamageInfo(0, "none", attack_type)
 
         stats = attacker.get_combat_stats()
+        target_stats = target.get_combat_stats()
 
         # Расчет базового урона
-        base_damage = (
-            stats.physical_damage if attack_type in (AttackType.MELEE, AttackType.RANGED)
-            else stats.magical_damage
-        )
+        base_damage = stats.physical_damage * damage_multiplier
 
         # Проверка критического удара
-        is_critical = self._check_critical(stats.critical_chance)
-        if is_critical:
+        is_critical = False
+        crit_roll = self._rng.random() if self._rng else 0.5
+        if crit_roll < stats.critical_chance:
+            is_critical = True
             base_damage *= stats.critical_damage
 
         # Проверка уклонения
-        is_dodged = self._check_dodge(target.get_combat_stats().dodge_chance)
-        if is_dodged:
+        is_dodged = False
+        dodge_roll = self._rng.random() if self._rng else 0.5
+        if dodge_roll < target_stats.dodge_chance:
+            is_dodged = True
             damage_info = DamageInfo(
                 damage=0,
                 damage_type="physical",
@@ -240,8 +242,8 @@ class CombatSystem:
             self._notify_event(damage_info)
             return damage_info
 
-        # Применение модификаторов
-        final_damage = base_damage * stats.damage_modifier * damage_multiplier
+        # Применение модификаторов и защиты
+        final_damage = max(1.0, (base_damage - target_stats.defense))
 
         applied_effect = None
         if on_hit_effect and self._effect_system is not None:
@@ -253,6 +255,7 @@ class CombatSystem:
             damage_type="physical",
             attack_type=attack_type,
             is_critical=is_critical,
+            is_dodged=is_dodged,
             source=attacker.entity_id,
             target=target.entity_id,
             applied_effect=applied_effect,

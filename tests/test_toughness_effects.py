@@ -248,13 +248,13 @@ class TestToughnessBreak:
     
     def test_break_max_cap(self, toughness_component):
         """Ограничение максимума стойкости 20% от HP"""
-        # Пробиваем несколько раз
+        # Пробиваем несколько раз с быстрым выходом из BREAK
         for i in range(6):
             toughness_component.take_toughness_damage(200.0)
             assert toughness_component.state == StanceState.BROKEN
             
-            # Ждем выхода из BREAK
-            time.sleep(5.5)
+            # Быстрый выход из BREAK через установку таймера
+            toughness_component._break_start_time = time.perf_counter() - 6.0
             toughness_component._on_update(0.1)
         
         # Максимум = base + (500 * 0.2) = 100 + 100 = 200
@@ -266,8 +266,8 @@ class TestToughnessBreak:
         toughness_component.take_toughness_damage(100.0)
         assert toughness_component.current_toughness == 0.0
         
-        # Ждем выхода из BREAK
-        time.sleep(2.5)
+        # Быстрый выход из BREAK через установку таймера
+        toughness_component._break_start_time = time.perf_counter() - 6.0
         toughness_component._on_update(0.1)
         
         assert toughness_component.current_toughness == toughness_component.max_toughness
