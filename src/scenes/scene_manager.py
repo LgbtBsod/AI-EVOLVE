@@ -93,6 +93,9 @@ class SceneManager(BaseComponent):
         # Архитектурные компоненты
         self.state_manager: StateManager | None = None
         
+        # Состояние системы (инициализируется до использования)
+        self.system_state = LifecycleState.UNINITIALIZED
+        
         # Сцены и переходы
         self.scenes: dict[str, SceneData] = {}
         self.scene_instances: dict[str, Scene] = {}

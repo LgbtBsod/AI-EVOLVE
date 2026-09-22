@@ -5,19 +5,21 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Build artifacts
-build/
-dist/
-*.egg-info/
-
-# Virtual environments
-venv/
-.venv/
-env/
-.ENV/
+# Development output directories
+dev_probe_output/
 
 # Logs
 *.log
+
+# Environment files
+.env
+.env.local
+.env.*
+
+# Coverage reports
+.coverage
+coverage/
+htmlcov/
 
 # IDE
 .vscode/
@@ -29,10 +31,10 @@ env/
 .DS_Store
 Thumbs.db
 
-# Coverage
-.coverage
-coverage/
-htmlcov/
+# Build artifacts
+dist/
+build/
+*.egg-info/
 
 # Testing
 .pytest_cache/
