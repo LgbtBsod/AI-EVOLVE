@@ -140,7 +140,8 @@ class GameLoop:
         if self.plugin_manager:
             quest_plugin = self.plugin_manager.get_plugin("QuestPlugin")
             if quest_plugin:
-                quest_plugin.start_quest("intro_quest")
+                # Player entity ID 1 is assumed for the first player
+                quest_plugin.start_quest(entity_id=1, quest_id="intro_quest")
 
     def _load_game(self, slot: int) -> None:
         """Load game from a save slot."""
@@ -196,7 +197,7 @@ class GameLoop:
             self.last_update_time = time.time()
             self.logger.info("Game resumed.")
 
-    def start_dialogue(self, dialogue_id: str) -> bool:
+    def start_dialogue(self, dialogue_id: str, speaker_id: int = 1) -> bool:
         """Enter dialogue state."""
         if self.state != GameState.PLAYING:
             return False
@@ -204,7 +205,7 @@ class GameLoop:
         if self.plugin_manager:
             dialogue_plugin = self.plugin_manager.get_plugin("DialoguePlugin")
             if dialogue_plugin:
-                if dialogue_plugin.start_dialogue(dialogue_id):
+                if dialogue_plugin.start_dialogue(entity_id=speaker_id, dialogue_id=dialogue_id):
                     old_state = self.state
                     self.state = GameState.IN_DIALOGUE
                     self.on_state_changed.send(self, old_state=old_state, new_state=self.state)
@@ -225,7 +226,9 @@ class GameLoop:
             return False
             
         if self.plugin_manager:
-            combat_plugin = self.plugin_manager.get_plugin("CombatPlugin")
+            # Try both naming conventions
+            combat_plugin = self.plugin_manager.get_plugin("CombatPlugin") or \
+                           self.plugin_manager.get_plugin("combat")
             if combat_plugin:
                 # Simplified combat start
                 old_state = self.state

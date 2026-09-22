@@ -1,9 +1,9 @@
 ```
 # Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
 .Python
 build/
 develop-eggs/
@@ -20,25 +20,20 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
-
-# Virtual environments
-venv/
-env/
-ENV/
-.venv/
-.env/
 
 # Testing
-.coverage
-coverage/
-htmlcov/
-.noserc
-.tox/
-.coverage*
-.cache
 .pytest_cache/
-.hypothesis/
+.coverage
+htmlcov/
+.coverage.*
+
+# Environment
+.env
+.env.local
+.env.*
+.venv/
+venv/
+ENV/
 
 # IDE
 .vscode/
@@ -50,15 +45,4 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
-
-# Logs
-*.log
-
-# Environment variables
-.env
-.env.local
-*.env.*
-
-# MyPy
-.mypy_cache/
 ```

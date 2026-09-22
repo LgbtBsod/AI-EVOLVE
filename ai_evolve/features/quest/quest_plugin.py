@@ -331,6 +331,20 @@ class QuestPlugin(PluginBase):
             if q.get("state") == QuestState.ACTIVE.value
         ]
     
+    def start_quest(self, entity_id: int, quest_id: int) -> bool:
+        """Начать квест (принять его)."""
+        # Ищем шаблон квеста
+        quest_template = self._quest_templates.get(quest_id)
+        if not quest_template:
+            self.logger.error(f"Quest template {quest_id} not found")
+            return False
+        
+        return self.add_quest(entity_id, quest_template)
+    
+    def accept_quest(self, entity_id: int, quest_id: int) -> bool:
+        """Принять квест (алиас для start_quest)."""
+        return self.start_quest(entity_id, quest_id)
+    
     def abandon_quest(self, entity_id: int, quest_id: int) -> bool:
         """Отказаться от квеста."""
         if entity_id in self._quests and quest_id in self._quests[entity_id]:

@@ -92,6 +92,23 @@ class DatabaseCore:
         Base.metadata.create_all(self._engine)
 
     @contextmanager
+    def session_scope(self):
+        """
+        Context manager for database sessions with automatic commit/rollback.
+        Alternative name for get_session for compatibility.
+        Ensures proper cleanup and rollback on errors.
+        """
+        session = self._session_factory()
+        try:
+            yield session
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            raise e
+        finally:
+            session.close()
+
+    @contextmanager
     def get_session(self):
         """
         Context manager for database sessions.

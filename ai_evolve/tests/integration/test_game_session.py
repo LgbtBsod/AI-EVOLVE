@@ -29,6 +29,17 @@ class TestFullGameSession:
         
         success = self.game_loop.initialize(db_url="sqlite:///:memory:")
         
+        # Register intro quest template
+        quest_plugin = self.game_loop.plugin_manager.get_plugin("QuestPlugin")
+        if quest_plugin:
+            quest_plugin.register_quest_template({
+                "id": "intro_quest",
+                "title": "Introduction",
+                "description": "Learn the basics",
+                "objectives": [],
+                "rewards": {"xp": 100, "gold": 50}
+            })
+        
         assert success is True
         assert self.game_loop.state == GameState.MENU
         assert self.game_loop.plugin_manager is not None
@@ -37,6 +48,17 @@ class TestFullGameSession:
     def test_new_game_session(self):
         """Test starting a new game session."""
         self.game_loop.initialize(db_url="sqlite:///:memory:")
+        
+        # Register intro quest template
+        quest_plugin = self.game_loop.plugin_manager.get_plugin("QuestPlugin")
+        if quest_plugin:
+            quest_plugin.register_quest_template({
+                "id": "intro_quest",
+                "title": "Introduction",
+                "description": "Learn the basics",
+                "objectives": [],
+                "rewards": {"xp": 100, "gold": 50}
+            })
         
         success = self.game_loop.start_session()
         
@@ -47,6 +69,18 @@ class TestFullGameSession:
     def test_quest_flow(self):
         """Test quest initiation and completion flow."""
         self.game_loop.initialize(db_url="sqlite:///:memory:")
+        
+        # Register intro quest template
+        quest_plugin = self.game_loop.plugin_manager.get_plugin("QuestPlugin")
+        if quest_plugin:
+            quest_plugin.register_quest_template({
+                "id": "intro_quest",
+                "title": "Introduction",
+                "description": "Learn the basics",
+                "objectives": [],
+                "rewards": {"xp": 100, "gold": 50}
+            })
+        
         self.game_loop.start_session()
         
         # Simulate quest start (via QuestPlugin internally)
@@ -62,6 +96,18 @@ class TestFullGameSession:
     def test_combat_flow(self):
         """Test entering and exiting combat."""
         self.game_loop.initialize(db_url="sqlite:///:memory:")
+        
+        # Register intro quest template
+        quest_plugin = self.game_loop.plugin_manager.get_plugin("QuestPlugin")
+        if quest_plugin:
+            quest_plugin.register_quest_template({
+                "id": "intro_quest",
+                "title": "Introduction",
+                "description": "Learn the basics",
+                "objectives": [],
+                "rewards": {"xp": 100, "gold": 50}
+            })
+        
         self.game_loop.start_session()
         
         # Start combat
@@ -81,6 +127,18 @@ class TestFullGameSession:
     def test_dialogue_flow(self):
         """Test entering and exiting dialogue."""
         self.game_loop.initialize(db_url="sqlite:///:memory:")
+        
+        # Register intro quest template
+        quest_plugin = self.game_loop.plugin_manager.get_plugin("QuestPlugin")
+        if quest_plugin:
+            quest_plugin.register_quest_template({
+                "id": "intro_quest",
+                "title": "Introduction",
+                "description": "Learn the basics",
+                "objectives": [],
+                "rewards": {"xp": 100, "gold": 50}
+            })
+        
         self.game_loop.start_session()
         
         # Load a test dialogue manually since we don't have files
@@ -130,6 +188,18 @@ class TestFullGameSession:
     def test_save_load_flow(self):
         """Test saving and loading game state."""
         self.game_loop.initialize(db_url="sqlite:///:memory:")
+        
+        # Register intro quest template
+        quest_plugin = self.game_loop.plugin_manager.get_plugin("QuestPlugin")
+        if quest_plugin:
+            quest_plugin.register_quest_template({
+                "id": "intro_quest",
+                "title": "Introduction",
+                "description": "Learn the basics",
+                "objectives": [],
+                "rewards": {"xp": 100, "gold": 50}
+            })
+        
         self.game_loop.start_session()
         
         # Run a bit to change state
@@ -146,6 +216,18 @@ class TestFullGameSession:
     def test_pause_resume(self):
         """Test pausing and resuming the game."""
         self.game_loop.initialize(db_url="sqlite:///:memory:")
+        
+        # Register intro quest template
+        quest_plugin = self.game_loop.plugin_manager.get_plugin("QuestPlugin")
+        if quest_plugin:
+            quest_plugin.register_quest_template({
+                "id": "intro_quest",
+                "title": "Introduction",
+                "description": "Learn the basics",
+                "objectives": [],
+                "rewards": {"xp": 100, "gold": 50}
+            })
+        
         self.game_loop.start_session()
         
         # Pause
@@ -164,6 +246,17 @@ class TestFullGameSession:
         init_success = self.game_loop.initialize(db_url="sqlite:///:memory:")
         assert init_success is True
         assert self.game_loop.state == GameState.MENU
+        
+        # Register intro quest template
+        quest_plugin = self.game_loop.plugin_manager.get_plugin("QuestPlugin")
+        if quest_plugin:
+            quest_plugin.register_quest_template({
+                "id": "intro_quest",
+                "title": "Introduction",
+                "description": "Learn the basics",
+                "objectives": [],
+                "rewards": {"xp": 100, "gold": 50}
+            })
         
         # 2. Start Session (New Game)
         start_success = self.game_loop.start_session()
@@ -237,9 +330,22 @@ class TestFullGameSession:
         def on_state_change(sender, old_state, new_state):
             events_received.append((old_state, new_state))
         
-        EventSystem.connect("game_state_changed", on_state_change)
-        
+        # Register intro quest template first
         self.game_loop.initialize(db_url="sqlite:///:memory:")
+        quest_plugin = self.game_loop.plugin_manager.get_plugin("QuestPlugin") or \
+                      self.game_loop.plugin_manager.get_plugin("quest")
+        if quest_plugin:
+            quest_plugin.register_quest_template({
+                "id": "intro_quest",
+                "title": "Introduction",
+                "description": "Learn the basics",
+                "objectives": [],
+                "rewards": {"xp": 100, "gold": 50}
+            })
+        
+        # Subscribe to event using the instance method - use signal directly
+        self.game_loop.on_state_changed.connect(on_state_change)
+        
         self.game_loop.start_session()
         self.game_loop.pause()
         self.game_loop.resume()
@@ -249,11 +355,23 @@ class TestFullGameSession:
         # Verify multiple state changes were recorded
         assert len(events_received) > 0
         
-        EventSystem.disconnect("game_state_changed", on_state_change)
+        self.game_loop.on_state_changed.disconnect(on_state_change)
 
     def test_error_handling_bad_dialogue(self):
         """Test handling of non-existent dialogue."""
         self.game_loop.initialize(db_url="sqlite:///:memory:")
+        
+        # Register intro quest template
+        quest_plugin = self.game_loop.plugin_manager.get_plugin("QuestPlugin")
+        if quest_plugin:
+            quest_plugin.register_quest_template({
+                "id": "intro_quest",
+                "title": "Introduction",
+                "description": "Learn the basics",
+                "objectives": [],
+                "rewards": {"xp": 100, "gold": 50}
+            })
+        
         self.game_loop.start_session()
         
         # Try to start non-existent dialogue
@@ -265,6 +383,18 @@ class TestFullGameSession:
     def test_error_handling_combat_while_in_dialogue(self):
         """Test that combat cannot start during dialogue."""
         self.game_loop.initialize(db_url="sqlite:///:memory:")
+        
+        # Register intro quest template
+        quest_plugin = self.game_loop.plugin_manager.get_plugin("QuestPlugin")
+        if quest_plugin:
+            quest_plugin.register_quest_template({
+                "id": "intro_quest",
+                "title": "Introduction",
+                "description": "Learn the basics",
+                "objectives": [],
+                "rewards": {"xp": 100, "gold": 50}
+            })
+        
         self.game_loop.start_session()
         
         # Mock dialogue state

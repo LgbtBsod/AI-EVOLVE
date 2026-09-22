@@ -31,10 +31,11 @@ class PluginManager:
         for name in self._plugin_order:
             plugin = self.plugins[name]
             if not plugin.is_initialized:
-                success = plugin.on_init(None)  # Pass game_core as None for now
-                if not success:
+                try:
+                    plugin.initialize(None)  # Use initialize method which sets is_initialized
+                except Exception as e:
+                    self.plugins[name].logger.error(f"Failed to initialize: {e}")
                     return False
-                plugin.is_initialized = True
         return True
     
     def update_all(self, delta_time: float):
@@ -47,7 +48,9 @@ class PluginManager:
     def shutdown_all(self):
         """Shutdown all plugins."""
         for name in reversed(self._plugin_order):
-            self.plugins[name].shutdown()
+            plugin = self.plugins[name]
+            if plugin.is_initialized:
+                plugin.shutdown()
     
     def get_plugin(self, name: str) -> GamePlugin:
         """Get a plugin by name."""
@@ -59,3 +62,32 @@ class PluginManager:
             self.plugins[name].shutdown()
             del self.plugins[name]
             self._plugin_order.remove(name)
+    
+    def get_state(self) -> dict:
+        """Get the combined state of all plugins for saving."""
+        state = {}
+        for name in self._plugin_order:
+            plugin = self.plugins[name]
+            if hasattr(plugin, 'get_state') and callable(getattr(plugin, 'get_state')):
+                try:
+                    state[name] = plugin.get_state()
+                except Exception as e:
+                    plugin.logger.warning(f"Failed to get state from {name}: {e}")
+            else:
+                # Store basic initialization state if no get_state method
+                state[name] = {"initialized": plugin.is_initialized}
+        return state
+    
+    def set_state(self, state: dict) -> bool:
+        """Restore state to all plugins from a save."""
+        success = True
+        for name, plugin_state in state.items():
+            if name in self.plugins:
+                plugin = self.plugins[name]
+                if hasattr(plugin, 'set_state') and callable(getattr(plugin, 'set_state')):
+                    try:
+                        plugin.set_state(plugin_state)
+                    except Exception as e:
+                        plugin.logger.error(f"Failed to set state for {name}: {e}")
+                        success = False
+        return success

@@ -21,7 +21,7 @@ class DialogueNode:
     """Узел диалога."""
     id: str
     text: str
-    speaker_id: Optional[int] = None
+    speaker: Optional[int] = None  # Changed from speaker_id to match usage
     choices: List[dict] = field(default_factory=list)  # [{text, next_node_id, condition}]
     on_enter: Optional[str] = None  # event to trigger
     on_exit: Optional[str] = None  # event to trigger
@@ -142,6 +142,11 @@ class DialoguePlugin(PluginBase):
         self._dialogues[dialogue_id] = dialogue
         self.logger.debug(f"Registered dialogue: {dialogue_id}")
     
+    @property
+    def dialogues(self) -> Dict[str, Dialogue]:
+        """Публичный доступ к диалогам (для тестов)."""
+        return self._dialogues
+    
     def start_dialogue(self, entity_id: int, dialogue_id: str, speaker_id: Optional[int] = None) -> bool:
         """Начать диалог."""
         if dialogue_id not in self._dialogues:
@@ -205,7 +210,7 @@ class DialoguePlugin(PluginBase):
             "entity_id": entity_id,
             "node_id": node.id,
             "text": node.text,
-            "speaker_id": node.speaker_id,
+            "speaker_id": node.speaker,  # Changed from speaker_id to speaker
             "choices": available_choices
         })
         
@@ -215,6 +220,17 @@ class DialoguePlugin(PluginBase):
     
     def select_choice(self, entity_id: int, choice_index: int) -> bool:
         """Выбрать вариант ответа."""
+        return self._select_choice_internal(entity_id, choice_index)
+    
+    def make_choice(self, choice_index: int) -> bool:
+        """Alias for select_choice for backward compatibility (tests)."""
+        # Use the last active dialogue entity
+        for entity_id, state in self._active_dialogues.items():
+            if state.get("state") == DialogueState.WAITING_CHOICE:
+                return self._select_choice_internal(entity_id, choice_index)
+        return False
+    
+    def _select_choice_internal(self, entity_id: int, choice_index: int) -> bool:
         dialogue_state = self._active_dialogues.get(entity_id)
         if not dialogue_state:
             return False
