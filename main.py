@@ -26,6 +26,7 @@ from panda3d.core import loadPrcFileData  # noqa: E402
 
 from src.core.rng_manager import get_default_rng  # noqa: E402
 from src.systems.combat.combat_system import CombatSystem  # noqa: E402
+from src.systems.effects.effect_system import EffectSystem, apply_tick_to_entity  # noqa: E402
 
 logging.basicConfig(
     level=logging.INFO,
@@ -52,10 +53,21 @@ class Game(ShowBase):
         self.showbase = self
         self.disableMouse()
 
+        # Система эффектов (баффы/дебаффы/DoT/HoT) - подключена к боевой
+        # системе ниже. BaseComponent.update() no-op, пока компонент не в
+        # состоянии RUNNING - initialize() доводит только до READY, отсюда
+        # обязательный .start().
+        self.effect_system = EffectSystem()
+        self.effect_system.initialize()
+        self.effect_system.start()
+        self.effect_system.on_effect_tick = self._on_effect_tick
+
         # Единая боевая система: Character/EnhancedEnemy.attack() дергают
         # game.combat_system.execute_attack(...) вместо дублирования формул
-        # крита/уворота у каждой сущности по отдельности.
-        self.combat_system = CombatSystem(rng=get_default_rng())
+        # крита/уворота у каждой сущности по отдельности. effect_system
+        # передана внутрь, чтобы execute_attack(on_hit_effect=...) мог
+        # накладывать эффекты (яд/замедление) на удачном попадании.
+        self.combat_system = CombatSystem(rng=get_default_rng(), effect_system=self.effect_system)
 
         self._keys = {
             "1": False, "2": False, "3": False,
@@ -85,8 +97,31 @@ class Game(ShowBase):
     def _set_key(self, key, pressed):
         self._keys[key] = pressed
 
+    def _find_entity_by_id(self, entity_id):
+        """Ищет сущность по entity_id среди игрока/врагов сцены - EffectSystem
+        хранит только entity_id (строку), не ссылку на объект."""
+        scene = getattr(self, "scene", None)
+        if not scene:
+            return None
+        if scene.player is not None and scene.player.entity_id == entity_id:
+            return scene.player
+        for enemy in scene.enemies:
+            if enemy.entity_id == entity_id:
+                return enemy
+        return None
+
+    def _on_effect_tick(self, entity_id, active_effect):
+        """Резолвит entity_id в реальную сущность и делегирует применение
+        тика apply_tick_to_entity() (см. effect_system.py) - EffectSystem сам
+        по себе только знает, КОГДА сработал тик, не КАК его применить к
+        конкретному игровому объекту."""
+        entity = self._find_entity_by_id(entity_id)
+        if entity is not None:
+            apply_tick_to_entity(entity, active_effect)
+
     def _game_loop(self, task):
         dt = globalClock.getDt()  # noqa: F821 (injected by ShowBase)
+        self.effect_system.update(dt)
         self.scene.handle_input(self._keys)
         self.scene.update(dt)
         return task.cont

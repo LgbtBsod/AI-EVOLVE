@@ -106,6 +106,7 @@ class DamageInfo:
     toughness_type: str = "physical"
     source: str = ""
     target: str = ""
+    applied_effect: str | None = None
 
 
 @dataclass(slots=True)
@@ -136,22 +137,25 @@ class CombatSystem:
     __slots__ = (
         '_attribute_system',
         '_damage_formulas',
+        '_effect_system',
         '_event_handlers',
         '_rng',
         '_sessions'
     )
-    
+
     def __init__(
         self,
         attribute_system: AttributeSystem | None = None,
         rng=None,
+        effect_system=None,
     ) -> None:
         self._sessions: dict[str, CombatSession] = {}
         self._attribute_system = attribute_system
         self._damage_formulas: dict[str, Callable[..., float]] = {}
         self._event_handlers: list[Callable[[DamageInfo], None]] = []
         self._rng = rng  # RNGManager (см. src.core.rng_manager.get_default_rng)
-        
+        self._effect_system = effect_system  # src.systems.effects.effect_system.EffectSystem, опционально
+
         self._setup_default_formulas()
     
     def _setup_default_formulas(self) -> None:
@@ -191,25 +195,37 @@ class CombatSystem:
         self,
         attacker: ICombatParticipant,
         target: ICombatParticipant,
-        attack_type: AttackType = AttackType.MELEE
+        attack_type: AttackType = AttackType.MELEE,
+        damage_multiplier: float = 1.0,
+        on_hit_effect: str | None = None,
     ) -> DamageInfo:
-        """Выполнение атаки"""
+        """Выполнение атаки.
+
+        damage_multiplier - множитель для конкретной атаки/скила поверх
+        обычных характеристик атакующего (например скрытная атака разбойника
+        х1.5) - раньше такие скилы просто обходили CombatSystem и считали
+        урон вручную через target.take_damage() напрямую.
+
+        on_hit_effect - id шаблона EffectSystem (например "poison_debuff"),
+        применяемый к цели при удачном (не уклонившемся) попадании - это и
+        есть подключение системы эффектов к боевой системе: без effect_system,
+        переданной в конструктор, параметр просто игнорируется."""
         if not attacker.is_alive() or not target.is_alive():
             return DamageInfo(0, "none", attack_type)
-        
+
         stats = attacker.get_combat_stats()
-        
+
         # Расчет базового урона
         base_damage = (
             stats.physical_damage if attack_type in (AttackType.MELEE, AttackType.RANGED)
             else stats.magical_damage
         )
-        
+
         # Проверка критического удара
         is_critical = self._check_critical(stats.critical_chance)
         if is_critical:
             base_damage *= stats.critical_damage
-        
+
         # Проверка уклонения
         is_dodged = self._check_dodge(target.get_combat_stats().dodge_chance)
         if is_dodged:
@@ -223,19 +239,25 @@ class CombatSystem:
             )
             self._notify_event(damage_info)
             return damage_info
-        
+
         # Применение модификаторов
-        final_damage = base_damage * stats.damage_modifier
-        
+        final_damage = base_damage * stats.damage_modifier * damage_multiplier
+
+        applied_effect = None
+        if on_hit_effect and self._effect_system is not None:
+            if self._effect_system.apply_effect(target.entity_id, on_hit_effect, source=attacker.entity_id):
+                applied_effect = on_hit_effect
+
         damage_info = DamageInfo(
             damage=final_damage,
             damage_type="physical",
             attack_type=attack_type,
             is_critical=is_critical,
             source=attacker.entity_id,
-            target=target.entity_id
+            target=target.entity_id,
+            applied_effect=applied_effect,
         )
-        
+
         # Нанесение урона
         target.take_damage(final_damage, "physical")
         

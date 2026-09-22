@@ -35,8 +35,10 @@ from panda3d.core import NodePath  # noqa: E402
 
 from src.core.rng_manager import get_default_rng  # noqa: E402
 from src.systems.combat.combat_system import CombatSystem  # noqa: E402
+from src.systems.effects.effect_system import EffectSystem, apply_tick_to_entity  # noqa: E402
 from src.entities.character import Character  # noqa: E402
 from src.entities.enemy import EnhancedEnemy  # noqa: E402
+from src.scenes.main_game_scene import EnhancedGameScene  # noqa: E402
 
 passed = 0
 failed = []
@@ -73,12 +75,22 @@ class FakeTaskMgr:
         pass
 
 
-def make_game(rng=None):
-    return SimpleNamespace(
+def make_game(rng=None, with_effects=False):
+    effect_system = None
+    if with_effects:
+        # initialize() only reaches READY - BaseComponent.update() is a
+        # no-op unless the state is RUNNING, so start() is required too or
+        # effect ticking/expiration silently never happens (see main.py).
+        effect_system = EffectSystem()
+        effect_system.initialize()
+        effect_system.start()
+    game = SimpleNamespace(
         render=NodePath("fake_render"),
         showbase=SimpleNamespace(taskMgr=FakeTaskMgr()),
-        combat_system=CombatSystem(rng=rng if rng is not None else get_default_rng()),
+        combat_system=CombatSystem(rng=rng if rng is not None else get_default_rng(), effect_system=effect_system),
+        effect_system=effect_system,
     )
+    return game
 
 
 def make_player(game, **kwargs):
@@ -283,6 +295,147 @@ def test_exit_and_hint_target_prefer_nearest():
     check("_select_best_hint_target() picks the nearest of several hints", hint == (1, 1))
 
 
+# ---------------------------------------------------------------------------
+# Leveling (Character.add_experience / EnhancedEnemy.apply_level_bonus)
+# ---------------------------------------------------------------------------
+
+def test_character_levels_up_from_experience():
+    game = make_game()
+    player = make_player(game)
+    check("starts at level 1 with 0 XP", player.level == 1 and player.experience == 0)
+
+    threshold = player.experience_to_next_level
+    max_hp_before = player.max_health
+    levels_gained = player.add_experience(threshold)
+    check("add_experience() crossing the threshold returns 1 level gained", levels_gained == 1)
+    check("level actually incremented", player.level == 2)
+    check("leftover experience is 0, not silently dropped or duplicated",
+          player.experience == 0)
+    check("stats actually grow on level up (max_health increased)", player.max_health > max_hp_before)
+    check("health is topped up to the new max on level up", player.health == player.max_health)
+
+    # Enough XP to cross two thresholds in one call - while loop, not a single if.
+    player2 = make_player(game)
+    t1 = player2.experience_to_next_level
+    levels_gained2 = player2.add_experience(t1 * 3)
+    check("a big XP dump can cross multiple level thresholds in one call", levels_gained2 >= 2)
+
+
+def test_enemy_level_bonus_scales_stats():
+    game = make_game()
+    enemy = make_enemy(game, x=1.0, enemy_type="basic")
+    base_level, base_hp, base_dmg, base_reward = enemy.level, enemy.max_health, enemy.physical_damage, enemy.experience_reward
+
+    enemy.apply_level_bonus(0)
+    check("apply_level_bonus(0) is a no-op", enemy.level == base_level and enemy.max_health == base_hp)
+
+    enemy.apply_level_bonus(3)
+    check("apply_level_bonus() raises level", enemy.level == base_level + 3)
+    check("apply_level_bonus() raises max_health", enemy.max_health > base_hp)
+    check("apply_level_bonus() heals to the new (higher) max_health", enemy.health == enemy.max_health)
+    check("apply_level_bonus() raises physical_damage", enemy.physical_damage > base_dmg)
+    check("apply_level_bonus() raises the XP a kill is worth", enemy.experience_reward > base_reward)
+
+
+# ---------------------------------------------------------------------------
+# Effect system <-> combat system integration
+# ---------------------------------------------------------------------------
+
+def test_buff_modifies_combat_stats():
+    game = make_game(with_effects=True)
+    player = make_player(game, physical_damage=20)
+    base_damage = player.get_combat_stats().physical_damage
+    check("no active effects -> get_combat_stats() returns the raw stat", base_damage == 20)
+
+    applied = game.effect_system.apply_effect(player.entity_id, "strength_buff", source="test")
+    check("apply_effect() for a known template succeeds", applied is not None)
+
+    buffed_damage = player.get_combat_stats().physical_damage
+    check("strength_buff (physical_damage x1.2) is reflected in get_combat_stats()",
+          abs(buffed_damage - 24.0) < 0.01)
+
+
+def test_effect_tick_damage_respects_death_latch():
+    # apply_tick_to_entity() must go through take_damage(), not a raw
+    # entity.health -= value - otherwise it's the exact same class of bug as
+    # the regen-oscillation death bug fixed earlier in this project's history
+    # (a mutation that bypasses is_defeated/state="dead").
+    game = make_game()
+    enemy = make_enemy(game, x=1.0, enemy_type="basic")
+    enemy.defense = 0
+    enemy.health = 3  # about to die from a single -5 poison tick
+
+    effect_system = EffectSystem()
+    effect_system.initialize()
+    poison_id = effect_system.apply_effect(enemy.entity_id, "poison_debuff", source="test")
+    check("poison_debuff applies successfully", poison_id is not None)
+    active = effect_system.get_entity_effects(enemy.entity_id)[0]
+
+    apply_tick_to_entity(enemy, active)
+    check("a lethal poison tick actually kills (via take_damage's own death handling)",
+          enemy.health == 0 and not enemy.is_alive())
+
+    enemy.health = enemy.max_health  # simulate a stray unrelated heal/regen after death
+    check("enemy stays dead after an external health change post-mortem (state latch holds)",
+          not enemy.is_alive())
+
+
+def test_effect_tick_heal_clamps_to_max_health():
+    game = make_game()
+    player = make_player(game)
+    player.health = player.max_health - 2
+
+    effect_system = EffectSystem()
+    effect_system.initialize()
+    effect_system.apply_effect(player.entity_id, "heal_over_time", source="test")
+    active = effect_system.get_entity_effects(player.entity_id)[0]
+
+    apply_tick_to_entity(player, active)  # heal_over_time is +3/tick, only 2 missing
+    check("a heal tick clamps at max_health instead of overshooting", player.health == player.max_health)
+
+
+def test_stealth_attack_applies_poison_via_combat_system():
+    # Previously _stealth_attack computed damage by hand and called
+    # target.take_damage() directly, bypassing CombatSystem entirely (no
+    # crit/dodge, and no way to hook an effect on hit). FakeRNG([1.0, 1.0])
+    # forces no-crit/no-dodge so the x1.5 multiplier is checked exactly.
+    game = make_game(rng=FakeRNG([1.0, 1.0]), with_effects=True)
+    player = make_player(game, character_class="rogue", physical_damage=20, defense=0, stamina=100)
+    enemy = make_enemy(game, x=1.0, enemy_type="basic")
+    enemy.defense = 0
+    hp_before = enemy.health
+
+    player._stealth_attack(enemy)
+    check("stealth attack applies the x1.5 damage_multiplier via CombatSystem",
+          enemy.health == hp_before - 20 * 1.5)
+    check("stealth attack applies poison_debuff to the target on hit",
+          game.effect_system.has_effect(enemy.entity_id, "poison_debuff"))
+
+
+def test_time_based_enemy_scaling_applies_on_spawn():
+    # EnhancedGameScene.__init__/_spawn_enemies never touch Panda3D beyond
+    # attachNewNode() on a bare NodePath (confirmed by reading the file - no
+    # camera/window dependency), so the wiring between "time elapsed" and
+    # "newly spawned enemies get apply_level_bonus()" can be checked exactly,
+    # deterministically, instead of hoping a real dev_probe.py run happens to
+    # spawn a replacement enemy after the right number of real seconds.
+    game = make_game()
+    scene = EnhancedGameScene(game, dev_mode=True)
+    check("no bonus at t=0", scene._current_enemy_level_bonus() == 0)
+
+    scene.world_start_time -= scene.enemy_level_up_interval * 2.3  # simulate 2.3 intervals elapsed
+    check("bonus grows with elapsed time (floor division by the interval)",
+          scene._current_enemy_level_bonus() == 2)
+
+    scene.max_enemies = 10
+    scene.last_enemy_spawn = 0
+    scene._spawn_enemies(dt=0.1)
+    check("a newly spawned enemy actually exists after _spawn_enemies()", len(scene.enemies) == 1)
+    spawned = scene.enemies[0]
+    check("a newly spawned enemy is scaled to the current time-based bonus level",
+          spawned.level >= 1 + 2)  # base level (>=1) + the 2 bonus levels just simulated
+
+
 TESTS = [
     test_combat_and_death_latch,
     test_damage_floor,
@@ -293,6 +446,13 @@ TESTS = [
     test_find_nearest_enemy,
     test_retreat_at_low_hp,
     test_exit_and_hint_target_prefer_nearest,
+    test_character_levels_up_from_experience,
+    test_enemy_level_bonus_scales_stats,
+    test_buff_modifies_combat_stats,
+    test_effect_tick_damage_respects_death_latch,
+    test_effect_tick_heal_clamps_to_max_health,
+    test_stealth_attack_applies_poison_via_combat_system,
+    test_time_based_enemy_scaling_applies_on_spawn,
 ]
 
 for test_fn in TESTS:

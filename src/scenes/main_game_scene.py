@@ -32,6 +32,14 @@ class EnhancedGameScene:
         # Время
         self.last_enemy_spawn = 0
         self.enemy_spawn_interval = 1.5 if dev_mode else 3.0  # Интервал между появлениями врагов
+
+        # Сложность врагов растёт со временем автоматически (не только через
+        # _advance_to_next_level по действию игрока) - раньше уровень
+        # EnhancedEnemy был фиксирован типом (basic=1/strong=3/elite=5/boss=10)
+        # и никогда не менялся: враг, заспавненный на 10-й минуте партии,
+        # ничем не отличался от заспавненного в первую секунду.
+        self.world_start_time = time.time()
+        self.enemy_level_up_interval = 10.0 if dev_mode else 30.0  # секунд на +1 уровень врагам
         
         # Система создания объектов игроком
         self.player_created_objects = []
@@ -358,10 +366,19 @@ class EnhancedGameScene:
         self.hud = EnhancedHUD(self.game)
         self.hud.create_hud()
         
+    def _current_enemy_level_bonus(self) -> int:
+        """Сколько дополнительных уровней получает враг, спавнящийся ПРЯМО
+        СЕЙЧАС - растёт автоматически с течением времени партии (см.
+        world_start_time/enemy_level_up_interval в __init__), независимо от
+        current_level (который меняется только через _advance_to_next_level
+        по действию игрока - маяк выхода)."""
+        elapsed = time.time() - self.world_start_time
+        return int(elapsed / self.enemy_level_up_interval)
+
     def _spawn_initial_enemies(self):
         """Создание начальных врагов"""
         from src.entities.enemy import EnhancedEnemy
-        
+
         # Создаем несколько врагов на удалённых позициях по краям арены,
         # чтобы игрок сначала двигался, а не сразу вступал в бой.
         enemy_positions = [
@@ -370,11 +387,13 @@ class EnhancedGameScene:
             (self.world_size * 0.3, -self.world_size * 0.3, 0.5),
             (-self.world_size * 0.3, -self.world_size * 0.3, 0.5)
         ]
-        
+
+        level_bonus = self._current_enemy_level_bonus()
         for i, (x, y, z) in enumerate(enemy_positions):
             enemy_type = "basic" if i < 2 else "strong"
             enemy = EnhancedEnemy(self.game, x, y, z, enemy_type)
             enemy.create_enemy()
+            enemy.apply_level_bonus(level_bonus)
             self.enemies.append(enemy)
             
     def _setup_camera(self):
@@ -509,7 +528,11 @@ class EnhancedGameScene:
                 if enemy.health_bar:
                     enemy.health_bar.update(enemy.health / enemy.max_health)
             else:
-                # Удаляем мертвых врагов
+                # Удаляем мертвых врагов и начисляем опыт за победу.
+                # enemy.experience_reward уже существовал у EnhancedEnemy, но
+                # нигде не читался - убийства не давали опыта вообще.
+                if self.player:
+                    self.player.add_experience(getattr(enemy, "experience_reward", 0))
                 enemy.destroy()
                 self.enemies.remove(enemy)
                 if enemy in self.player_created_objects:
@@ -600,8 +623,9 @@ class EnhancedGameScene:
             # Создаем врага
             enemy = EnhancedEnemy(self.game, x, y, 0, enemy_type)
             enemy.create_enemy()
+            enemy.apply_level_bonus(self._current_enemy_level_bonus())
             self.enemies.append(enemy)
-            
+
             self.last_enemy_spawn = current_time
 
     def _update_exit_hints(self, dt):
@@ -933,6 +957,7 @@ class EnhancedGameScene:
         
         enemy = EnhancedEnemy(self.game, x, y, z, enemy_type)
         enemy.create_enemy()
+        enemy.apply_level_bonus(self._current_enemy_level_bonus())
         self.enemies.append(enemy)
         self.player_created_objects.append(enemy)
     
@@ -974,17 +999,26 @@ class EnhancedGameScene:
         self._add_chest_logic(chest, x, y, z)
     
     def _add_trap_logic(self, trap, x, y, z):
-        """Добавление логики ловушки"""
+        """Добавление логики ловушки: шанс обезвредить вместо срабатывания.
+
+        Шанс растёт с уровнем персонажа (5% база + 5% за уровень, потолок
+        75% - ловушка не должна становиться гарантированно безопасной).
+        Раньше подход к ловушке всегда означал урон - "обезвреженные
+        ловушки" как источник опыта были невозможны в принципе."""
         task_name = f"trap_{id(trap)}"
 
         def check_trap_trigger(task):
             if self.player:
                 distance = math.sqrt((self.player.x - x)**2 + (self.player.y - y)**2)
                 if distance <= 1.5:  # Радиус срабатывания
-                    # Ловушка срабатывает
-                    self.player.take_damage(20, "physical")
-                    logger.info("Trap triggered!")
-                    # Удаляем ловушку после срабатывания
+                    disarm_chance = min(0.75, 0.05 + 0.05 * self.player.level)
+                    if random.random() < disarm_chance:
+                        self.player.add_experience(15)
+                        logger.info(f"Trap disarmed! (chance was {disarm_chance:.0%}) +15 XP")
+                    else:
+                        self.player.take_damage(20, "physical")
+                        logger.info(f"Trap triggered! (disarm chance was {disarm_chance:.0%})")
+                    # Ловушка исчезает в любом случае - обезврежена или сработала
                     trap.removeNode()
                     if trap in self.world_objects:
                         self.world_objects.remove(trap)
@@ -1022,9 +1056,11 @@ class EnhancedGameScene:
             return
         self._opened_chest_ids.add(chest_id)
 
-        # Даем игроку награду
+        # Даем игроку награду.
+        # Раньше experience просто рос напрямую - experience_to_next_level
+        # ни с чем не сравнивался, level-up никогда не происходил.
         if self.player:
-            self.player.experience += 50
+            self.player.add_experience(50)
             self.player.health = min(self.player.max_health, self.player.health + 25)
             logger.info("Chest opened! Received: 50 XP, 25 HP")
         

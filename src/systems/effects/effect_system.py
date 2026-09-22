@@ -102,6 +102,26 @@ class EffectTemplate:
     icon_path: str | None = None
     requirements: dict[str, Any] = field(default_factory=dict)
 
+
+def apply_tick_to_entity(entity: Any, active_effect: ActiveEffect) -> None:
+    """Применяет health-тик эффекта (яд/регенерация) к сущности.
+
+    Урон идёт через entity.take_damage(), а не прямое entity.health -=
+    value, чтобы не обходить is_defeated/state="dead" защёлку (см. историю
+    починки death-oscillation бага в этом проекте - тот баг тоже был про
+    что-то, менявшее health в обход правильного пути). Вынесено в отдельную
+    функцию, а не только внутрь main.py.Game._on_effect_tick, чтобы её можно
+    было проверить headless-тестом (tools/combat_smoke_test.py) без
+    поднятия окна."""
+    for modifier in active_effect.effect.modifiers:
+        if modifier.stat_type != "health" or modifier.value == 0:
+            continue
+        if modifier.value < 0:
+            entity.take_damage(abs(modifier.value), "effect")
+        else:
+            entity.health = min(entity.max_health, entity.health + modifier.value)
+
+
 class EffectSystem(BaseComponent):
     """Система эффектов"""
     
@@ -174,12 +194,17 @@ class EffectSystem(BaseComponent):
                 EffectTemplate(
                     template_id="strength_buff",
                     name="Усиление силы",
-                    description="Увеличивает силу на 20%",
+                    description="Увеличивает физический урон на 20%",
                     effect_type=EffectType.BUFF,
                     category=EffectCategory.STAT_MODIFIER,
                     base_duration=30.0,
                     base_modifiers=[
-                        EffectModifier("strength", 0.2, "multiplicative")
+                        # stat_type должен совпадать с реальным атрибутом
+                        # Character/EnhancedEnemy (physical_damage), а не с
+                        # абстрактным "strength", которого у сущностей нет -
+                        # иначе get_modified_stat() никогда не найдёт этот
+                        # модификатор ни у одной боевой характеристики.
+                        EffectModifier("physical_damage", 0.2, "multiplicative")
                     ],
                     base_triggers=[],
                     visual_effects=["glow_red"],
@@ -337,7 +362,10 @@ class EffectSystem(BaseComponent):
             
             # Проверка стаков
             if not self._can_apply_effect(entity_id, effect):
-                logger.warning(f"Эффект {template_id} не может быть применен к {entity_id}")
+                # Обычная ситуация (например второй elite-хит slow_debuff'ом,
+                # пока первый ещё активен, а шаблон не стакается) - не баг и
+                # не повод для WARNING в игровом логе на каждый такой момент.
+                logger.debug(f"Эффект {template_id} не может быть применен к {entity_id} (уже активен, не стакается)")
                 return None
             
             # Применение эффекта
@@ -536,47 +564,50 @@ class EffectSystem(BaseComponent):
             logger.exception("Ошибка обновления системы эффектов: %s", e)
     
     def _process_effect_triggers(self, active_effect: ActiveEffect, current_time: float):
-        """Обработка триггеров эффекта"""
+        """Обработка триггеров эффекта.
+
+        Раньше здесь были ветки "on_hit"/"on_damage", обращавшиеся к
+        trigger.effects/trigger.context - полей, которых нет на EffectTrigger
+        (только trigger_type/condition/chance/cooldown/last_trigger), и звавшие
+        apply_effect(source_entity_id=...) - параметра, которого нет в её
+        сигнатуре (source). Это гарантированно падало бы при первом же вызове.
+        Применение эффекта "по факту попадания" теперь делает сам
+        CombatSystem.execute_attack(on_hit_effect=...) напрямую - см. combat_system.py -
+        отдельный generic trigger-scanning механизм для этого не нужен."""
         try:
             for trigger in active_effect.effect.triggers:
                 if current_time - trigger.last_trigger < trigger.cooldown:
                     continue
-                
+
                 if trigger.trigger_type == "tick":
                     # Обработка тиков
                     if current_time - active_effect.last_tick >= active_effect.tick_interval:
                         active_effect.last_tick = current_time
                         trigger.last_trigger = current_time
-                        
+
                         # Вызов callback
                         if self.on_effect_tick:
                             self.on_effect_tick(active_effect.entity_id, active_effect)
-                        
+
                         logger.debug(f"Тик эффекта {active_effect.effect.name} для {active_effect.entity_id}")
-                
-                elif trigger.trigger_type == "on_hit":
-                    # Обработка попаданий - применение эффектов при успешном попадании
-                    for effect_id in trigger.effects:
-                        if effect_id in self.effect_templates:
-                            template = self.effect_templates[effect_id]
-                            # Создаем эффект на цели попадания
-                            target_id = getattr(trigger.context, 'target_id', None)
-                            if target_id:
-                                self.apply_effect(target_id, effect_id, source_entity_id=active_effect.entity_id)
-                                logger.debug(f"Эффект {effect_id} применён при попадании по {target_id}")
-                
-                elif trigger.trigger_type == "on_damage":
-                    # Обработка получения урона - эффекты при получении урона
-                    for effect_id in trigger.effects:
-                        if effect_id in self.effect_templates:
-                            template = self.effect_templates[effect_id]
-                            # Применяем эффект к получившему урон
-                            damaged_entity_id = getattr(trigger.context, 'damaged_entity_id', active_effect.entity_id)
-                            self.apply_effect(damaged_entity_id, effect_id, source_entity_id=active_effect.entity_id)
-                            logger.debug(f"Эффект {effect_id} применён при получении урона {damaged_entity_id}")
-                
+
         except Exception as e:
             logger.error(f"Ошибка обработки триггеров эффекта: {e}")
+
+    def get_modified_stat(self, entity_id: str, stat_type: str, base_value: float) -> float:
+        """Применяет активные модификаторы эффектов к базовому значению
+        характеристики - это и есть "подключение" системы эффектов к боевой
+        системе: Character/EnhancedEnemy.get_combat_stats() зовут это вместо
+        того, чтобы читать сырой атрибут напрямую."""
+        value = base_value
+        for modifier in self.get_effect_modifiers(entity_id, stat_type):
+            if modifier.modifier_type == "multiplicative":
+                value *= (1.0 + modifier.value)
+            elif modifier.modifier_type == "additive":
+                value += modifier.value
+            elif modifier.modifier_type == "override":
+                value = modifier.value
+        return value
     
     def create_custom_effect(self, template_id: str, custom_modifiers: list[EffectModifier], 
                            duration: float, name: str = "") -> str | None:

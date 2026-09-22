@@ -10,7 +10,7 @@ from typing import Any
 from panda3d.core import CardMaker, TransparencyAttrib
 
 from ..core.constants import EntityType
-from ..systems.combat.combat_system import CombatStats
+from ..systems.combat.combat_system import AttackType, CombatStats
 from ..ui.health_bar import HealthBar
 from .base_entity import BaseEntity
 
@@ -619,7 +619,7 @@ class Character(BaseEntity):
             
     def move_by(self, dx, dy, dz=0, dt=0.016):
         """Перемещение персонажа на относительное расстояние"""
-        move_speed = self.speed * dt
+        move_speed = self.get_effective_speed() * dt
         self.x += dx * move_speed
         self.y += dy * move_speed
         self.z += dz * move_speed
@@ -662,18 +662,37 @@ class Character(BaseEntity):
         return False
 
     def get_combat_stats(self) -> CombatStats:
-        """Боевые характеристики в формате, ожидаемом CombatSystem."""
+        """Боевые характеристики в формате, ожидаемом CombatSystem.
+
+        Проходят через EffectSystem.get_modified_stat(), если она доступна
+        через game.effect_system - активные баффы/дебаффы (strength_buff,
+        magic_shield и т.д.) иначе не влияли бы на бой вообще, только
+        существовали бы как записи в EffectSystem без какого-либо эффекта."""
+        effects = getattr(self.game, "effect_system", None)
+
+        def mod(stat_type: str, base_value: float) -> float:
+            if effects is None:
+                return base_value
+            return effects.get_modified_stat(self.entity_id, stat_type, base_value)
+
         return CombatStats(
-            physical_damage=self.physical_damage,
-            magical_damage=self.magical_damage,
-            defense=self.defense,
+            physical_damage=mod("physical_damage", self.physical_damage),
+            magical_damage=mod("magical_damage", self.magical_damage),
+            defense=mod("defense", self.defense),
             attack_speed=self.attack_speed,
-            critical_chance=self.critical_chance / 100.0,
+            critical_chance=mod("critical_chance", self.critical_chance) / 100.0,
             critical_damage=self.critical_damage / 100.0,
-            dodge_chance=self.dodge_chance / 100.0,
-            magic_resistance=self.magic_resistance,
+            dodge_chance=mod("dodge_chance", self.dodge_chance) / 100.0,
+            magic_resistance=mod("magic_resistance", self.magic_resistance),
             range=self.attack_range,
         )
+
+    def get_effective_speed(self) -> float:
+        """Скорость передвижения с учётом эффектов (например slow_debuff)."""
+        effects = getattr(self.game, "effect_system", None)
+        if effects is None:
+            return self.speed
+        return effects.get_modified_stat(self.entity_id, "speed", self.speed)
 
     def is_alive(self):
         """Проверка, жив ли персонаж.
@@ -942,8 +961,8 @@ class Character(BaseEntity):
             dx /= distance
             dy /= distance
             
-            # Двигаемся с учетом скорости
-            move_distance = self.speed * dt
+            # Двигаемся с учетом скорости (с модификаторами эффектов, если есть)
+            move_distance = self.get_effective_speed() * dt
             self.x += dx * move_distance
             self.y += dy * move_distance
             
@@ -1022,20 +1041,42 @@ class Character(BaseEntity):
         return True
 
     def _cast_magic_attack(self, target):
-        """Магическая атака"""
-        if self.mana >= 10:
-            self.mana -= 10
-            damage = self.magical_damage
-            target.take_damage(damage, "magical")
-            logger.info(f"Маг атаковал врага магией на {damage} урона!")
-    
+        """Магическая атака.
+
+        Раньше считала урон вручную и била через target.take_damage()
+        напрямую в обход CombatSystem - без крита/уклонения и без доступа к
+        системе эффектов. Теперь идёт тем же путём, что и обычная атака."""
+        if self.mana < 10:
+            return
+        combat_system = getattr(self.game, "combat_system", None)
+        if not combat_system:
+            logger.warning("No combat_system on game object, magic attack skipped")
+            return
+        self.mana -= 10
+        damage_info = combat_system.execute_attack(self, target, attack_type=AttackType.MAGIC)
+        if not damage_info.is_dodged:
+            logger.info(f"Маг атаковал врага магией на {damage_info.damage:.1f} урона!")
+
     def _stealth_attack(self, target):
-        """Скрытная атака"""
-        if self.stamina >= 20:
-            self.stamina -= 20
-            damage = self.physical_damage * 1.5  # Увеличенный урон
-            target.take_damage(damage, "physical")
-            logger.info(f"Разбойник атаковал врага скрытно на {damage} урона!")
+        """Скрытная атака: усиленный урон + шанс отравить цель.
+
+        Тоже раньше била в обход CombatSystem. x1.5 урона реализовано через
+        новый параметр execute_attack(damage_multiplier=...), а не отдельной
+        ручной формулой - и заодно демонстрирует подключение EffectSystem к
+        бою: успешное скрытное попадание накладывает poison_debuff."""
+        if self.stamina < 20:
+            return
+        combat_system = getattr(self.game, "combat_system", None)
+        if not combat_system:
+            logger.warning("No combat_system on game object, stealth attack skipped")
+            return
+        self.stamina -= 20
+        damage_info = combat_system.execute_attack(
+            self, target, attack_type=AttackType.MELEE,
+            damage_multiplier=1.5, on_hit_effect="poison_debuff",
+        )
+        if not damage_info.is_dodged:
+            logger.info(f"Разбойник атаковал врага скрытно на {damage_info.damage:.1f} урона!")
     
     def destroy(self):
         """Уничтожение персонажа"""
@@ -1046,18 +1087,51 @@ class Character(BaseEntity):
             self.node.removeNode()
             self.node = None
     
+    def add_experience(self, amount: float) -> int:
+        """Начисляет опыт и повышает уровень, пока хватает накопленного опыта.
+
+        Раньше self.experience только рос (открытие сундука делало
+        self.player.experience += 50 напрямую) - experience_to_next_level
+        существовал как атрибут, но ничего и никогда не сравнивало с ним
+        накопленный опыт, поэтому level-up не происходил вообще ни при каких
+        обстоятельствах. Возвращает количество полученных уровней."""
+        if amount <= 0:
+            return 0
+        self.experience += amount
+        levels_gained = 0
+        while self.experience >= self.experience_to_next_level:
+            self.experience -= self.experience_to_next_level
+            self.level += 1
+            levels_gained += 1
+            # Рост порога следующего уровня и самих характеристик - не
+            # драматичный, но заметный прогресс за каждый уровень.
+            self.experience_to_next_level = int(self.experience_to_next_level * 1.25)
+            self.max_health += 15
+            self.max_mana += 5
+            self.max_stamina += 5
+            self.physical_damage += 2
+            self.magical_damage += 1
+            self.defense += 1
+            # Полное восстановление при левел-апе - обычная награда за прогресс,
+            # а не просто число в характеристиках.
+            self.health = self.max_health
+            self.mana = self.max_mana
+            self.stamina = self.max_stamina
+            logger.info(f"{self.entity_id}: level up -> {self.level}")
+        return levels_gained
+
     # Методы игрока
     def add_achievement(self, achievement: str):
         """Добавление достижения"""
         if self.is_player and achievement not in self.achievements:
             self.achievements.append(achievement)
             logger.info(f"Достижение получено: {achievement}")
-    
+
     def complete_quest(self, quest_id: str):
         """Завершение квеста"""
         if self.is_player and quest_id not in self.quests_completed:
             self.quests_completed.append(quest_id)
-            self.experience += 100  # Награда за квест
+            self.add_experience(100)  # Награда за квест
             logger.info(f"Квест завершен: {quest_id}")
     
     def visit_location(self, location: str):

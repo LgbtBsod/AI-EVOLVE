@@ -223,8 +223,8 @@ class EnhancedEnemy:
             dx /= distance
             dy /= distance
             
-            # Двигаемся с учетом скорости
-            move_distance = self.move_speed * dt
+            # Двигаемся с учетом скорости (с модификаторами эффектов, если есть)
+            move_distance = self.get_effective_move_speed() * dt
             self.x += dx * move_distance
             self.y += dy * move_distance
             
@@ -287,7 +287,12 @@ class EnhancedEnemy:
                     logger.warning("No combat_system on game object, attack skipped")
                     return False
 
-                damage_info = combat_system.execute_attack(self, target)
+                # Сильные враги (elite/boss) накладывают замедление на удачном
+                # попадании - демонстрирует подключение EffectSystem к бою и
+                # даёт "прокачке" смысл: слабых hit-and-run противников это
+                # не задевает, тяжёлых стоит опасаться отдельно.
+                on_hit_effect = "slow_debuff" if self.enemy_type in ("elite", "boss") else None
+                damage_info = combat_system.execute_attack(self, target, on_hit_effect=on_hit_effect)
                 self.last_attack_time = current_time
 
                 if damage_info.is_dodged:
@@ -299,18 +304,51 @@ class EnhancedEnemy:
         return False
 
     def get_combat_stats(self) -> CombatStats:
-        """Боевые характеристики в формате, ожидаемом CombatSystem."""
+        """Боевые характеристики в формате, ожидаемом CombatSystem.
+
+        Проходят через EffectSystem.get_modified_stat(), если она доступна
+        через game.effect_system - см. аналогичный комментарий в
+        Character.get_combat_stats()."""
+        effects = getattr(self.game, "effect_system", None)
+
+        def mod(stat_type: str, base_value: float) -> float:
+            if effects is None:
+                return base_value
+            return effects.get_modified_stat(self.entity_id, stat_type, base_value)
+
         return CombatStats(
-            physical_damage=self.physical_damage,
-            magical_damage=getattr(self, "magical_damage", 0.0),
-            defense=self.defense,
+            physical_damage=mod("physical_damage", self.physical_damage),
+            magical_damage=mod("magical_damage", getattr(self, "magical_damage", 0.0)),
+            defense=mod("defense", self.defense),
             attack_speed=1.0 / max(self.attack_cooldown, 0.01),
-            critical_chance=self.critical_chance / 100.0,
+            critical_chance=mod("critical_chance", self.critical_chance) / 100.0,
             critical_damage=self.critical_damage / 100.0,
-            dodge_chance=self.dodge_chance / 100.0,
-            magic_resistance=self.magic_resistance,
+            dodge_chance=mod("dodge_chance", self.dodge_chance) / 100.0,
+            magic_resistance=mod("magic_resistance", self.magic_resistance),
             range=self.attack_range,
         )
+
+    def get_effective_move_speed(self) -> float:
+        """Скорость передвижения с учётом эффектов (например slow_debuff)."""
+        effects = getattr(self.game, "effect_system", None)
+        if effects is None:
+            return self.move_speed
+        return effects.get_modified_stat(self.entity_id, "speed", self.move_speed)
+
+    def apply_level_bonus(self, bonus_levels: int) -> None:
+        """Масштабирует уровень/характеристики врага под сложность,
+        растущую со временем (main_game_scene._enemy_level_bonus) - без этого
+        враг в конце долгой партии ничем не отличается от заспавненного в
+        первую секунду. Зовётся один раз, сразу после create_enemy()."""
+        if bonus_levels <= 0:
+            return
+        self.level += bonus_levels
+        growth = 1.15 ** bonus_levels
+        self.max_health = int(self.max_health * growth)
+        self.health = self.max_health
+        self.physical_damage = int(self.physical_damage * (1.10 ** bonus_levels))
+        self.defense += bonus_levels
+        self.experience_reward = int(self.experience_reward * (1.20 ** bonus_levels))
     
     def update_ai(self, player, dt=0.016):
         """Обновление ИИ врага"""
