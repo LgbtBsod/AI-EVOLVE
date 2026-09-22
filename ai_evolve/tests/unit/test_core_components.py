@@ -2,9 +2,10 @@
 Unit Tests for AI-EVOLVE Core Components
 """
 import pytest
+from typing import Dict, Any
 from ai_evolve.core.event_system import EventSystem, event_system
 from ai_evolve.db.database_core import DatabaseCore, db_core, GameEntity
-from ai_evolve.core.plugin_base import GamePlugin
+from ai_evolve.core.plugin_base import PluginBase, GamePlugin
 from ai_evolve.core.plugin_manager import PluginManager
 
 class TestEventSystem:
@@ -118,28 +119,33 @@ class TestDatabaseCore:
             result = session.query(GameEntity).filter_by(name="TempEntity").first()
             assert result is None  # Should be rolled back
 
-class MockPlugin(GamePlugin):
+class MockPlugin(PluginBase):
     """Mock plugin for testing."""
     
+    name = "mock"
+    
     def __init__(self, name="mock"):
-        super().__init__(name)
+        super().__init__()
+        self.name = name
         self.init_called = False
         self.update_called = False
         self.shutdown_called = False
         self.update_delta = 0
         self.game_core_ref = None
     
-    def on_init(self, game_core=None) -> bool:
+    def initialize(self, config: Dict[str, Any], game_core: Any) -> bool:
         self.init_called = True
         self.game_core_ref = game_core
+        self.is_initialized = True
         return True
     
-    def on_update(self, delta_time: float) -> None:
+    def update(self, delta_time: float) -> None:
         self.update_called = True
         self.update_delta = delta_time
     
-    def on_shutdown(self) -> None:
+    def shutdown(self) -> None:
         self.shutdown_called = True
+        self.is_initialized = False
 
 class TestPluginManager:
     """Tests for PluginManager."""

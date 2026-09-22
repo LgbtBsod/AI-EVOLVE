@@ -3,19 +3,24 @@ Plugin Base Class for AI-EVOLVE
 All game features/modules should inherit from this.
 """
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import logging
 
-class GamePlugin(ABC):
+class PluginBase(ABC):
     """
     Base class for all game plugins/modules.
     Provides lifecycle methods and core integration points.
     """
 
-    def __init__(self, name: str):
-        self.name = name
+    name = "base_plugin"
+    version = "1.0.0"
+    description = "Base plugin class"
+    
+    def __init__(self):
         self.is_initialized = False
-        self.logger = logging.getLogger(f"plugin.{name}")
+        self.game_core: Optional[Any] = None
+        self.event_system = None
+        self.logger = logging.getLogger(f"plugin.{self.name}")
     
     @property
     def dependencies(self) -> List[str]:
@@ -23,18 +28,17 @@ class GamePlugin(ABC):
         return []
 
     @abstractmethod
-    def on_init(self, game_core: Any) -> bool:
+    def initialize(self, config: Dict[str, Any], game_core: Any) -> bool:
         """Called when plugin is initialized."""
         pass
 
     @abstractmethod
-    def on_update(self, delta_time: float) -> None:
-        """Called every frame/update cycle."""
+    def shutdown(self) -> None:
+        """Called when plugin is shut down."""
         pass
 
-    @abstractmethod
-    def on_shutdown(self) -> None:
-        """Called when plugin is shut down."""
+    def update(self, delta_time: float) -> None:
+        """Called every frame/update cycle."""
         pass
 
     def register_events(self, event_system):
@@ -45,14 +49,9 @@ class GamePlugin(ABC):
         """Return plugin configuration."""
         return {}
 
-    def initialize(self, game_core: Any = None):
-        """Initialize the plugin."""
-        if not self.is_initialized:
-            self.on_init(game_core)
-            self.is_initialized = True
 
-    def shutdown(self):
-        """Shutdown the plugin."""
-        if self.is_initialized:
-            self.on_shutdown()
-            self.is_initialized = False
+class GamePlugin(PluginBase):
+    """
+    Legacy alias for PluginBase - kept for backward compatibility.
+    """
+    pass

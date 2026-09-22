@@ -245,7 +245,7 @@ class TestEntityComponentsPlugin:
     
     def test_init_registers_components(self):
         plugin = EntityComponentsPlugin()
-        plugin.on_init()
+        plugin.initialize({}, None)
         
         assert "combat" in plugin._component_registry
         assert "stats" in plugin._component_registry
@@ -253,7 +253,7 @@ class TestEntityComponentsPlugin:
     
     def test_create_player(self):
         plugin = EntityComponentsPlugin()
-        plugin.on_init()
+        plugin.initialize({}, None)
         
         player = plugin.create_player("player_1", max_health=150.0)
         
@@ -265,7 +265,7 @@ class TestEntityComponentsPlugin:
     
     def test_create_enemy(self):
         plugin = EntityComponentsPlugin()
-        plugin.on_init()
+        plugin.initialize({}, None)
         
         enemy = plugin.create_enemy("enemy_1", enemy_type="basic", max_health=75.0)
         
@@ -277,7 +277,7 @@ class TestEntityComponentsPlugin:
     
     def test_create_boss(self):
         plugin = EntityComponentsPlugin()
-        plugin.on_init()
+        plugin.initialize({}, None)
         
         boss = plugin.create_boss("boss_1", boss_type="major", max_health=1000.0)
         
@@ -290,7 +290,7 @@ class TestEntityComponentsPlugin:
     
     def test_update_entities(self):
         plugin = EntityComponentsPlugin()
-        plugin.on_init()
+        plugin.initialize({}, None)
         
         enemy = plugin.create_enemy("enemy_1")
         ai = enemy.get_component("ai")
@@ -298,19 +298,19 @@ class TestEntityComponentsPlugin:
         ai.patrol_points = [(10.0, 10.0)]
         
         initial_x = enemy.x
-        plugin.on_update(0.5)
+        plugin.update(0.5)
         
         # Entity should have been updated
         assert enemy.x != initial_x or enemy.y != 0.0
     
     def test_shutdown_clears_entities(self):
         plugin = EntityComponentsPlugin()
-        plugin.on_init()
+        plugin.initialize({}, None)
         
         plugin.create_player("player_1")
         plugin.create_enemy("enemy_1")
         
-        plugin.on_shutdown()
+        plugin.shutdown()
         
         assert len(plugin._entities) == 0
     
@@ -325,7 +325,7 @@ class TestEntityFactory:
     
     def test_create_standard_player(self):
         plugin = EntityComponentsPlugin()
-        plugin.on_init()
+        plugin.initialize({}, None)
         
         player = plugin.factory.create_standard_player("hero_1")
         
@@ -335,7 +335,7 @@ class TestEntityFactory:
     
     def test_create_basic_enemy(self):
         plugin = EntityComponentsPlugin()
-        plugin.on_init()
+        plugin.initialize({}, None)
         
         enemy = plugin.factory.create_basic_enemy("mob_1")
         
@@ -345,7 +345,7 @@ class TestEntityFactory:
     
     def test_create_elite_enemy(self):
         plugin = EntityComponentsPlugin()
-        plugin.on_init()
+        plugin.initialize({}, None)
         
         elite = plugin.factory.create_elite_enemy("elite_1")
         
@@ -357,7 +357,7 @@ class TestEntityFactory:
     
     def test_create_boss(self):
         plugin = EntityComponentsPlugin()
-        plugin.on_init()
+        plugin.initialize({}, None)
         
         boss = plugin.factory.create_boss("big_boss", "Dragon Lord")
         

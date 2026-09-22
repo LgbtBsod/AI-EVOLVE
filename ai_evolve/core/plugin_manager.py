@@ -32,7 +32,7 @@ class PluginManager:
             plugin = self.plugins[name]
             if not plugin.is_initialized:
                 try:
-                    plugin.initialize(None)  # Use initialize method which sets is_initialized
+                    plugin.initialize({}, None)  # Use initialize method which sets is_initialized
                 except Exception as e:
                     self.plugins[name].logger.error(f"Failed to initialize: {e}")
                     return False
@@ -43,7 +43,7 @@ class PluginManager:
         for name in self._plugin_order:
             plugin = self.plugins[name]
             if plugin.is_initialized:
-                plugin.on_update(delta_time)
+                plugin.update(delta_time)
     
     def shutdown_all(self):
         """Shutdown all plugins."""
