@@ -4,10 +4,11 @@
 __pycache__/
 *.o
 *.obj
+*.so
+*.dylib
+*.dll
+*.exe
 *.out
-dist/
-build/
-target/
 
 # Dependencies
 .venv/
@@ -16,34 +17,37 @@ venv/
 .env.local
 .env.*
 
-# Logs and temp files
+# Build directories
+dist/
+build/
+target/
+
+# Logs and temporary files
 *.log
 *.tmp
 *.swp
+*.swo
 
-# Editors
+# Editors and IDEs
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# Coverage
+# Python specific
+*.pyc
+__pycache__/
+*.pyo
+*.pyd
+.Python
+*.so
+.Pytest_cache/
+.mypy_cache/
 .coverage
 coverage/
 htmlcov/
 
-# Python specific
-*.py[cod]
-*$py.class
-*.so
-.Python
-*.egg-info/
-.eggs/
-
-# Testing
-.pytest_cache/
-.mypy_cache/
-.hypothesis/
-
-# System
+# System files
 .DS_Store
 Thumbs.db
 ```
