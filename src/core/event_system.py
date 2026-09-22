@@ -139,6 +139,23 @@ class EventSystem:
             logger.exception("Error shutting down EventSystem: %s", e)
             return False
     
+    # Aliases for BaseComponent lifecycle compatibility
+    def start(self) -> bool:
+        """Start the event system (alias for initialize)."""
+        return self.initialize()
+    
+    def stop(self) -> bool:
+        """Stop the event system (alias for shutdown)."""
+        return self.shutdown()
+    
+    def update(self, delta_time: float) -> None:
+        """Update the event system (no-op for event-driven system)."""
+        pass
+    
+    def destroy(self) -> bool:
+        """Destroy the event system (alias for shutdown)."""
+        return self.shutdown()
+    
     def emit(
         self, 
         event_type: str, 

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from src.core.architecture import BaseComponent, ComponentType, Priority
-from src.core.event_system import Event, EventSystem
+from src.core.event_system import EventData as Event, EventSystem
 
 
 class MoraleState(Enum):

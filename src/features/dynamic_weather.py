@@ -15,7 +15,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from src.core.architecture import BaseComponent, ComponentType, Priority
-from src.core.event_system import Event, EventSystem
+from src.core.event_system import EventData as Event, EventSystem
 from src.core.rng_manager import RNGManager
 
 if TYPE_CHECKING:
