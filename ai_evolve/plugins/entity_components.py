@@ -476,17 +476,19 @@ class EntityComponentsPlugin(GamePlugin):
     - Component updates
     """
     
+    name = "entity_components"
+    
     def __init__(self):
+        super().__init__()
         self._component_registry: Dict[str, Type[EntityComponent]] = {}
         self._entities: Dict[str, GameEntity] = {}
         self._factory = EntityFactory(self)
-        self.is_initialized = False
     
     @property
     def name(self) -> str:
         return "entity_components"
     
-    def on_init(self):
+    def initialize(self, config: Dict[str, Any], game_core: Any) -> bool:
         """Initialize the plugin."""
         # Register default components
         self.register_component(CombatComponent)
@@ -494,17 +496,20 @@ class EntityComponentsPlugin(GamePlugin):
         self.register_component(AIComponent)
         
         logger.info("EntityComponentsPlugin initialized")
+        self.is_initialized = True
+        return True
     
-    def on_update(self, delta_time: float):
+    def update(self, delta_time: float):
         """Update all entities."""
         for entity in list(self._entities.values()):
             if entity.is_alive:
                 entity.update(delta_time)
     
-    def on_shutdown(self):
+    def shutdown(self):
         """Clean up all entities."""
         self._entities.clear()
         logger.info("EntityComponentsPlugin shut down")
+        self.is_initialized = False
     
     def register_component(self, component_class: Type[EntityComponent]):
         """Register a component type."""
