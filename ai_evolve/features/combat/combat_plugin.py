@@ -50,7 +50,7 @@ class CombatPlugin(GamePlugin):
             "attacker": attacker
         })
         
-        return damage
+        return True  # Return success status
     
     def calculate_damage(self, attacker, target) -> float:
         """Calculate damage based on attacker and target stats."""

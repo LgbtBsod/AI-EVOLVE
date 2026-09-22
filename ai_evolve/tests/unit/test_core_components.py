@@ -129,15 +129,16 @@ class MockPlugin(GamePlugin):
         self.update_delta = 0
         self.game_core_ref = None
     
-    def on_init(self, game_core=None):
+    def on_init(self, game_core=None) -> bool:
         self.init_called = True
         self.game_core_ref = game_core
+        return True
     
-    def on_update(self, delta_time: float):
+    def on_update(self, delta_time: float) -> None:
         self.update_called = True
         self.update_delta = delta_time
     
-    def on_shutdown(self):
+    def on_shutdown(self) -> None:
         self.shutdown_called = True
 
 class TestPluginManager:
