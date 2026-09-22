@@ -1,0 +1,96 @@
+{
+ "t": 0.5,
+ "reason": "run start",
+ "screen_size": [
+  1280,
+  720
+ ],
+ "pixel_stddev": 8.07,
+ "likely_blank": false,
+ "phash": 1729382256977576455,
+ "phash_cv2": 1243860333603982568026641440523014635142548663400440582220925253023722110980,
+ "ui_state": {
+  "hp_bar_visible": false,
+  "hp_bar_percent": null,
+  "damage_numbers_detected": false,
+  "status_effects_count": 0
+ },
+ "ssim_ready": true,
+ "edge_density": 0.005,
+ "brightness_stats": {
+  "mean": 121.1,
+  "std": 8.07
+ },
+ "visually_similar_to_previous": false,
+ "entities": [
+  {
+   "id": "character_1",
+   "type": "hero",
+   "hp": 120,
+   "max_hp": 120,
+   "pos": [
+    -6.6,
+    5.3
+   ],
+   "screen_xy": [
+    640,
+    312
+   ]
+  },
+  {
+   "id": "enemy_1",
+   "type": "basic",
+   "hp": 50,
+   "max_hp": 50,
+   "pos": [
+    120.0,
+    119.9
+   ],
+   "screen_xy": null
+  },
+  {
+   "id": "enemy_2",
+   "type": "basic",
+   "hp": 50,
+   "max_hp": 50,
+   "pos": [
+    -120.0,
+    120.0
+   ],
+   "screen_xy": null
+  },
+  {
+   "id": "enemy_3",
+   "type": "strong",
+   "hp": 120,
+   "max_hp": 120,
+   "pos": [
+    120.0,
+    -120.0
+   ],
+   "screen_xy": null
+  },
+  {
+   "id": "enemy_4",
+   "type": "strong",
+   "hp": 120,
+   "max_hp": 120,
+   "pos": [
+    -120.0,
+    -120.1
+   ],
+   "screen_xy": null
+  },
+  {
+   "id": "enemy_5",
+   "type": "basic",
+   "hp": 50,
+   "max_hp": 50,
+   "pos": [
+    185.5,
+    -197.9
+   ],
+   "screen_xy": null
+  }
+ ]
+}

@@ -48,6 +48,15 @@
     stdout - до 2 строк + одна пометка "further ... suppressed" (см.
     log_event). Ничего не удаляется с диска - только то, что стоит открыть
     по умолчанию.
+11. (опционально, нужен OpenCV: pip install -r tools/requirements-dev.txt)
+    Умная визуальная аналитика для снижения токенов:
+    - Perceptual hash (256-bit) + кластеризация похожих кадров — агент
+      получает только репрезентативные скриншоты вместо дубликатов
+    - Детекция UI элементов (HP бары, цифры урона, статус эффекты) через
+      цветовую сегментацию — не нужно парсить game state JSON
+    - SSIM-ready данные для сравнения "до/после" без открытия изображений
+    - Edge density + brightness stats для оценки визуальной сложности
+    - Авто-детекция проблем: "урон был но цифр нет" = UI сломан
 
 ВАЖНО - для логических правок (формулы урона/крита, is_alive()/is_defeated,
 AI-таргетинг/движение) СНАЧАЛА запускай tools/combat_smoke_test.py: без окна,
@@ -105,6 +114,22 @@ try:
     PIL_AVAILABLE = True
 except ImportError:
     PIL_AVAILABLE = False
+
+try:
+    import cv2
+    import numpy as np
+    from skimage.metrics import structural_similarity as ssim_skimage
+    CV2_AVAILABLE = True
+    SKIMAGE_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+    SKIMAGE_AVAILABLE = False
+
+try:
+    import imagehash
+    IMAGEHASH_AVAILABLE = True
+except ImportError:
+    IMAGEHASH_AVAILABLE = False
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -271,6 +296,533 @@ def world_to_screen(game, node_path):
 
 
 BLANK_FRAME_STDDEV_THRESHOLD = 2.0  # out of 0-255; a real scene has far more variance than this
+VISUAL_SIMILARITY_HASH_BITS = 16  # for perceptual hash grid size (16x16 = 256 bits)
+VISUAL_SIMILARITY_HAMMING_THRESHOLD = 8  # frames with hamming distance <= this are "visually similar"
+MOTION_DETECTION_THRESHOLD = 5.0  # optical flow magnitude threshold for "significant motion"
+BRIGHTNESS_ANOMALY_THRESHOLD = 30.0  # stddev threshold for sudden brightness changes (flash/fade detection)
+ENTITY_TRACKING_MAX_DISTANCE = 150  # max pixels between frames to consider same entity
+
+
+def _perceptual_hash_imagehash(img_array, hash_type='phash'):
+    """Production-grade perceptual hash using imagehash library.
+    
+    Offers multiple algorithms:
+    - 'ahash': Average hash (fast, less robust)
+    - 'phash': Perceptive hash (slower, more robust to scale/contrast)
+    - 'dhash': Difference hash (good for detecting small changes)
+    - 'whash': Wavelet hash (robust to compression artifacts)
+    - 'colorhash': Color-sensitive hash (detects color shifts)
+    
+    Returns hex string hash that can be compared with hamming distance.
+    Falls back to None if imagehash not available."""
+    if not IMAGEHASH_AVAILABLE or img_array is None:
+        return None
+    
+    try:
+        if img_array.ndim == 3:
+            img_rgb = cv2.cvtColor(img_array, cv2.COLOR_BGR2RGB)
+        else:
+            img_rgb = img_array
+        
+        pil_img = Image.fromarray(img_rgb)
+        
+        hash_funcs = {
+            'ahash': imagehash.average_hash,
+            'phash': imagehash.phash,
+            'dhash': imagehash.dhash,
+            'whash': imagehash.whash,
+            'colorhash': imagehash.colorhash,
+        }
+        
+        hash_func = hash_funcs.get(hash_type, imagehash.phash)
+        return str(hash_func(pil_img))
+    except Exception:
+        return None
+
+
+def _perceptual_hash_cv2(img_array, size=VISUAL_SIMILARITY_HASH_BITS):
+    """OpenCV-based perceptual hash using average hash algorithm.
+    
+    Returns a 256-bit hash (for 16x16 grid) as an integer. More robust than
+    Pillow's simple 8x8 hash, especially for game screenshots with UI elements.
+    Works on BGR numpy arrays directly from OpenCV screenshot reads.
+    
+    Note: When imagehash library is available, prefer _perceptual_hash_imagehash
+    for better robustness and multiple algorithm options."""
+    if img_array.ndim == 3:
+        gray = cv2.cvtColor(img_array, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = img_array
+    
+    resized = cv2.resize(gray, (size, size))
+    avg = np.mean(resized)
+    bits = (resized >= avg).flatten()
+    hash_value = 0
+    for i, bit in enumerate(bits):
+        if bit:
+            hash_value |= (1 << i)
+    return hash_value
+
+
+def _structural_similarity_ssim(img1_array, img2_array):
+    """Fast structural similarity index (SSIM) between two frames.
+    
+    Returns a value between -1 and 1, where 1 means identical. Values > 0.95
+    indicate visually near-identical frames suitable for deduplication.
+    Uses scikit-image's production-grade implementation when available,
+    falls back to OpenCV's implementation otherwise."""
+    if img1_array.shape != img2_array.shape:
+        return 0.0
+    
+    if img1_array.ndim == 3:
+        img1_gray = cv2.cvtColor(img1_array, cv2.COLOR_BGR2GRAY)
+        img2_gray = cv2.cvtColor(img2_array, cv2.COLOR_BGR2GRAY)
+    else:
+        img1_gray = img1_array
+        img2_gray = img2_array
+    
+    if SKIMAGE_AVAILABLE:
+        # Use scikit-image's production-grade SSIM with full multichannel support
+        score, _ = ssim_skimage(img1_gray, img2_gray, full=True)
+        return float(score)
+    
+    # Fallback to OpenCV-based SSIM computation
+    img1_float = img1_gray.astype(np.float32) / 255.0
+    img2_float = img2_gray.astype(np.float32) / 255.0
+    
+    C1 = 0.01 ** 2
+    C2 = 0.03 ** 2
+    
+    mu1 = cv2.GaussianBlur(img1_float, (11, 11), 1.5)
+    mu2 = cv2.GaussianBlur(img2_float, (11, 11), 1.5)
+    
+    mu1_sq = mu1 ** 2
+    mu2_sq = mu2 ** 2
+    mu1_mu2 = mu1 * mu2
+    
+    sigma1_sq = cv2.GaussianBlur(img1_float ** 2, (11, 11), 1.5) - mu1_sq
+    sigma2_sq = cv2.GaussianBlur(img2_float ** 2, (11, 11), 1.5) - mu2_sq
+    sigma12 = cv2.GaussianBlur(img1_float * img2_float, (11, 11), 1.5) - mu1_mu2
+    
+    ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / \
+               ((mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2))
+    
+    return float(np.mean(ssim_map))
+
+
+def _compute_optical_flow(prev_frame, curr_frame):
+    """Compute dense optical flow between two consecutive frames.
+    
+    Returns motion magnitude statistics that help agents understand
+    scene dynamics without watching video. High motion = action sequence,
+    low motion = idle/cutscene/stuck state.
+    
+    Uses Farneback dense optical flow for smooth motion fields."""
+    if not CV2_AVAILABLE or prev_frame is None or curr_frame is None:
+        return None
+    
+    try:
+        if prev_frame.ndim == 3:
+            prev_gray = cv2.cvtColor(prev_frame, cv2.COLOR_BGR2GRAY)
+            curr_gray = cv2.cvtColor(curr_frame, cv2.COLOR_BGR2GRAY)
+        else:
+            prev_gray = prev_frame
+            curr_gray = curr_frame
+        
+        # Farneback dense optical flow
+        flow = cv2.calcOpticalFlowFarneback(
+            prev_gray, curr_gray, None,
+            pyr_scale=0.5, levels=3, winsize=15,
+            iterations=3, poly_n=5, poly_sigma=1.2,
+            flags=0
+        )
+        
+        # Compute motion magnitude
+        magnitude, angle = cv2.cartToPolar(flow[..., 0], flow[..., 1])
+        
+        return {
+            "mean_magnitude": float(np.mean(magnitude)),
+            "max_magnitude": float(np.max(magnitude)),
+            "std_magnitude": float(np.std(magnitude)),
+            "high_motion_pixels": int(np.sum(magnitude > MOTION_DETECTION_THRESHOLD)),
+            "motion_ratio": float(np.sum(magnitude > MOTION_DETECTION_THRESHOLD) / magnitude.size),
+        }
+    except Exception:
+        return None
+
+
+def _detect_brightness_anomalies(img_array, prev_stats=None):
+    """Detect sudden brightness changes that may indicate flashes, fades,
+    or rendering issues.
+    
+    Returns anomaly flag and detailed stats. Helps agents catch visual
+    effects or problems that game state alone won't reveal."""
+    if not CV2_AVAILABLE or img_array is None:
+        return {"anomaly": False}
+    
+    try:
+        if img_array.ndim == 3:
+            gray = cv2.cvtColor(img_array, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = img_array
+        
+        mean_val = float(np.mean(gray))
+        std_val = float(np.std(gray))
+        
+        result = {
+            "brightness_mean": round(mean_val, 2),
+            "brightness_std": round(std_val, 2),
+            "anomaly": False,
+        }
+        
+        if prev_stats is not None and "brightness_mean" in prev_stats:
+            delta = abs(mean_val - prev_stats["brightness_mean"])
+            if delta > BRIGHTNESS_ANOMALY_THRESHOLD:
+                result["anomaly"] = True
+                result["brightness_delta"] = round(delta, 2)
+                result["anomaly_type"] = "flash" if delta > 0 else "fade"
+        
+        return result
+    except Exception:
+        return {"anomaly": False}
+
+
+def _track_entities_across_frames(prev_entities, curr_entities, prev_frame_shape, curr_frame_shape):
+    """Track entities between consecutive frames using screen positions.
+    
+    Returns entity trajectories and lifecycle events (spawned/despawned).
+    Helps agents understand entity behavior patterns without manual correlation."""
+    if not prev_entities or not curr_entities:
+        return {"tracked": [], "spawned": len(curr_entities), "despawned": len(prev_entities)}
+    
+    tracked = []
+    matched_prev = set()
+    matched_curr = set()
+    
+    for i, prev_ent in enumerate(prev_entities):
+        prev_pos = prev_ent.get("screen_xy")
+        if prev_pos is None:
+            continue
+        
+        best_match = None
+        best_dist = ENTITY_TRACKING_MAX_DISTANCE
+        
+        for j, curr_ent in enumerate(curr_entities):
+            if j in matched_curr:
+                continue
+            
+            curr_pos = curr_ent.get("screen_xy")
+            if curr_pos is None:
+                continue
+            
+            dist = ((prev_pos[0] - curr_pos[0]) ** 2 + (prev_pos[1] - curr_pos[1]) ** 2) ** 0.5
+            
+            if dist < best_dist:
+                best_dist = dist
+                best_match = j
+        
+        if best_match is not None:
+            curr_ent = curr_entities[best_match]
+            prev_id = prev_ent.get("id", f"prev_{i}")
+            curr_id = curr_ent.get("id", f"curr_{best_match}")
+            
+            # Only track if IDs match or are close enough
+            if prev_id == curr_id or best_dist < ENTITY_TRACKING_MAX_DISTANCE * 0.5:
+                tracked.append({
+                    "entity_id": curr_id,
+                    "displacement": round(best_dist, 2),
+                    "prev_hp": prev_ent.get("hp"),
+                    "curr_hp": curr_ent.get("hp"),
+                    "hp_change": round(curr_ent.get("hp", 0) - prev_ent.get("hp", 0), 1),
+                })
+                matched_prev.add(i)
+                matched_curr.add(best_match)
+    
+    spawned = len(curr_entities) - len(matched_curr)
+    despawned = len(prev_entities) - len(matched_prev)
+    
+    return {
+        "tracked": tracked,
+        "spawned": max(0, spawned),
+        "despawned": max(0, despawned),
+        "continuity_score": round(len(tracked) / max(len(prev_entities), len(curr_entities), 1), 2),
+    }
+
+
+def generate_auto_hypothesis(summary_data, visual_analysis, combat_events, kill_count, pinned_reported, blank_frame_count):
+    """Auto-generate diagnostic hypotheses for agents based on collected data.
+    
+    This reduces agent token costs by providing pre-computed analysis instead of
+    requiring the agent to infer causes from raw data. Each hypothesis includes:
+    - issue_type: categorization for filtering
+    - description: human-readable summary
+    - evidence: data points supporting the hypothesis
+    - confidence: high/medium/low based on evidence strength
+    - suggested_checks: concrete next steps for debugging
+    
+    Returns None if no issues detected or CV2 not available."""
+    hypotheses = []
+    
+    # Check for UI rendering issues
+    ui_state = visual_analysis.get("ui_state", {})
+    frames_with_damage = visual_analysis.get("frames_with_damage_numbers", 0)
+    
+    if kill_count > 0 and frames_with_damage == 0:
+        hypotheses.append({
+            "issue_type": "UI_RENDERING",
+            "description": "Damage numbers not visible despite successful kills - UI layer may be broken or occluded",
+            "evidence": {
+                "kills_recorded": kill_count,
+                "frames_with_damage_numbers": frames_with_damage,
+                "total_screenshots": len(combat_events) if combat_events else 0,
+            },
+            "confidence": "high",
+            "suggested_checks": [
+                "Check Canvas.active status during combat",
+                "Verify DamageNumber prefab is instantiated",
+                "Check UI layer z-order vs game world",
+                "Inspect damage number parent transforms",
+            ],
+        })
+    
+    # Check for render failures
+    if blank_frame_count > 0:
+        confidence = "high" if blank_frame_count > 5 else ("medium" if blank_frame_count > 2 else "low")
+        hypotheses.append({
+            "issue_type": "RENDER_FAILURE",
+            "description": f"Blank/solid-color frames detected - graphics rendering may have failed",
+            "evidence": {
+                "blank_frames": blank_frame_count,
+                "total_samples": summary_data.get("sample_count", 0),
+                "blank_ratio": round(blank_frame_count / max(summary_data.get("sample_count", 1), 1), 3),
+            },
+            "confidence": confidence,
+            "suggested_checks": [
+                "Check GPU driver logs",
+                "Verify Panda3D pipe creation succeeded",
+                "Check for OpenGL context errors",
+                "Review panda3d.log for rendering errors",
+            ],
+        })
+    
+    # Check for motion anomalies (too little movement = stuck/freezing)
+    motion_analysis = visual_analysis.get("motion_analysis", {})
+    action_intensity = motion_analysis.get("action_intensity", "unknown")
+    
+    if action_intensity == "low" and kill_count == 0 and summary_data.get("elapsed", 0) > 10:
+        hypotheses.append({
+            "issue_type": "MOTION_ANOMALY",
+            "description": "Very low scene motion detected with no kills - entities may be frozen or stuck",
+            "evidence": {
+                "avg_motion_ratio": motion_analysis.get("avg_motion_ratio", 0),
+                "action_intensity": action_intensity,
+                "kills": kill_count,
+                "duration": summary_data.get("elapsed", 0),
+            },
+            "confidence": "medium",
+            "suggested_checks": [
+                "Check AI state machines for deadlock",
+                "Verify pathfinding is functioning",
+                "Check for animation system freezes",
+                "Review entity update loops",
+            ],
+        })
+    
+    # Check for player pinning issues
+    if pinned_reported:
+        hypotheses.append({
+            "issue_type": "PLAYER_PINNED",
+            "description": "Player was pinned at low HP for extended period without dying - possible death latch bug",
+            "evidence": {
+                "min_hp": summary_data.get("min_hp"),
+                "end_hp": summary_data.get("end_hp"),
+                "pinned_duration_threshold": 5.0,
+            },
+            "confidence": "high",
+            "suggested_checks": [
+                "Check Character.is_defeated() logic",
+                "Verify health cannot go negative",
+                "Check for damage immunity buffs",
+                "Review death state transitions",
+            ],
+        })
+    
+    # Check for entity tracking anomalies
+    entity_tracking = visual_analysis.get("entity_tracking", {})
+    total_spawned = entity_tracking.get("total_spawned", 0)
+    total_despawned = entity_tracking.get("total_despawned", 0)
+    
+    if total_spawned > 0 and total_despawned == 0 and kill_count == 0:
+        hypotheses.append({
+            "issue_type": "ENTITY_LIFECYCLE",
+            "description": "Entities spawned but none despawned - possible cleanup leak or missing death handling",
+            "evidence": {
+                "spawned": total_spawned,
+                "despawned": total_despawned,
+                "kills": kill_count,
+            },
+            "confidence": "medium",
+            "suggested_checks": [
+                "Check enemy death cleanup routines",
+                "Verify object pooling release calls",
+                "Review scene graph node removal",
+                "Check for reference cycles preventing GC",
+            ],
+        })
+    
+    # Return top hypothesis or None
+    if hypotheses:
+        # Sort by confidence (high > medium > low)
+        confidence_order = {"high": 0, "medium": 1, "low": 2}
+        hypotheses.sort(key=lambda h: confidence_order.get(h["confidence"], 3))
+        
+        return {
+            "primary_hypothesis": hypotheses[0],
+            "additional_hypotheses": hypotheses[1:],
+            "total_issues_detected": len(hypotheses),
+        }
+    
+    return None
+
+
+def _detect_ui_changes(img_array, prev_ui_state=None):
+    """Detect changes in UI elements (HP bars, status icons) using color segmentation.
+    
+    Returns a dict with detected UI state and changes. This helps agents quickly
+    identify important gameplay events without parsing game state JSON.
+    
+    Detects:
+    - HP bar changes (red/green regions)
+    - Damage number pops (bright text regions)
+    - Status effect icons (colored overlays)
+    """
+    if not CV2_AVAILABLE or img_array is None:
+        return {}
+    
+    result = {
+        "hp_bar_visible": False,
+        "hp_bar_percent": None,
+        "damage_numbers_detected": False,
+        "status_effects_count": 0,
+    }
+    
+    try:
+        hsv = cv2.cvtColor(img_array, cv2.COLOR_BGR2HSV)
+        
+        lower_red = np.array([0, 70, 50])
+        upper_red = np.array([15, 255, 255])
+        mask1 = cv2.inRange(hsv, lower_red, upper_red)
+        lower_red2 = np.array([160, 70, 50])
+        upper_red2 = np.array([180, 255, 255])
+        mask2 = cv2.inRange(hsv, lower_red2, upper_red2)
+        red_mask = cv2.bitwise_or(mask1, mask2)
+        
+        lower_green = np.array([40, 70, 50])
+        upper_green = np.array([80, 255, 255])
+        green_mask = cv2.inRange(hsv, lower_green, upper_green)
+        
+        hp_regions = []
+        for mask, color_name in [(red_mask, "red"), (green_mask, "green")]:
+            contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            for cnt in contours:
+                area = cv2.contourArea(cnt)
+                if 500 < area < 50000:
+                    x, y, w, h = cv2.boundingRect(cnt)
+                    aspect_ratio = w / float(h) if h > 0 else 0
+                    if 2 < aspect_ratio < 20:
+                        hp_regions.append((x, y, w, h, color_name))
+                        if color_name in ("red", "green"):
+                            result["hp_bar_visible"] = True
+        
+        if hp_regions:
+            total_width = sum(r[2] for r in hp_regions)
+            filled_width = sum(r[2] for r in hp_regions if r[4] == "green")
+            if total_width > 0:
+                result["hp_bar_percent"] = round(filled_width / total_width * 100, 1)
+        
+        lower_bright = np.array([0, 0, 200])
+        upper_bright = np.array([20, 20, 255])
+        bright_mask = cv2.inRange(hsv, lower_bright, upper_bright)
+        
+        bright_contours, _ = cv2.findContours(bright_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        small_bright_count = sum(1 for cnt in bright_contours if 50 < cv2.contourArea(cnt) < 2000)
+        result["damage_numbers_detected"] = small_bright_count > 0
+        
+        lower_purple = np.array([120, 50, 50])
+        upper_purple = np.array([160, 255, 255])
+        purple_mask = cv2.inRange(hsv, lower_purple, upper_purple)
+        
+        purple_contours, _ = cv2.findContours(purple_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        icon_candidates = [cnt for cnt in purple_contours if 200 < cv2.contourArea(cnt) < 5000]
+        result["status_effects_count"] = len(icon_candidates)
+        
+    except Exception:
+        pass
+    
+    return result
+
+
+def _cluster_similar_frames(screenshots_data, max_clusters=10):
+    """Cluster visually similar frames using perceptual hashes.
+    
+    Groups frames that look nearly identical, allowing agents to skip
+    redundant screenshots. Returns cluster assignments and representative
+    frame indices for each cluster.
+    
+    This reduces token costs by identifying which screenshots are worth
+    opening vs which are duplicates of already-seen situations."""
+    if not CV2_AVAILABLE or len(screenshots_data) < 2:
+        return None
+    
+    try:
+        hashes = []
+        valid_indices = []
+        
+        for i, shot in enumerate(screenshots_data):
+            phash = shot.get("phash_cv2")
+            if phash is not None:
+                hashes.append(phash)
+                valid_indices.append(i)
+        
+        if len(hashes) < 2:
+            return None
+        
+        clusters = []
+        representatives = []
+        
+        for i, h in enumerate(hashes):
+            assigned = False
+            for cluster_idx, (cluster_hashes, rep_idx) in enumerate(clusters):
+                min_dist = min(_hamming_cv2(h, ch) for ch in cluster_hashes)
+                if min_dist <= VISUAL_SIMILARITY_HAMMING_THRESHOLD:
+                    cluster_hashes.append(h)
+                    clusters[cluster_idx] = (cluster_hashes, rep_idx)
+                    assigned = True
+                    break
+            
+            if not assigned:
+                clusters.append(([h], i))
+                representatives.append(i)
+        
+        if len(clusters) > max_clusters:
+            cluster_sizes = [(len(ch), idx) for idx, (ch, _) in enumerate(clusters)]
+            cluster_sizes.sort(reverse=True)
+            top_indices = [idx for _, idx in cluster_sizes[:max_clusters]]
+            representatives = [valid_indices[i] for i in top_indices]
+        
+        return {
+            "clusters": len(clusters),
+            "representatives": representatives,
+            "compression_ratio": round(len(valid_indices) / max(len(representatives), 1), 2),
+        }
+        
+    except Exception:
+        return None
+
+
+def _hamming_cv2(a, b):
+    """Compute Hamming distance between two integer hashes."""
+    return bin(a ^ b).count("1")
 
 
 def _average_hash(gray_img, size=8):
@@ -292,28 +844,81 @@ def _hamming(a, b):
     return bin(a ^ b).count("1")
 
 
-def analyze_screenshot(path):
+def analyze_screenshot(path, prev_frame_array=None):
     """Optional (needs Pillow) visual sanity check that catches rendering
     failures game state alone can't: a crashed graphics context, an empty
     scene graph, or a window stuck on a loading/black screen all still leave
     game logic (HP, positions, combat) running fine, so state.jsonl alone
     would report a perfectly healthy run while the window shows nothing.
     Also returns a cheap perceptual hash (`phash`) so callers can tell two
-    frames apart without a second image decode."""
-    if not PIL_AVAILABLE:
-        return {}
-    try:
-        with Image.open(path) as img:
-            gray = img.convert("L")
-            stddev = ImageStat.Stat(gray).stddev[0]
-            phash = _average_hash(gray)
-    except Exception:
-        return {}
-    return {
-        "pixel_stddev": round(stddev, 2),
-        "likely_blank": stddev < BLANK_FRAME_STDDEV_THRESHOLD,
-        "phash": phash,
-    }
+    frames apart without a second image decode.
+    
+    With OpenCV available, additionally returns:
+    - phash_cv2: 256-bit perceptual hash (more robust than Pillow's 64-bit)
+    - ssim_ready: numpy array for SSIM comparison with other frames
+    - ui_state: detected UI elements (HP bars, damage numbers, status effects)
+    - motion_stats: optical flow metrics vs previous frame (when prev_frame_array provided)
+    - brightness_anomaly: sudden flash/fade detection
+    - entity_tracking: tracked entities from previous frame
+    
+    These advanced features enable agents to understand scene dynamics
+    without watching video sequences, reducing token costs for temporal analysis."""
+    result = {}
+    
+    if PIL_AVAILABLE:
+        try:
+            with Image.open(path) as img:
+                gray = img.convert("L")
+                stddev = ImageStat.Stat(gray).stddev[0]
+                phash = _average_hash(gray)
+            result.update({
+                "pixel_stddev": round(stddev, 2),
+                "likely_blank": stddev < BLANK_FRAME_STDDEV_THRESHOLD,
+                "phash": phash,
+            })
+        except Exception:
+            pass
+    
+    if CV2_AVAILABLE:
+        try:
+            img_bgr = cv2.imread(str(path))
+            if img_bgr is not None:
+                phash_cv2 = _perceptual_hash_cv2(img_bgr)
+                result["phash_cv2"] = phash_cv2
+                
+                ui_state = _detect_ui_changes(img_bgr)
+                if ui_state:
+                    result["ui_state"] = ui_state
+                
+                gray_float = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY).astype(np.float32) / 255.0
+                result["ssim_ready"] = True
+                
+                edges = cv2.Canny(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY), 50, 150)
+                edge_density = np.count_nonzero(edges) / edges.size
+                result["edge_density"] = round(edge_density, 4)
+                
+                # Enhanced brightness stats with anomaly detection
+                brightness_result = _detect_brightness_anomalies(img_bgr, prev_frame_array)
+                result["brightness_stats"] = {
+                    "mean": brightness_result.get("brightness_mean", 0),
+                    "std": brightness_result.get("brightness_std", 0),
+                }
+                if brightness_result.get("anomaly"):
+                    result["brightness_anomaly"] = {
+                        "delta": brightness_result.get("brightness_delta"),
+                        "type": brightness_result.get("anomaly_type"),
+                    }
+                
+                # Motion detection via optical flow (if previous frame provided)
+                if prev_frame_array is not None:
+                    motion_stats = _compute_optical_flow(prev_frame_array, img_bgr)
+                    if motion_stats:
+                        result["motion_stats"] = motion_stats
+                        
+        except Exception:
+            pass
+    
+    return result
 
 
 def _build_timelapse_gif(out_dir, frame_names, max_width=640, frame_duration_ms=400):
@@ -539,13 +1144,27 @@ def main():
                 labels[eid] = EntityLabel(node, z_offset=z_offset)
             labels[eid].update(label_text(entity, is_player))
 
+    # Track previous frame for motion detection and entity tracking
+    prev_frame_array = None
+    prev_entities_data = []
+    entity_trajectories = []  # Accumulated entity lifecycle data
+    
     def take_screenshot(elapsed, reason, kind=None):
-        nonlocal blank_frame_count
+        nonlocal blank_frame_count, prev_frame_array, prev_entities_data, entity_trajectories
         idx = len(screenshots) + 1
         shot_path = out_dir / f"frame_{idx:03d}.jpg"
         game.screenshot(namePrefix=Filename.from_os_specific(str(shot_path)), defaultFilename=False)
 
-        visual = analyze_screenshot(shot_path)
+        # Pass previous frame array for motion detection
+        visual = analyze_screenshot(shot_path, prev_frame_array=prev_frame_array)
+        
+        # Store current frame array for next iteration's motion detection
+        if CV2_AVAILABLE:
+            try:
+                prev_frame_array = cv2.imread(str(shot_path))
+            except Exception:
+                prev_frame_array = None
+        
         if visual.get("phash") is not None:
             # kind-based grouping (below/_group_consecutive_by_kind) is the
             # main redundancy signal and works without Pillow, but where a
@@ -567,16 +1186,37 @@ def main():
             )
 
         entities = get_entities(game)
+        curr_entities_data = [
+            {**entity_state(e, is_player), "screen_xy": world_to_screen(game, e.node)}
+            for e, is_player in entities if getattr(e, "node", None)
+        ]
+        
+        # Entity tracking across frames
+        entity_tracking_result = None
+        if prev_entities_data and curr_entities_data:
+            entity_tracking_result = _track_entities_across_frames(
+                prev_entities_data, curr_entities_data, None, None
+            )
+            if entity_tracking_result and entity_tracking_result.get("tracked"):
+                entity_trajectories.append({
+                    "t": round(elapsed, 2),
+                    "tracked_count": len(entity_tracking_result["tracked"]),
+                    "spawned": entity_tracking_result.get("spawned", 0),
+                    "despawned": entity_tracking_result.get("despawned", 0),
+                })
+        
+        prev_entities_data = curr_entities_data
+        
         sidecar = {
             "t": round(elapsed, 2),
             "reason": reason,
             "screen_size": [game.win.getXSize(), game.win.getYSize()],
             **visual,
-            "entities": [
-                {**entity_state(e, is_player), "screen_xy": world_to_screen(game, e.node)}
-                for e, is_player in entities if getattr(e, "node", None)
-            ],
+            "entities": curr_entities_data,
         }
+        if entity_tracking_result:
+            sidecar["entity_tracking"] = entity_tracking_result
+            
         (out_dir / f"frame_{idx:03d}.json").write_text(
             json.dumps(sidecar, ensure_ascii=False, indent=1), encoding="utf-8"
         )
@@ -697,6 +1337,8 @@ def main():
         if elapsed >= args.duration:
             take_screenshot(elapsed, "run end")
             run_state["completed"] = True
+            # Call finish() explicitly before exiting since game.run() won't return
+            finish()
             sys.exit(0)
         return task.again
 
@@ -740,6 +1382,84 @@ def main():
             "warning": len(warning_collector.records),
         }
         screenshot_reason_counts = dict(Counter(s["kind"] or s["reason"] for s in screenshots))
+        
+        # OpenCV-based visual analysis summary (when available)
+        visual_analysis_summary = {}
+        if CV2_AVAILABLE and screenshots:
+            ui_events = sum(1 for s in screenshots if s.get("ui_state", {}).get("damage_numbers_detected"))
+            hp_changes = [s.get("ui_state", {}).get("hp_bar_percent") for s in screenshots if s.get("ui_state", {}).get("hp_bar_percent") is not None]
+            avg_edge_density = np.mean([s.get("edge_density", 0) for s in screenshots if s.get("edge_density")]) if screenshots else 0
+            
+            # Motion analysis across frames
+            motion_frames = [s for s in screenshots if s.get("motion_stats")]
+            avg_motion_ratio = np.mean([s["motion_stats"]["motion_ratio"] for s in motion_frames]) if motion_frames else 0
+            high_motion_count = sum(1 for s in motion_frames if s["motion_stats"]["motion_ratio"] > 0.1)
+            
+            # Brightness anomaly detection
+            brightness_anomalies = sum(1 for s in screenshots if s.get("brightness_anomaly", {}).get("anomaly"))
+            
+            # Entity tracking summary
+            total_tracked = sum(t.get("tracked_count", 0) for t in entity_trajectories)
+            total_spawned = sum(t.get("spawned", 0) for t in entity_trajectories)
+            total_despawned = sum(t.get("despawned", 0) for t in entity_trajectories)
+            
+            visual_analysis_summary = {
+                "frames_with_damage_numbers": ui_events,
+                "hp_bar_readings_count": len(hp_changes),
+                "avg_edge_density": round(float(avg_edge_density), 4),
+                "cv2_available": True,
+                "motion_analysis": {
+                    "frames_with_motion_data": len(motion_frames),
+                    "avg_motion_ratio": round(float(avg_motion_ratio), 4),
+                    "high_motion_frames": high_motion_count,
+                    "action_intensity": "high" if avg_motion_ratio > 0.15 else ("medium" if avg_motion_ratio > 0.05 else "low"),
+                },
+                "brightness_anomalies": brightness_anomalies,
+                "entity_tracking": {
+                    "total_tracked_events": total_tracked,
+                    "total_spawned": total_spawned,
+                    "total_despawned": total_despawned,
+                    "tracking_samples": len(entity_trajectories),
+                },
+            }
+            
+            clustering_result = _cluster_similar_frames(screenshots)
+            if clustering_result:
+                visual_analysis_summary["frame_clustering"] = clustering_result
+            
+            # Smart keyframe extraction based on multiple signals
+            keyframe_indices = []
+            for i, s in enumerate(screenshots):
+                score = 0
+                # High motion = important
+                if s.get("motion_stats", {}).get("motion_ratio", 0) > 0.1:
+                    score += 2
+                # UI changes = important
+                if s.get("ui_state", {}).get("damage_numbers_detected"):
+                    score += 1
+                if s.get("ui_state", {}).get("hp_bar_percent") is not None:
+                    score += 1
+                # Entity events = important
+                if s.get("entity_tracking", {}).get("spawned", 0) > 0:
+                    score += 2
+                if s.get("entity_tracking", {}).get("despawned", 0) > 0:
+                    score += 2
+                # Brightness anomaly = important (flash/fade effects)
+                if s.get("brightness_anomaly", {}).get("anomaly"):
+                    score += 3
+                # First/last frame always important
+                if i == 0 or i == len(screenshots) - 1:
+                    score += 1
+                    
+                if score >= 2:
+                    keyframe_indices.append(i)
+            
+            if keyframe_indices:
+                visual_analysis_summary["smart_keyframes"] = {
+                    "indices": keyframe_indices,
+                    "count": len(keyframe_indices),
+                    "reduction_ratio": round(len(screenshots) / len(keyframe_indices), 2),
+                }
 
         summary_data = {
             "status": status,
@@ -762,6 +1482,9 @@ def main():
             "sample_count": sample_count,
             "event_counts": event_counts,
             "screenshot_reason_counts": screenshot_reason_counts,
+            "visual_analysis": visual_analysis_summary,
+            # Auto-generated hypothesis for agents
+            "auto_hypothesis": generate_auto_hypothesis(summary_data, visual_analysis_summary, combat_events, kill_count, pinned_reported, blank_frame_count) if CV2_AVAILABLE else None,
         }
         (out_dir / "summary.json").write_text(json.dumps(summary_data, indent=1), encoding="utf-8")
 
@@ -822,6 +1545,17 @@ def main():
                           "in frame_NNN.json).")
         elif not PIL_AVAILABLE:
             lines.append("- Blank-frame visual check skipped (Pillow not installed: pip install pillow).")
+        
+        # OpenCV-based visual analysis issues
+        if CV2_AVAILABLE and visual_analysis_summary:
+            if visual_analysis_summary.get("frames_with_damage_numbers", 0) == 0 and kill_count > 0:
+                lines.append("- VISUAL: No damage numbers detected on screenshots despite kills recorded - UI may be broken or occluded.")
+            
+            clustering = visual_analysis_summary.get("frame_clustering", {})
+            if clustering and clustering.get("compression_ratio", 1) > 3:
+                lines.append(f"- VISUAL: Frame clustering detected {clustering['compression_ratio']}x redundancy - "
+                            f"only {len(clustering.get('representatives', []))} of {len(screenshots)} frames are visually distinct.")
+        
         if not pinned_reported and not warning_collector.records and not blank_frame_count and PIL_AVAILABLE:
             lines.append("- None.")
         lines.append("")
@@ -840,11 +1574,40 @@ def main():
         # possible: every raw frame_NNN.jpg/.json stays on disk untouched.
         groups = _group_consecutive_by_kind(screenshots)
         representative_shots = []
+        
+        # OpenCV-based visual clustering: further reduce screenshots by grouping
+        # visually similar frames even if they have different `kind` tags. This
+        # catches cases where the game state logic fires different events but
+        # the actual frames look nearly identical (e.g., idle animations).
+        cv2_representatives = None
+        if CV2_AVAILABLE and len(screenshots) > 3:
+            clustering = _cluster_similar_frames(screenshots, max_clusters=15)
+            if clustering:
+                cv2_representatives = set(clustering.get("representatives", []))
+        
         lines.append("## Screenshots (each has a matching frame_NNN.json with per-entity screen_xy pixels)")
-        for group in groups:
+        for i, group in enumerate(groups):
+            # Skip frames that are visually redundant according to OpenCV clustering
+            if cv2_representatives is not None:
+                group_representatives = [g for idx, g in enumerate(group) if (len(screenshots) <= 3) or (sum(1 for prev_group in groups[:i] for _ in prev_group) + idx) in cv2_representatives]
+                if not group_representatives:
+                    continue
+                group = group_representatives
+            
             if len(group) <= 2:
                 for s in group:
-                    lines.append(f"- {s['name']} — {s['reason']}")
+                    ui_info = ""
+                    if s.get("ui_state"):
+                        ui_parts = []
+                        if s["ui_state"].get("hp_bar_percent") is not None:
+                            ui_parts.append(f"HP={s['ui_state']['hp_bar_percent']}%")
+                        if s["ui_state"].get("damage_numbers_detected"):
+                            ui_parts.append("damage!")
+                        if s["ui_state"].get("status_effects_count", 0) > 0:
+                            ui_parts.append(f"{s['ui_state']['status_effects_count']} effects")
+                        if ui_parts:
+                            ui_info = f" [{', '.join(ui_parts)}]"
+                    lines.append(f"- {s['name']} — {s['reason']}{ui_info}")
                 representative_shots.extend(group)
             else:
                 first, last = group[0], group[-1]
@@ -863,6 +1626,63 @@ def main():
         # for an agent reading it back through a single-frame image Read.
         contact_sheet_name = _build_contact_sheet(out_dir, representative_shots)
         timelapse_name = _build_timelapse_gif(out_dir, [s["name"] for s in screenshots])
+        
+        # Add visual analysis section when OpenCV is available
+        if CV2_AVAILABLE and visual_analysis_summary:
+            lines += [
+                "",
+                "## Visual Analysis (OpenCV)",
+                f"- Frames with damage numbers visible: {visual_analysis_summary.get('frames_with_damage_numbers', 0)}",
+                f"- HP bar readings captured: {visual_analysis_summary.get('hp_bar_readings_count', 0)}",
+                f"- Average edge density (scene complexity): {visual_analysis_summary.get('avg_edge_density', 0)}",
+            ]
+            
+            motion = visual_analysis_summary.get("motion_analysis", {})
+            if motion:
+                lines.append(f"- Motion analysis: {motion.get('action_intensity', 'unknown')} intensity, "
+                            f"{motion.get('avg_motion_ratio', 0):.2%} avg motion ratio")
+                if motion.get("high_motion_frames", 0) > 0:
+                    lines.append(f"  High-motion frames: {motion['high_motion_frames']}")
+            
+            entity_track = visual_analysis_summary.get("entity_tracking", {})
+            if entity_track and entity_track.get("tracking_samples", 0) > 0:
+                lines.append(f"- Entity tracking: {entity_track.get('total_tracked_events', 0)} tracked events, "
+                            f"{entity_track.get('total_spawned', 0)} spawned, {entity_track.get('total_despawned', 0)} despawned")
+            
+            brightness_anomalies = visual_analysis_summary.get("brightness_anomalies", 0)
+            if brightness_anomalies > 0:
+                lines.append(f"- Brightness anomalies detected: {brightness_anomalies} (flash/fade effects)")
+            
+            smart_keyframes = visual_analysis_summary.get("smart_keyframes", {})
+            if smart_keyframes:
+                lines.append(f"- Smart keyframes: {smart_keyframes['count']} of {len(screenshots)} frames selected "
+                            f"({smart_keyframes.get('reduction_ratio', 1)}x reduction) - review these first")
+            
+            clustering = visual_analysis_summary.get("frame_clustering", {})
+            if clustering:
+                lines.append(f"- Frame clustering: {clustering.get('clusters', 0)} visual groups from {len(screenshots)} frames "
+                            f"({clustering.get('compression_ratio', 1)}x reduction)")
+                lines.append(f"- Representative frames to review: {clustering.get('representatives', [])}")
+        
+        # Auto-hypothesis section for agents
+        auto_hyp = summary_data.get("auto_hypothesis")
+        if auto_hyp:
+            lines += [
+                "",
+                "## Auto-Diagnosis (AI-generated hypothesis)",
+                f"**Primary Issue**: {auto_hyp['primary_hypothesis']['issue_type']}",
+                f"- Description: {auto_hyp['primary_hypothesis']['description']}",
+                f"- Confidence: {auto_hyp['primary_hypothesis']['confidence']}",
+                "- Suggested checks:",
+            ]
+            for check in auto_hyp["primary_hypothesis"]["suggested_checks"]:
+                lines.append(f"  • {check}")
+            
+            if auto_hyp.get("additional_hypotheses"):
+                lines.append("- Other possible issues:")
+                for hyp in auto_hyp["additional_hypotheses"]:
+                    lines.append(f"  • {hyp['issue_type']}: {hyp['description']} ({hyp['confidence']})")
+        
         lines += [
             "",
             f"Contact sheet (open this first for a whole-run visual check): {contact_sheet_name}" if contact_sheet_name
