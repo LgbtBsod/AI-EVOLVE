@@ -1,0 +1,12 @@
+{
+  "avg_fps": 43.93,
+  "min_fps": 31.1,
+  "max_fps": 62.06,
+  "avg_frame_time_ms": 24.14,
+  "p95_frame_time_ms": 32.15,
+  "p99_frame_time_ms": 32.15,
+  "total_frames": 100,
+  "stutter_count": 0,
+  "stutter_percentage": 0.0,
+  "performance_score": "fair"
+}

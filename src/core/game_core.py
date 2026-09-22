@@ -387,9 +387,9 @@ class GameCore(BaseComponent):
     def get_system_info(self) -> dict[str, Any]:
         """Получение информации о системе"""
         return {
-            'name': self.system_name,
+            'name': self.component_id,
             'state': self.system_state.value,
-            'priority': self.system_priority.value,
+            'priority': self.priority.value,
             'plugins_loaded': self.core_stats['plugins_loaded'],
             'plugins_failed': self.core_stats['plugins_failed'],
             'systems_initialized': self.core_stats['systems_initialized'],
