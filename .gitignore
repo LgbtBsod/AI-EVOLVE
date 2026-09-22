@@ -1,53 +1,40 @@
 ```
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
+*.pyc
+*.pyo
+*.pyd
+
+# Build artifacts
 build/
-develop-eggs/
 dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
 
-# Database
-*.db
-*.db-journal
-
-# Development output directories
-dev_probe_output/
-
-# IDE
-.vscode/
-.idea/
-
-# Environment
-.env
-.env.local
-.env.*
-!.env.example
+# Virtual environments
+venv/
+.venv/
+env/
+.ENV/
 
 # Logs
 *.log
 
-# OS generated files
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
+
+# Coverage
+.coverage
+coverage/
+htmlcov/
+
+# Testing
+.pytest_cache/
+.mypy_cache/
 ```

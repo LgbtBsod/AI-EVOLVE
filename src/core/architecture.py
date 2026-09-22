@@ -221,7 +221,7 @@ class LifecycleMixin:
             # Если переход недопустим - форсируем его для обратной совместимости
             old_state = self._state
             self._state = value
-            logger.debug(f"Форсированный переход состояния (legacy): {old_state.name} -> {new_state.name}")
+            logger.debug(f"Форсированный переход состояния (legacy): {old_state.name} -> {value.name}")
     
     def _transition_to(self, new_state: LifecycleState) -> bool:
         """Безопасный переход между состояниями"""

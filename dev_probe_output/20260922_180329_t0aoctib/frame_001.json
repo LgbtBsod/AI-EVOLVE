@@ -1,0 +1,13 @@
+{
+ "t": 1.0,
+ "reason": "run start",
+ "screen_size": [
+  1280,
+  720
+ ],
+ "pixel_stddev": 0.0,
+ "likely_blank": true,
+ "phash": 18446744073709551615,
+ "visually_similar_to_previous": false,
+ "entities": []
+}
