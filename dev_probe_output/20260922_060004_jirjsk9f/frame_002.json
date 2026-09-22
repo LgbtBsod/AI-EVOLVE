@@ -1,0 +1,150 @@
+{
+ "t": 5.05,
+ "reason": "run end",
+ "screen_size": [
+  1280,
+  720
+ ],
+ "pixel_stddev": 8.61,
+ "likely_blank": false,
+ "phash": 1729382256960602631,
+ "phash_cv2": 1243860333603982568026641440523014635142548663400435746517610765710004322308,
+ "ui_state": {
+  "hp_bar_visible": false,
+  "hp_bar_percent": null,
+  "damage_numbers_detected": false,
+  "status_effects_count": 0
+ },
+ "ssim_ready": true,
+ "edge_density": 0.0056,
+ "brightness_stats": {
+  "mean": 121.11,
+  "std": 8.61
+ },
+ "motion_stats": {
+  "mean_magnitude": 0.1503130942583084,
+  "max_magnitude": 35.74639129638672,
+  "std_magnitude": 1.3633445501327515,
+  "high_motion_pixels": 9277,
+  "motion_ratio": 0.010066189236111111
+ },
+ "visually_similar_to_previous": false,
+ "entities": [
+  {
+   "id": "character_1",
+   "type": "hero",
+   "hp": 120,
+   "max_hp": 120,
+   "pos": [
+    -11.1,
+    9.0
+   ],
+   "screen_xy": [
+    640,
+    309
+   ]
+  },
+  {
+   "id": "enemy_1",
+   "type": "basic",
+   "hp": 50,
+   "max_hp": 50,
+   "pos": [
+    119.4,
+    120.4
+   ],
+   "screen_xy": null
+  },
+  {
+   "id": "enemy_2",
+   "type": "basic",
+   "hp": 50,
+   "max_hp": 50,
+   "pos": [
+    -119.8,
+    119.8
+   ],
+   "screen_xy": null
+  },
+  {
+   "id": "enemy_3",
+   "type": "strong",
+   "hp": 120,
+   "max_hp": 120,
+   "pos": [
+    119.8,
+    -119.9
+   ],
+   "screen_xy": null
+  },
+  {
+   "id": "enemy_4",
+   "type": "strong",
+   "hp": 120,
+   "max_hp": 120,
+   "pos": [
+    -120.5,
+    -120.2
+   ],
+   "screen_xy": null
+  },
+  {
+   "id": "enemy_5",
+   "type": "basic",
+   "hp": 50,
+   "max_hp": 50,
+   "pos": [
+    185.6,
+    -197.7
+   ],
+   "screen_xy": null
+  },
+  {
+   "id": "enemy_6",
+   "type": "basic",
+   "hp": 50,
+   "max_hp": 50,
+   "pos": [
+    46.5,
+    -198.2
+   ],
+   "screen_xy": null
+  },
+  {
+   "id": "enemy_7",
+   "type": "basic",
+   "hp": 50,
+   "max_hp": 50,
+   "pos": [
+    197.9,
+    -110.5
+   ],
+   "screen_xy": null
+  },
+  {
+   "id": "enemy_8",
+   "type": "basic",
+   "hp": 50,
+   "max_hp": 50,
+   "pos": [
+    -39.4,
+    197.8
+   ],
+   "screen_xy": null
+  }
+ ],
+ "entity_tracking": {
+  "tracked": [
+   {
+    "entity_id": "character_1",
+    "displacement": 3.0,
+    "prev_hp": 120,
+    "curr_hp": 120,
+    "hp_change": 0
+   }
+  ],
+  "spawned": 8,
+  "despawned": 5,
+  "continuity_score": 0.11
+ }
+}

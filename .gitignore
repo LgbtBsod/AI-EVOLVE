@@ -1,61 +1,44 @@
+```
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+*.pyc
+*.pyo
+*.pyd
 
-# IDE
-.vscode/
-.idea/
-
-# Environment
-.env
-.env.local
-.env.*
-.venv/
-venv/
-ENV/
-
-# Testing
-.coverage
-htmlcov/
-.coverage.*
-.noserc
-.testing/
-.pytest_cache/
-pytestdebug.log
+# Development output
+dev_probe_output/
 
 # Logs
 *.log
 
+# Environment
+.env
+.env.local
+*.env.*
+
+# Dependencies
+.venv/
+venv/
+node_modules/
+
+# Build artifacts
+dist/
+build/
+target/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# Coverage
+.coverage
+coverage/
+htmlcov/
+
 # OS
 .DS_Store
 Thumbs.db
-
-# Dev tooling output (tools/dev_probe.py + ad hoc verification screenshots
-# at the repo root). Deliberately NOT a blanket *.png/*.jpg - real game
-# assets under src/assets/ must stay trackable.
-/dev_probe_output/
-/*.jpg
-/*.jpeg
-/*.png
-
-# Personal dev_probe.py baseline snapshot (--save-baseline) - whatever run
-# a developer happened to save locally, not a project artifact to share.
-tools/dev_probe_baseline.json
+```
