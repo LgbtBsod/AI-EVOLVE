@@ -19,7 +19,7 @@ from enum import Enum
 from typing import Any
 
 from src.core.architecture import BaseComponent, ComponentType, LifecycleState, Priority
-from src.core.constants import EffectCategory, EffectType
+from src.core.constants import EffectCategory, EffectType, EffectModifierType, EffectTag
 from src.core.rng_manager import RNGManager
 
 logger = logging.getLogger(__name__)
@@ -40,8 +40,10 @@ class EffectModifier:
     """Модификатор эффекта"""
     stat_type: str
     value: float
-    modifier_type: str = "additive"  # additive, multiplicative, override
+    modifier_type: EffectModifierType = EffectModifierType.ADDITIVE
     condition: str | None = None
+    modifier_id: str | None = None  # Уникальный ID для синергий (NEGATIVE, BREAK_RELATED)
+    tags: list[EffectTag] = field(default_factory=list)  # Теги эффекта
 
 @dataclass(slots=True)
 class EffectTrigger:
@@ -73,6 +75,8 @@ class Effect:
     source: str | None = None
     removable: bool = True
     dispellable: bool = True
+    tags: list[EffectTag] = field(default_factory=list)  # Теги эффекта
+    priority: int = 0  # Приоритет эффекта (важно для конфликтов)
 
 @dataclass(slots=True)
 class ActiveEffect:
@@ -598,16 +602,79 @@ class EffectSystem(BaseComponent):
         """Применяет активные модификаторы эффектов к базовому значению
         характеристики - это и есть "подключение" системы эффектов к боевой
         системе: Character/EnhancedEnemy.get_combat_stats() зовут это вместо
-        того, чтобы читать сырой атрибут напрямую."""
+        того, чтобы читать сырой атрибут напрямую.
+        
+        Поддержка синергий:
+        - NEGATIVE теги: если есть негативные эффекты, урон по ним увеличивается
+        - BREAK_RELATED теги: бонусы при пробитой стойкости
+        """
         value = base_value
+        
+        # Сначала аддитивные модификаторы (плоские бонусы)
+        additive_sum = 0.0
+        multiplicative_sum = 0.0
+        
         for modifier in self.get_effect_modifiers(entity_id, stat_type):
-            if modifier.modifier_type == "multiplicative":
-                value *= (1.0 + modifier.value)
-            elif modifier.modifier_type == "additive":
-                value += modifier.value
-            elif modifier.modifier_type == "override":
-                value = modifier.value
+            if modifier.modifier_type == EffectModifierType.ADDITIVE:
+                additive_sum += modifier.value
+            elif modifier.modifier_type == EffectModifierType.MULTIPLICATIVE:
+                multiplicative_sum += modifier.value
+            elif modifier.modifier_type == EffectModifierType.OVERRIDE:
+                return modifier.value
+        
+        # Формула: (base + flat) * (1 + percent)
+        value = (value + additive_sum) * (1.0 + multiplicative_sum)
+        
         return value
+    
+    def has_tag(self, entity_id: str, tag: EffectTag) -> bool:
+        """Проверка наличия эффекта с тегом у сущности"""
+        if entity_id not in self.active_effects:
+            return False
+        
+        for active_effect in self.active_effects[entity_id]:
+            if not active_effect.is_active:
+                continue
+            
+            # Проверка тегов эффекта
+            if tag in active_effect.effect.tags:
+                return True
+            
+            # Проверка тегов модификаторов
+            for modifier in active_effect.effect.modifiers:
+                if tag in modifier.tags:
+                    return True
+        
+        return False
+    
+    def get_effects_by_tag(self, entity_id: str, tag: EffectTag) -> list[ActiveEffect]:
+        """Получение всех эффектов с указанным тегом"""
+        if entity_id not in self.active_effects:
+            return []
+        
+        result = []
+        for active_effect in self.active_effects[entity_id]:
+            if not active_effect.is_active:
+                continue
+            
+            if tag in active_effect.effect.tags:
+                result.append(active_effect)
+                continue
+            
+            for modifier in active_effect.effect.modifiers:
+                if tag in modifier.tags:
+                    result.append(active_effect)
+                    break
+        
+        return result
+    
+    def count_negative_effects(self, entity_id: str) -> int:
+        """Подсчет количества негативных эффектов на сущности"""
+        return len(self.get_effects_by_tag(entity_id, EffectTag.NEGATIVE))
+    
+    def is_broken(self, entity_id: str) -> bool:
+        """Проверка состояния BROKEN через теги"""
+        return self.has_tag(entity_id, EffectTag.BREAK_RELATED)
     
     def create_custom_effect(self, template_id: str, custom_modifiers: list[EffectModifier], 
                            duration: float, name: str = "") -> str | None:

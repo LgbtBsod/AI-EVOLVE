@@ -301,6 +301,31 @@ class EffectCategory(Enum):
     EMOTIONAL = "emotional"
     GENETIC = "genetic"
     REVERSIVE = "reversive"
+    CROWD_CONTROL = "crowd_control"  # Стан, нокдаун, замедление, оглушение
+    TOUGHNESS = "toughness"  # Эффекты связанные со стойкостью
+
+
+class EffectModifierType(Enum):
+    """Типы модификаторов эффектов"""
+    ADDITIVE = "additive"      # Плоское добавление
+    MULTIPLICATIVE = "multiplicative"  # Процентное изменение
+    OVERRIDE = "override"      # Полная замена значения
+
+
+class EffectTag(Enum):
+    """Теги для классификации эффектов"""
+    BUFF = "buff"
+    DEBUFF = "debuff"
+    PERMANENT = "permanent"
+    TEMPORARY = "temporary"
+    STACKABLE = "stackable"
+    UNIQUE = "unique"
+    NEGATIVE = "negative"  # Негативный эффект (для синергий)
+    BREAK_RELATED = "break_related"  # Связан с пробитием стойкости
+    STUN = "stun"  # Оглушение
+    KNOCKDOWN = "knockdown"  # Нокдаун
+    SLOW = "slow"  # Замедление
+    DAZE = "daze"  # Ошеломление
 
 class EntityType(Enum):
     """Типы сущностей"""

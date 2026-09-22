@@ -4,41 +4,43 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
-
-# Development output
-dev_probe_output/
+.Python
+env/
+venv/
+.venv/
+.ENV
+.ENV.local
+.env
+.env.local
+.env.*
 
 # Logs
 *.log
 
-# Environment
-.env
-.env.local
-*.env.*
-
-# Dependencies
-.venv/
-venv/
-node_modules/
-
-# Build artifacts
-dist/
-build/
-target/
-
-# Editors
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *.tmp
 
-# Coverage
+# Build artifacts
+dist/
+build/
+target/
+*.o
+*.obj
+*.out
+
+# Dependencies
+node_modules/
+.mypy_cache/
+.pytest_cache/
 .coverage
 coverage/
 htmlcov/
 
-# OS
+# System
 .DS_Store
 Thumbs.db
 ```
