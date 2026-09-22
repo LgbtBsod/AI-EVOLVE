@@ -1,0 +1,33 @@
+{
+ "t": 20.02,
+ "reason": "run end",
+ "screen_size": [
+  1280,
+  720
+ ],
+ "pixel_stddev": 0.0,
+ "likely_blank": true,
+ "phash": 18446744073709551615,
+ "phash_cv2": 115792089237316195423570985008687907853269984665640564039457584007913129639935,
+ "ui_state": {
+  "hp_bar_visible": false,
+  "hp_bar_percent": null,
+  "damage_numbers_detected": false,
+  "status_effects_count": 0
+ },
+ "ssim_ready": true,
+ "edge_density": 0.0,
+ "brightness_stats": {
+  "mean": 105.0,
+  "std": 0.0
+ },
+ "motion_stats": {
+  "mean_magnitude": 0.0,
+  "max_magnitude": 0.0,
+  "std_magnitude": 0.0,
+  "high_motion_pixels": 0,
+  "motion_ratio": 0.0
+ },
+ "visually_similar_to_previous": true,
+ "entities": []
+}
