@@ -40,9 +40,12 @@ logger = logging.getLogger("main")
 
 loadPrcFileData("", "window-title AI-EVOLVE (dev build)")
 loadPrcFileData("", "win-size 1280 720")
-loadPrcFileData("", "sync-video 1")
-# Поддержка headless-режима для тестов без дисплея
-loadPrcFileData("", "load-display panda3d_glxdisplay.so")  # Попробовать GLX сначала
+loadPrcFileData("", "sync-video 0")  # Disable vsync for headless testing
+# Headless support - prioritize offscreen/pandagl for CI environments
+loadPrcFileData("", "load-display pandagl")
+loadPrcFileData("", "pipe-type offscreen")
+loadPrcFileData("", "egl-device true")
+loadPrcFileData("", "audio-library-name null")  # Disable audio for tests
 loadPrcFileData("", "show-frame-rate-meter 0")
 
 

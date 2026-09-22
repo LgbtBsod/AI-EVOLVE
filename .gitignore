@@ -1,31 +1,33 @@
 ```
-# Python compiled files
-__pycache__/
+# Compiled and build artifacts
 *.pyc
-*.pyo
-*.pyd
+__pycache__/
+*.o
+*.obj
+*.out
 
-# Development output directories
-dev_probe_output/
-
-# Logs and temporary files
+# Logs and temp files
 *.log
 *.tmp
 *.swp
 
-# Environment files
+# Coverage
+.coverage
+
+# Development probe outputs
+dev_probe_output/
+
+# Database files
+*.db
+
+# Environment
 .env
 .env.local
 *.env.*
 
-# Editors and IDEs
+# Editors
 .vscode/
 .idea/
-
-# Coverage reports
-coverage/
-htmlcov/
-.coverage
 
 # OS specific
 .DS_Store

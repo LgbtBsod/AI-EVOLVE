@@ -1,0 +1,6 @@
+Known pipe types:
+  glxGraphicsPipe
+(1 aux display modules not yet loaded.)
+:display:x11display(error): Could not open display ":0.0".
+:display(warning): Unable to load libp3headlessgl.so: libEGL.so.1: cannot open shared object file: No such file or directory
+:ShowBase(warning): Unable to open 'onscreen' window.

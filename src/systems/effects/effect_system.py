@@ -608,6 +608,8 @@ class EffectSystem(BaseComponent):
         - NEGATIVE теги: если есть негативные эффекты, урон по ним увеличивается
         - BREAK_RELATED теги: бонусы при пробитой стойкости
         """
+        from src.core.constants import EffectModifierType
+        
         value = base_value
         
         # Сначала аддитивные модификаторы (плоские бонусы)
@@ -615,11 +617,17 @@ class EffectSystem(BaseComponent):
         multiplicative_sum = 0.0
         
         for modifier in self.get_effect_modifiers(entity_id, stat_type):
-            if modifier.modifier_type == EffectModifierType.ADDITIVE:
+            # modifier_type может быть строкой или enum
+            mod_type = modifier.modifier_type
+            if isinstance(mod_type, EffectModifierType):
+                # Конвертируем enum в строку для сравнения
+                mod_type = mod_type.value
+            
+            if mod_type == "additive":
                 additive_sum += modifier.value
-            elif modifier.modifier_type == EffectModifierType.MULTIPLICATIVE:
+            elif mod_type == "multiplicative":
                 multiplicative_sum += modifier.value
-            elif modifier.modifier_type == EffectModifierType.OVERRIDE:
+            elif mod_type == "override":
                 return modifier.value
         
         # Формула: (base + flat) * (1 + percent)
