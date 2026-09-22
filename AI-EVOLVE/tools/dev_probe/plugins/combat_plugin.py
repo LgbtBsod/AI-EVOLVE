@@ -72,8 +72,8 @@ class CombatPlugin(DevProbePlugin):
         
         if event_type == EventType.DAMAGE_DEALT:
             damage = event.data.get("damage", 0)
-            source_id = event.source_entity_id or "unknown"
-            target_id = event.target_entity_id or "unknown"
+            source_id = getattr(event, 'source_entity_id', None) or event.source_id or "unknown"
+            target_id = getattr(event, 'target_entity_id', None) or event.target_id or "unknown"
             is_crit = event.data.get("is_critical", False)
             
             self.damage_events.append(DamageEvent(

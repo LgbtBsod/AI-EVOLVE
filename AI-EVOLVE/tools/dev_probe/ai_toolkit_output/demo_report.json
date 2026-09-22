@@ -1,0 +1,55 @@
+{
+  "generated_at": 1790080902.110971,
+  "session_stats": {
+    "start_time": 1790080902.1107373,
+    "snapshots_analyzed": 0,
+    "events_processed": 0,
+    "anomalies_detected": 0
+  },
+  "issues": [
+    {
+      "id": "issue_1",
+      "title": "Toughness cap violation",
+      "priority": "critical",
+      "category": "toughness",
+      "desc": "Max toughness exceeds 20% HP limit",
+      "fix": "Check scaling formula in toughness_component.py",
+      "files": [
+        "src/systems/combat/components/toughness_component.py"
+      ]
+    },
+    {
+      "id": "issue_2",
+      "title": "Low test coverage",
+      "priority": "medium",
+      "category": "testing",
+      "desc": "Combat system tests cover only 65% of code",
+      "fix": "Add more edge case tests",
+      "files": []
+    }
+  ],
+  "trends": {
+    "avg_damage": {
+      "values": [
+        100,
+        103,
+        106,
+        109,
+        112,
+        115,
+        118,
+        121,
+        124,
+        127
+      ],
+      "direction": "stable",
+      "anomaly": false,
+      "prediction": 130.0
+    }
+  },
+  "token_usage": {
+    "budget": 8000,
+    "used": 40,
+    "compression": 1.0
+  }
+}

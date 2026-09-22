@@ -9,8 +9,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dev_probe.core.snapshot_manager import SnapshotManager
 from dev_probe.core.event_tracker import EventTracker, EventType
-from dev_probe.core.state_analyzer import StateAnalyzer, Anomaly
-from dev_probe.plugins import ToughnessPlugin, EffectsPlugin, CombatPlugin
+from dev_probe.core.state_analyzer import StateAnalyzer, Anomaly, AnomalyType
+from dev_probe.plugins import ToughnessPlugin, EffectsPlugin, CombatPlugin, AdvancedMechanicsPlugin
 
 
 def test_snapshot_manager():
@@ -156,8 +156,8 @@ def test_state_analyzer():
     # Должны быть аномалии
     assert len(anomalies) > 0
     
-    anomaly_types = [a.anomaly_type for a in anomalies]
-    assert "low_health" in anomaly_types or "negative_toughness" in anomaly_types
+    anomaly_types = [a.anomaly_type.value for a in anomalies]
+    assert AnomalyType.LOW_HEALTH.value in anomaly_types or AnomalyType.NEGATIVE_TOUGHNESS.value in anomaly_types
     
     print("✓ StateAnalyzer tests passed")
 
@@ -314,6 +314,86 @@ def test_combat_plugin():
     print("✓ CombatPlugin tests passed")
 
 
+def test_advanced_mechanics_plugin():
+    """Тест плагина продвинутых механик."""
+    print("Testing AdvancedMechanicsPlugin...")
+    
+    plugin = AdvancedMechanicsPlugin()
+    tracker = EventTracker()
+    tracker.start_tracking()
+    
+    # Зарегистрировать обработчик
+    def on_event(event):
+        plugin.on_event(event)
+    
+    tracker.register_handler(EventType.DODGE_PERFORMED, on_event)
+    tracker.register_handler(EventType.COMBO_STARTED, on_event)
+    
+    # Симуляция уклонений
+    tracker.track_event(
+        EventType.DODGE_PERFORMED,
+        {"success": True, "dodge_type": "dodge", "stamina_cost": 20.0},
+        source_id="player_1",
+        target_id="enemy_1"
+    )
+    
+    tracker.track_event(
+        EventType.DODGE_PERFORMED,
+        {"success": True, "dodge_type": "parry", "stamina_cost": 15.0},
+        source_id="player_1",
+        target_id="enemy_2"
+    )
+    
+    tracker.track_event(
+        EventType.DODGE_PERFORMED,
+        {"success": False, "dodge_type": "dodge", "stamina_cost": 20.0},
+        source_id="player_1",
+        target_id="enemy_3"
+    )
+    
+    # Симуляция комбо
+    tracker.track_event(
+        EventType.COMBO_STARTED,
+        {"combo_count": 5},
+        source_id="player_1"
+    )
+    
+    # Симуляция снапшота с ресурсами
+    snapshot = {
+        "timestamp": 3.0,
+        "frame": 180,
+        "state": {
+            "entities": [
+                {
+                    "id": "player_1",
+                    "health": 80,
+                    "max_health": 100,
+                    "is_alive": True,
+                    "combo": {"count": 8, "max": 12},
+                    "combat_stats": {"dodges": {"available": 2, "total": 5}},
+                    "resources": {
+                        "stamina": {"current": 45, "max": 100},
+                        "mana": {"current": 80, "max": 200}
+                    }
+                }
+            ]
+        }
+    }
+    
+    result = plugin.on_snapshot(snapshot)
+    
+    assert result is not None
+    assert result["active_combos"] == 1
+    
+    # Финиш
+    report = plugin.on_finish()
+    assert report.summary["total_dodge_events"] == 3
+    assert report.summary["dodge_success_rate"] == 2/3
+    assert report.summary["entities_tracked"] >= 1
+    
+    print("✓ AdvancedMechanicsPlugin tests passed")
+
+
 def run_all_tests():
     """Запустить все тесты."""
     print("=" * 60)
@@ -327,6 +407,7 @@ def run_all_tests():
         test_toughness_plugin,
         test_effects_plugin,
         test_combat_plugin,
+        test_advanced_mechanics_plugin,
     ]
     
     passed = 0

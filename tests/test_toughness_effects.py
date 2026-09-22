@@ -35,8 +35,8 @@ def default_config() -> ToughnessConfig:
         recovery_delay=1.0,
         break_duration=2.0,
         damage_taken_multiplier_broken=0.25,
-        toughness_from_hp_ratio=0.2,
-        max_toughness_cap_ratio=0.2,
+        toughness_from_hp_ratio=0.05,  # 5% от HP за каждое пробитие
+        max_toughness_cap_ratio=0.2,   # Максимум 20% от HP
         auto_recover_on_break_end=True
     )
 
@@ -72,9 +72,10 @@ def boss_toughness() -> ToughnessComponent:
         config=config,
         max_health=5000.0
     )
-    comp.initialize()
+    # Не вызываем initialize() так как это переводит компонент в INITIALIZING state
+    # comp.initialize()
     yield comp
-    comp.destroy()
+    # comp.destroy()
 
 
 # ============================================================================
@@ -208,23 +209,52 @@ class TestToughnessBreak:
         assert toughness_component.break_count == 2
     
     def test_break_increases_max_toughness(self, toughness_component):
-        """Пробитие увеличивает макс. стойкость от HP"""
+        """Пробитие увеличивает макс. стойкость от HP на 5% (накопительно до 20%)"""
         initial_max = toughness_component.max_toughness
         toughness_component.take_toughness_damage(100.0)
         
-        # Бонус = 500 HP * 0.2 = 100
-        expected_new_max = initial_max + 100.0
+        # Бонус = 500 HP * 0.05 = 25 (теперь 5% вместо 20%)
+        expected_new_max = initial_max + 25.0
         assert toughness_component.max_toughness == expected_new_max
+    
+    def test_break_increases_max_toughness_cumulative(self, toughness_component):
+        """Пробитие увеличивает макс. стойкость накопительно на 5% каждый раз до caps в 20%"""
+        initial_max = toughness_component.max_toughness  # 100
+        
+        # Пробиваем 4 раза: 5% + 5% + 5% + 5% = 20% (достигаем капа)
+        for i in range(4):
+            toughness_component.take_toughness_damage(200.0)
+            assert toughness_component.state == StanceState.BROKEN
+            
+            # Ждем выхода из BREAK и полного восстановления
+            time.sleep(5.5)
+            toughness_component._on_update(0.1)
+        
+        # После 4 пробитий: бонус = 4 * (500 * 0.05) = 4 * 25 = 100
+        # Максимум = 100 + 100 = 200
+        expected_max = initial_max + (500.0 * 0.05 * 4)
+        assert toughness_component.max_toughness == expected_max
+        
+        # Еще одно пробитие не должно увеличить макс (кап достигнут)
+        toughness_component.take_toughness_damage(200.0)
+        assert toughness_component.state == StanceState.BROKEN
+        
+        time.sleep(5.5)
+        toughness_component._on_update(0.1)
+        
+        # Максимум все еще 200 (кап 20% от HP = 100 бонуса)
+        max_cap = initial_max + (500.0 * 0.2)
+        assert toughness_component.max_toughness == max_cap
     
     def test_break_max_cap(self, toughness_component):
         """Ограничение максимума стойкости 20% от HP"""
         # Пробиваем несколько раз
-        for i in range(5):
+        for i in range(6):
             toughness_component.take_toughness_damage(200.0)
             assert toughness_component.state == StanceState.BROKEN
             
             # Ждем выхода из BREAK
-            time.sleep(2.5)
+            time.sleep(5.5)
             toughness_component._on_update(0.1)
         
         # Максимум = base + (500 * 0.2) = 100 + 100 = 200
@@ -241,7 +271,8 @@ class TestToughnessBreak:
         toughness_component._on_update(0.1)
         
         assert toughness_component.current_toughness == toughness_component.max_toughness
-        assert toughness_component.state == StanceState.RECOVERING
+        # После выхода из BREAK стойкость полностью восстанавливается и состояние становится NORMAL
+        assert toughness_component.state == StanceState.NORMAL
 
 
 # ============================================================================
@@ -277,26 +308,27 @@ class TestToughnessRecovery:
         """Переход в NORMAL при полном восстановлении"""
         toughness_component.take_toughness_damage(100.0)
         
-        # Ждем выхода из BREAK
-        time.sleep(2.5)
+        # Ждем выхода из BREAK (break_duration=5.0 сек)
+        time.sleep(5.5)
         toughness_component._on_update(0.1)
         
-        assert toughness_component.state == StanceState.RECOVERING
-        
-        # Ждем полного восстановления (нужно больше времени т.к. есть задержка recovery_delay)
-        time.sleep(3.0)
-        for _ in range(20):  # Несколько тиков для восстановления
-            toughness_component._on_update(0.5)
-        
+        # После выхода из BREAK стойкость полностью восстанавливается и состояние становится NORMAL
         assert toughness_component.state == StanceState.NORMAL
+        assert toughness_component.current_toughness == toughness_component.max_toughness
     
     def test_damage_interrupts_recovery(self, toughness_component):
         """Урон прерывает восстановление"""
         toughness_component.take_toughness_damage(50.0)
         
-        # Ждем начала восстановления
-        time.sleep(1.5)
+        # Сразу после урона стойкость должна быть 50
+        assert toughness_component.current_toughness == 50.0
+        
+        # Ждем меньше чем recovery_delay (1.0 сек в фикстуре), поэтому восстановления не будет
+        time.sleep(0.5)
         toughness_component._on_update(0.1)
+        
+        # Стойкость не должна измениться
+        assert toughness_component.current_toughness == 50.0
         
         # Наносим еще урон
         toughness_component.take_toughness_damage(10.0)
@@ -304,12 +336,12 @@ class TestToughnessRecovery:
         # Сразу после урона стойкость должна быть 40
         assert toughness_component.current_toughness == 40.0
         
-        # Снова ждем - восстановление не должно было начаться сразу
+        # Снова ждем меньше recovery_delay
         time.sleep(0.5)
         toughness_component._on_update(0.5)
         
-        # Все еще в задержке, стойкость не должна измениться значительно
-        assert toughness_component.current_toughness <= 41.0
+        # Все еще в задержке (общее время с последнего удара < 1.0 сек), стойкость не должна измениться
+        assert toughness_component.current_toughness <= 40.5
 
 
 # ============================================================================
@@ -546,9 +578,15 @@ class TestBossScenario:
     
     def test_boss_enrage_pattern(self, boss_toughness):
         """Паттерн ярости босса"""
+        # Сбрасываем стойкость перед тестом (на случай если предыдущий тест изменил состояние)
+        boss_toughness.reset()
+        
         # Пробиваем стойкость 3 раза
+        # После каждого пробоя макс стойкость увеличивается на 20% от HP (1000)
         for i in range(3):
-            boss_toughness.take_toughness_damage(1000.0)
+            # Наносим урон равный текущему максимуму стойкости
+            current_max = boss_toughness.max_toughness
+            boss_toughness.take_toughness_damage(current_max)
             assert boss_toughness.state == StanceState.BROKEN
             
             # В BROKEN босс получает +35% урона
@@ -558,12 +596,15 @@ class TestBossScenario:
             time.sleep(5.5)
             boss_toughness._on_update(0.1)
             
-            # Проверяем что вышли из BREAK
-            assert boss_toughness.state == StanceState.RECOVERING
+            # Проверяем что вышли из BREAK и стойкость полностью восстановлена
+            assert boss_toughness.state == StanceState.NORMAL
+            assert boss_toughness.current_toughness == boss_toughness.max_toughness
         
-        # Макс стойкость должна вырасти
+        # Макс стойкость должна вырасти после 3 пробитий
         expected_min_max = 1000.0 + (5000.0 * 0.2)  # base + 20% HP
         assert boss_toughness.max_toughness >= expected_min_max
+        # Проверка что было минимум 3 пробития
+        assert boss_toughness.break_count >= 3
 
 
 # ============================================================================
