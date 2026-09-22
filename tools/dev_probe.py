@@ -1351,6 +1351,7 @@ def main():
             return
         finished["done"] = True
         state_log.close()
+        
         final_player = next((e for e, is_player in get_entities(game) if is_player), None)
         hits = [e for e in combat_events if not e["dodged"]]
         dodges = [e for e in combat_events if e["dodged"]]
@@ -1361,7 +1362,7 @@ def main():
 
         if run_state["error"]:
             status = "CRASHED"
-        elif run_state["completed"]:
+        elif run_state.get("completed"):
             status = "OK"
         else:
             status = "STOPPED EARLY"
