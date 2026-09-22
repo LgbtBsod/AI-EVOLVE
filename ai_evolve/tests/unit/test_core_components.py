@@ -127,9 +127,11 @@ class MockPlugin(GamePlugin):
         self.update_called = False
         self.shutdown_called = False
         self.update_delta = 0
+        self.game_core_ref = None
     
-    def on_init(self):
+    def on_init(self, game_core=None):
         self.init_called = True
+        self.game_core_ref = game_core
     
     def on_update(self, delta_time: float):
         self.update_called = True

@@ -30,11 +30,21 @@ class EventSystem:
         sig = self.get_signal(event_name)
         sig.connect(handler, sender=sender)
     
+    # Alias for compatibility with old code
+    def on(self, event_name: str, handler: Callable, sender: Any = None):
+        """Subscribe a handler to an event (alias for subscribe)."""
+        self.subscribe(event_name, handler, sender)
+    
     def unsubscribe(self, event_name: str, handler: Callable, sender: Any = None):
         """Unsubscribe a handler from an event."""
         if event_name in self._signals:
             sig = self._signals[event_name]
             sig.disconnect(handler, sender=sender)
+    
+    # Alias for compatibility with old code
+    def off(self, event_name: str, handler: Callable, sender: Any = None):
+        """Unsubscribe a handler from an event (alias for unsubscribe)."""
+        self.unsubscribe(event_name, handler, sender)
     
     def emit(self, event_name: str, data: Dict = None, sender: Any = None):
         """Emit an event with optional data."""
@@ -50,6 +60,22 @@ class EventSystem:
     def reset_instance(cls):
         """Reset the singleton instance (for testing)."""
         cls._instance = None
+    
+    @classmethod
+    def get_instance(cls):
+        """Get the singleton instance."""
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+    
+    def get_context(self, key: str):
+        """Get context data (for plugin integration)."""
+        # Placeholder for context - will be implemented in GameCore
+        return getattr(self, f'_ctx_{key}', None)
+    
+    def set_context(self, key: str, value: Any):
+        """Set context data (for plugin integration)."""
+        setattr(self, f'_ctx_{key}', value)
 
 
 # Global instance

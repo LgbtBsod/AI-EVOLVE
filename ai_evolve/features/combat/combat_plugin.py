@@ -20,9 +20,10 @@ class CombatPlugin(GamePlugin):
             "base_damage": 10.0
         }
     
-    def on_init(self):
+    def on_init(self, game_core=None):
         """Initialize combat system."""
         print("[CombatPlugin] Initialized")
+        return True
     
     def on_update(self, delta_time: float):
         """Update combat state."""
