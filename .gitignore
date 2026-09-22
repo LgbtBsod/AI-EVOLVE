@@ -1,4 +1,29 @@
-```markdown
-# No build artifacts, dependencies, or temporary files detected in changes
-# Source files only (.md, .py) - no ignores needed
+```
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Dependencies
+.venv/
+venv/
+env/
+.env
+.env.local
+.env.*
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Editors
+.vscode/
+.idea/
+
+# Build artifacts
+dist/
+build/
+target/
 ```
