@@ -1,22 +1,36 @@
 ```
-# Python
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.Python
-env/
+
+# Dependencies
 venv/
 .venv/
-.ENV
-.ENV.*
-.venv/
-.venv.*
+.env
+.env.local
+.env.*
+
+# Test cache
+.pytest_cache/
+.coverage
+coverage/
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
+# OS specific
+.DS_Store
+Thumbs.db
 
 # Build artifacts
-*.pyc
-__pycache__/
-
-# Test outputs
-training_room_output/
+dist/
+build/
+target/
 ```
