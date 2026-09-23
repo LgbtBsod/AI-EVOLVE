@@ -4,15 +4,20 @@
 use pyo3::prelude::*;
 use crate::simulation::SimulationEnv;
 use crate::generator::WorldGenerator;
+use crate::probe::{ProbeConfig, FrameAnalysis, analyze_frame, compute_ssim};
+use image::{DynamicImage, ImageFormat};
+use std::io::Cursor;
 
 /// Python module for rust_core
 #[pymodule]
 fn rust_core(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<PySimulationEnv>()?;
     m.add_class::<PyWorldGenerator>()?;
+    m.add_class::<PyProbeAnalyzer>()?;
     // Aliases for cleaner Python API
     m.add("WorldGenerator", m.getattr("PyWorldGenerator")?)?;
     m.add("SimulationEnv", m.getattr("PySimulationEnv")?)?;
+    m.add("ProbeAnalyzer", m.getattr("PyProbeAnalyzer")?)?;
     m.add("VERSION", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }
@@ -77,5 +82,155 @@ impl PyWorldGenerator {
             }
             Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e)),
         }
+    }
+}
+
+/// Python wrapper for probe analytics
+#[pyclass]
+struct PyProbeAnalyzer {
+    config: ProbeConfig,
+    prev_frame: Option<DynamicImage>,
+}
+
+#[pymethods]
+impl PyProbeAnalyzer {
+    #[new]
+    #[pyo3(signature = (config_dict=None))]
+    fn new(config_dict: Option<&pyo3::types::PyDict>) -> PyResult<Self> {
+        let mut config = ProbeConfig::default();
+        
+        if let Some(dict) = config_dict {
+            if let Ok(val) = dict.get_item("blank_frame_stddev_threshold") {
+                if let Some(v) = val { config.blank_frame_stddev_threshold = v.extract()?; }
+            }
+            if let Ok(val) = dict.get_item("visual_hash_bits") {
+                if let Some(v) = val { config.visual_hash_bits = v.extract()?; }
+            }
+            if let Ok(val) = dict.get_item("hamming_threshold") {
+                if let Some(v) = val { config.hamming_threshold = v.extract()?; }
+            }
+            if let Ok(val) = dict.get_item("motion_detection_threshold") {
+                if let Some(v) = val { config.motion_detection_threshold = v.extract()?; }
+            }
+            if let Ok(val) = dict.get_item("brightness_anomaly_threshold") {
+                if let Some(v) = val { config.brightness_anomaly_threshold = v.extract()?; }
+            }
+            if let Ok(val) = dict.get_item("ssim_threshold") {
+                if let Some(v) = val { config.ssim_threshold = v.extract()?; }
+            }
+        }
+        
+        Ok(Self {
+            config,
+            prev_frame: None,
+        })
+    }
+
+    /// Analyze a single frame from PNG bytes
+    /// Returns dict with perceptual_hash, brightness, motion, is_blank, edge_density, complexity_score
+    fn analyze_frame(&mut self, png_bytes: &[u8]) -> PyResult<PyObject> {
+        let image = image::load_from_memory(png_bytes)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid image: {}", e)))?;
+        
+        let prev_ref = self.prev_frame.as_ref();
+        let analysis = analyze_frame(&image, prev_ref, &self.config);
+        
+        // Store current frame for next motion comparison
+        self.prev_frame = Some(image);
+        
+        Python::with_gil(|py| {
+            let dict = pyo3::types::PyDict::new(py);
+            
+            // Perceptual hash as hex string
+            if let Some(hash) = &analysis.perceptual_hash {
+                let hex = format!("{:016x}{:016x}{:016x}{:016x}", 
+                    hash.bits[0], hash.bits[1], hash.bits[2], hash.bits[3]);
+                dict.set_item("perceptual_hash", hex)?;
+            } else {
+                dict.set_item("perceptual_hash", py.None())?;
+            }
+            
+            // Brightness stats
+            if let Some(bright) = &analysis.brightness {
+                let bright_dict = pyo3::types::PyDict::new(py);
+                bright_dict.set_item("mean", bright.mean)?;
+                bright_dict.set_item("stddev", bright.stddev)?;
+                bright_dict.set_item("min", bright.min)?;
+                bright_dict.set_item("max", bright.max)?;
+                dict.set_item("brightness", bright_dict)?;
+            }
+            
+            // Motion stats
+            if let Some(motion) = &analysis.motion {
+                let motion_dict = pyo3::types::PyDict::new(py);
+                motion_dict.set_item("mean_magnitude", motion.mean_magnitude)?;
+                motion_dict.set_item("max_magnitude", motion.max_magnitude)?;
+                motion_dict.set_item("std_magnitude", motion.std_magnitude)?;
+                motion_dict.set_item("high_motion_pixels", motion.high_motion_pixels)?;
+                motion_dict.set_item("motion_ratio", motion.motion_ratio)?;
+                dict.set_item("motion", motion_dict)?;
+            }
+            
+            dict.set_item("is_blank", analysis.is_blank)?;
+            dict.set_item("edge_density", analysis.edge_density)?;
+            dict.set_item("complexity_score", analysis.complexity_score)?;
+            
+            Ok(dict.into())
+        })
+    }
+
+    /// Compare two frames and return SSIM score
+    fn compare_frames(&self, frame1_bytes: &[u8], frame2_bytes: &[u8]) -> PyResult<PyObject> {
+        let img1 = image::load_from_memory(frame1_bytes)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid image 1: {}", e)))?;
+        let img2 = image::load_from_memory(frame2_bytes)
+            .map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("Invalid image 2: {}", e)))?;
+        
+        let ssim_result = compute_ssim(&img1, &img2)
+            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("Frames must have same dimensions"))?;
+        
+        Python::with_gil(|py| {
+            let dict = pyo3::types::PyDict::new(py);
+            dict.set_item("ssim_score", ssim_result.score)?;
+            dict.set_item("mean_score", ssim_result.mean_score)?;
+            dict.set_item("is_similar", ssim_result.mean_score > self.config.ssim_threshold)?;
+            Ok(dict.into())
+        })
+    }
+
+    /// Compute hamming distance between two perceptual hashes
+    #[staticmethod]
+    fn hamming_distance(hash1: &str, hash2: &str) -> PyResult<u32> {
+        if hash1.len() != 64 || hash2.len() != 64 {
+            return Err(pyo3::exceptions::PyValueError::new_err(
+                "Hashes must be 64 hex characters (256 bits)"
+            ));
+        }
+        
+        let parse_hex = |hex: &str| -> Result<[u64; 4], String> {
+            let mut bits = [0u64; 4];
+            for i in 0..4 {
+                let start = i * 16;
+                let end = start + 16;
+                bits[i] = u64::from_str_radix(&hex[start..end], 16)
+                    .map_err(|e| format!("Invalid hex at position {}: {}", i, e))?;
+            }
+            Ok(bits)
+        };
+        
+        let bits1 = parse_hex(hash1).map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+        let bits2 = parse_hex(hash2).map_err(|e| pyo3::exceptions::PyValueError::new_err(e))?;
+        
+        let mut distance = 0u32;
+        for i in 0..4 {
+            distance += (bits1[i] ^ bits2[i]).count_ones();
+        }
+        
+        Ok(distance)
+    }
+
+    /// Reset previous frame (for when you want to restart motion comparison)
+    fn reset(&mut self) {
+        self.prev_frame = None;
     }
 }

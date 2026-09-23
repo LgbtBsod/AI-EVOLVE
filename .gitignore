@@ -21,19 +21,19 @@ wheels/
 .installed.cfg
 *.egg
 
-# Virtual environments
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+coverage/
+
+# Environment
+.env
+.env.local
+.env.*
+.venv/
 venv/
 ENV/
-env.bak/
-.venv/
-
-# Testing
-.coverage
-coverage/
-htmlcov/
-.nox/
-.tox/
-.coverage.*
 
 # IDE
 .vscode/
@@ -42,11 +42,7 @@ htmlcov/
 *.swo
 *.tmp
 
-# Logs
-*.log
-
-# Environment variables
-.env
-.env.local
-.env.*
+# OS
+.DS_Store
+Thumbs.db
 ```

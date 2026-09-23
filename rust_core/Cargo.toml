@@ -2,7 +2,7 @@
 name = "rust_core"
 version = "0.1.0"
 edition = "2021"
-description = "Rust core layer for AI Evolve: simulation, world generation, storage"
+description = "Rust core layer for AI Evolve: simulation, world generation, storage, probe analytics"
 authors = ["AI Evolve Team"]
 
 [lib]
@@ -40,6 +40,12 @@ env_logger = "0.10"
 # Ошибки
 thiserror = "1.0"
 anyhow = "1.0"
+
+# Image processing for probe analytics
+image = "0.24"
+ndarray = "0.15"
+num-complex = "0.4"
+rustfft = "6.1"
 
 [dev-dependencies]
 criterion = "0.5"
