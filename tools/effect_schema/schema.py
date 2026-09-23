@@ -1,0 +1,233 @@
+"""
+Effect Schema v1 -- "Effect -> Ops[]" (universal structure)
+
+Единая схема для всех эффектов предметов/скиллов/буфф:
+
+    Effect  = триггер + список операций (ops)
+    Op      = универсальная операция (mod/heal/drain/deal/buff/set/kill/...)
+    Value   = {flat|pct|ref, of}
+    Scale   = "за каждые N единиц X добавить Y"
+    Trigger = passive | condition | event
+
+Python-представление == JSON == Lua table (1-в-1).
+Предикаты хранятся как именованные строки ("named_pred") или выражения,
+поэтому вся схема сериализуема.
+
+Примеры готовых эффектов: presets.py
+Генератор Lua: lua_gen.py, парсер: lua_parse.py, валидатор: validate.py
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass, field, asdict
+from typing import Any, Optional, Union
+
+SCHEMA_VERSION = "effect-schema/1"
+
+# ---------------------------------------------------------------- enums
+
+OP_KINDS = {
+    "mod",          # модификация стата (бафф/дебафф через модификатор)
+    "heal",         # лечение
+    "drain",        # стоимость из ресурса (может провалиться -> fail ветка)
+    "deal",         # нанесение урона
+    "set",          # жёсткая установка значения
+    "buff",         # повесить эффект/бафф по buff_id
+    "extend",       # продлить таймер существующего баффа
+    "remove_buff",  # снять бафф
+    "apply_effect",  # применить другой эффект по id
+    "kill",         # убить цель
+}
+
+TARGETS = {"self", "enemy", "ally", "allies", "source"}
+
+OPS = {"add", "sub", "mul", "div", "set", "min", "max"}
+
+TRIGGER_KINDS = {"passive", "condition", "event"}
+
+EVENTS = {
+    "use", "attack", "attack_hit", "cast", "crit", "dodge",
+    "kill", "take_damage", "die", "hp_cross", "on_shield_break",
+    "combat_start", "combat_end", "tick",
+}
+
+# известные статы (не закрытый список; кастомные -- через "custom:<name>")
+KNOWN_STATS = {
+    "hp", "max_hp", "hp_pct", "hp_missing_below_40", "strength", "stamina",
+    "agility", "intelligence", "defense", "aspd", "crit_chance", "crit_dmg",
+    "hp_regen", "lifesteal", "mana", "max_mana", "tenacity", "move_speed",
+    "attack_damage",
+}
+
+
+def is_stat(name: str) -> bool:
+    return name in KNOWN_STATS or name.startswith("custom:")
+
+
+# ---------------------------------------------------------------- descriptors
+
+@dataclass
+class Value:
+    """Value descriptor: flat | pct(+of) | ref."""
+    flat: Optional[float] = None
+    pct: Optional[float] = None       # процент (от `of`, иначе от op.stat)
+    of: Optional[str] = None          # от какого стата брать pct
+    ref: Optional[str] = None         # ссылка на поле контекста, "ctx.strength"
+
+    def to_json(self) -> dict:
+        d = {k: v for k, v in asdict(self).items() if v is not None}
+        return d
+
+    @staticmethod
+    def from_json(d: dict) -> "Value":
+        return Value(**{k: d.get(k) for k in ("flat", "pct", "of", "ref")})
+
+
+@dataclass
+class Scale:
+    """Scale descriptor: base + floor(ctx[of]/every) * value * factor."""
+    every: float
+    of: str                            # псевдо-стат из ctx
+    value: Optional[Value] = None      # что добавлять за шаг
+    factor: float = 1.0
+    cap: Optional[float] = None        # максимум шагов
+    floor: Optional[float] = None      # минимум
+
+    def to_json(self) -> dict:
+        d = {"every": self.every, "of": self.of, "factor": self.factor}
+        if self.value is not None:
+            d["value"] = self.value.to_json()
+        if self.cap is not None:
+            d["cap"] = self.cap
+        if self.floor is not None:
+            d["floor"] = self.floor
+        return {k: v for k, v in d.items() if v is not None}
+
+    @staticmethod
+    def from_json(d: dict) -> "Scale":
+        v = d.get("value")
+        return Scale(
+            every=d["every"], of=d["of"],
+            value=Value.from_json(v) if isinstance(v, dict) else None,
+            factor=d.get("factor", 1.0),
+            cap=d.get("cap"), floor=d.get("floor"),
+        )
+
+
+@dataclass
+class Trigger:
+    kind: str = "passive"              # passive | condition | event
+    event: Optional[str] = None        # для kind=event
+    when: Optional[str] = None         # именованный предикат или выражение
+    filter: Optional[str] = None       # доп. фильтр события
+    owner_has: Optional[str] = None    # id родительского эффекта (sub-effect)
+
+    def to_json(self) -> dict:
+        return {k: v for k, v in asdict(self).items() if v is not None}
+
+    @staticmethod
+    def from_json(d: dict) -> "Trigger":
+        return Trigger(**{k: d.get(k) for k in
+                          ("kind", "event", "when", "filter", "owner_has")})
+
+
+# ---------------------------------------------------------------- Op
+
+@dataclass
+class Op:
+    kind: str                                        # OP_KINDS
+    target: str = "self"                             # TARGETS
+    stat: Optional[str] = None                       # что трогаем (None для buff/deal)
+    op: Optional[str] = None                         # OPS
+    value: Optional[Value] = None
+    scale: Optional[Scale] = None
+    when: Optional[str] = None                       # условие на операцию
+    fail: list = field(default_factory=list)         # Op[] при провале (drain)
+    duration: Optional[dict] = None                  # Value/Scale dict (для buff)
+    cooldown: Optional[dict] = None                  # Value dict (для buff)
+    extend: Optional[dict] = None                    # {on, flat|pct} (для buff)
+    buff_id: Optional[str] = None
+    flags: list = field(default_factory=list)
+
+    def to_json(self) -> dict:
+        d: dict[str, Any] = {"kind": self.kind, "target": self.target}
+        if self.stat:
+            d["stat"] = self.stat
+        if self.op:
+            d["op"] = self.op
+        if self.value:
+            d["value"] = self.value.to_json()
+        if self.scale:
+            d["scale"] = self.scale.to_json()
+        if self.when:
+            d["when"] = self.when
+        if self.fail:
+            d["fail"] = [o.to_json() for o in self.fail]
+        for k in ("duration", "cooldown", "extend", "buff_id"):
+            v = getattr(self, k)
+            if v:
+                d[k] = v
+        if self.flags:
+            d["flags"] = list(self.flags)
+        return d
+
+    @staticmethod
+    def from_json(d: dict) -> "Op":
+        v = d.get("value")
+        s = d.get("scale")
+        return Op(
+            kind=d["kind"], target=d.get("target", "self"),
+            stat=d.get("stat"), op=d.get("op"),
+            value=Value.from_json(v) if isinstance(v, dict) else None,
+            scale=Scale.from_json(s) if isinstance(s, dict) else None,
+            when=d.get("when"),
+            fail=[Op.from_json(x) for x in d.get("fail", [])],
+            duration=d.get("duration"), cooldown=d.get("cooldown"),
+            extend=d.get("extend"), buff_id=d.get("buff_id"),
+            flags=list(d.get("flags", [])),
+        )
+
+
+# ---------------------------------------------------------------- Effect
+
+@dataclass
+class Effect:
+    id: str
+    trigger: Trigger
+    ops: list = field(default_factory=list)          # Op[]
+    tags: list = field(default_factory=list)
+    duration: Optional[dict] = None                  # Value/Scale dict, nil = пока триггер true
+    cooldown: Optional[dict] = None
+    stacks: Optional[dict] = None
+    meta: Optional[dict] = None                      # name/description/icon... для UI
+
+    def to_json(self) -> dict:
+        d: dict[str, Any] = {"id": self.id, "trigger": self.trigger.to_json(),
+                             "ops": [o.to_json() for o in self.ops]}
+        if self.tags:
+            d["tags"] = list(self.tags)
+        for k in ("duration", "cooldown", "stacks", "meta"):
+            v = getattr(self, k)
+            if v:
+                d[k] = v
+        return d
+
+    @staticmethod
+    def from_json(d: dict) -> "Effect":
+        return Effect(
+            id=d["id"],
+            trigger=Trigger.from_json(d.get("trigger", {"kind": "passive"})),
+            ops=[Op.from_json(o) for o in d.get("ops", [])],
+            tags=list(d.get("tags", [])),
+            duration=d.get("duration"), cooldown=d.get("cooldown"),
+            stacks=d.get("stacks"), meta=d.get("meta"),
+        )
+
+    # -- convenience -----------------------------------------------------
+    def to_item_lua(self, item: dict) -> str:
+        from tools.effect_schema.lua_gen import render_item
+        return render_item(item, [self])
+
+    def dump(self, **kw) -> str:
+        return json.dumps(self.to_json(), ensure_ascii=False, indent=2, **kw)
