@@ -1,29 +1,61 @@
 ```
-# Python
+# Python cache
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
-# Dependencies
+# Virtual environments
 .venv/
 venv/
 env/
-.env
-.env.local
-.env.*
 
-# Logs and temp files
-*.log
-*.tmp
-*.swp
-
-# Editors
-.vscode/
-.idea/
+# Dependencies
+pip/
+setuptools/
+wheel/
 
 # Build artifacts
-dist/
 build/
-target/
+dist/
+*.egg-info/
+
+# Rust build artifacts
+rust_core/target/
+
+# Logs
+*.log
+
+# Environment files
+.env
+.env.local
+*.env.*
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Coverage reports
+.coverage
+htmlcov/
+coverage/
+
+# Testing
+.pytest_cache/
+.mypy_cache/
+
+# Distribution / packaging
+*.tar.gz
+*.whl
+
+# Rust core specific
+rust_core/**/*.so
+rust_core/**/*.dylib
+rust_core/**/*.dll
 ```
