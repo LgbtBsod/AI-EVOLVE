@@ -47,6 +47,9 @@ ndarray = "0.15"
 num-complex = "0.4"
 rustfft = "6.1"
 
+# UUID для effect contracts
+uuid = { version = "1.0", features = ["v4", "serde"] }
+
 [dev-dependencies]
 criterion = "0.5"
 
