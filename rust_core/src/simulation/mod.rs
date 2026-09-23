@@ -8,7 +8,7 @@ pub mod pathfinding;
 pub mod batch;
 
 pub use grid::Grid;
-pub use entities::{Entity, Component, Position, Health, AI};
+pub use entities::{Entity, Component, Position, Health, AI, EntityKind};
 pub use tick::TickSystem;
 pub use pathfinding::{AStar, FlowField};
 pub use batch::BatchStepper;
@@ -30,6 +30,7 @@ pub struct SimulationEnv {
     state: State,
 }
 
+#[derive(Clone)]
 struct State {
     step_count: u64,
     done: bool,
@@ -57,7 +58,7 @@ impl SimulationEnv {
     }
     
     /// Step the simulation (releases GIL when called from Python)
-    pub fn step(&mut self, actions: Vec<Action>) -> StepResult {
+    pub fn step(&mut self, _actions: Vec<Action>) -> StepResult {
         self.state.step_count += 1;
         
         // Apply actions
@@ -84,7 +85,7 @@ impl SimulationEnv {
         })
     }
     
-    fn step_multiple(&mut self, actions: Vec<Vec<Action>>) -> BatchStepResult {
+    fn step_multiple(&mut self, _actions: Vec<Vec<Action>>) -> BatchStepResult {
         // Implement parallel batch stepping
         BatchStepResult {
             observations: Vec::new(),

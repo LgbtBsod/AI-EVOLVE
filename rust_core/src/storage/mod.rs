@@ -1,7 +1,7 @@
 // Storage Module (L1)
 //! SQLite database for saves and snapshots
 
-use rusqlite::{Connection, Result};
+use rusqlite::{Connection, Result, params};
 use std::path::Path;
 
 pub struct Database {
@@ -21,7 +21,7 @@ impl Database {
     pub fn save_meta(&self, seed: u64, version: &str) -> Result<()> {
         self.conn.execute(
             "INSERT INTO meta (seed, generator_version, created_at) VALUES (?1, ?2, datetime('now'))",
-            [seed, version],
+            params![seed, version],
         )?;
         Ok(())
     }

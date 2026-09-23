@@ -3,6 +3,7 @@
 
 use rand_chacha::ChaCha8Rng;
 use rand::SeedableRng;
+use crate::simulation::{World, Grid};
 
 pub struct WorldGenerator {
     seed: u64,
@@ -17,19 +18,19 @@ impl WorldGenerator {
         }
     }
     
-    pub fn generate(&self, _bricks_config: &str) -> Result<crate::simulation::World, String> {
+    pub fn generate(&self, _bricks_config: &str) -> Result<World, String> {
         // Deterministic PRNG
-        let mut rng = ChaCha8Rng::seed_from_u64(self.seed);
+        let _rng = ChaCha8Rng::seed_from_u64(self.seed);
         
         // Generate 80 maps with entities
         // Load bricks from Lua config
         // Apply combination rules
         
-        Ok(crate::simulation::World {
+        Ok(World {
             seed: self.seed,
             map_id: 0,
             entities: Vec::new(),
-            grid: crate::simulation::Grid::new(32, 32),
+            grid: Grid::new(32, 32),
         })
     }
 }
