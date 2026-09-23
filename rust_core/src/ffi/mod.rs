@@ -5,6 +5,7 @@ use pyo3::prelude::*;
 use crate::simulation::SimulationEnv;
 use crate::generator::WorldGenerator;
 use crate::probe::{ProbeConfig, FrameAnalysis, analyze_frame, compute_ssim};
+use crate::semantic_core::{LogCompressor as RustLogCompressor, StateDiffCalculator as RustStateDiffCalculator, EventCorrelator as RustEventCorrelator};
 use image::{DynamicImage, ImageFormat};
 use std::io::Cursor;
 
@@ -14,10 +15,16 @@ fn rust_core(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<PySimulationEnv>()?;
     m.add_class::<PyWorldGenerator>()?;
     m.add_class::<PyProbeAnalyzer>()?;
+    m.add_class::<PyLogCompressor>()?;
+    m.add_class::<PyStateDiffCalculator>()?;
+    m.add_class::<PyEventCorrelator>()?;
     // Aliases for cleaner Python API
     m.add("WorldGenerator", m.getattr("PyWorldGenerator")?)?;
     m.add("SimulationEnv", m.getattr("PySimulationEnv")?)?;
     m.add("ProbeAnalyzer", m.getattr("PyProbeAnalyzer")?)?;
+    m.add("LogCompressor", m.getattr("PyLogCompressor")?)?;
+    m.add("StateDiffCalculator", m.getattr("PyStateDiffCalculator")?)?;
+    m.add("EventCorrelator", m.getattr("PyEventCorrelator")?)?;
     m.add("VERSION", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }
@@ -232,5 +239,75 @@ impl PyProbeAnalyzer {
     /// Reset previous frame (for when you want to restart motion comparison)
     fn reset(&mut self) {
         self.prev_frame = None;
+    }
+}
+
+// ============================================================================
+// Semantic Core FFI Wrappers
+// ============================================================================
+
+#[pyclass]
+struct PyLogCompressor {
+    inner: RustLogCompressor,
+}
+
+#[pymethods]
+impl PyLogCompressor {
+    #[new]
+    fn new() -> Self {
+        Self {
+            inner: RustLogCompressor::new(),
+        }
+    }
+
+    fn ingest(&mut self, line: &str) {
+        self.inner.ingest(line);
+    }
+
+    fn summarize(&self) -> String {
+        self.inner.summarize()
+    }
+
+    fn reset(&mut self) {
+        self.inner.reset();
+    }
+}
+
+#[pyclass]
+struct PyStateDiffCalculator;
+
+#[pymethods]
+impl PyStateDiffCalculator {
+    #[staticmethod]
+    fn calculate_diff(py: Python, old_state: &pyo3::types::PyDict, new_state: &pyo3::types::PyDict) -> PyResult<Py<pyo3::types::PyDict>> {
+        RustStateDiffCalculator::calculate_diff(py, old_state, new_state)
+    }
+}
+
+#[pyclass]
+struct PyEventCorrelator {
+    inner: RustEventCorrelator,
+}
+
+#[pymethods]
+impl PyEventCorrelator {
+    #[new]
+    #[pyo3(signature = (time_window_ms=100))]
+    fn new(time_window_ms: u64) -> Self {
+        Self {
+            inner: RustEventCorrelator::new(time_window_ms),
+        }
+    }
+
+    fn add_event(&mut self, timestamp: u64, event_type: &str, payload: &str) {
+        self.inner.add_event(timestamp, event_type, payload);
+    }
+
+    fn find_correlations(&self) -> Vec<String> {
+        self.inner.find_correlations()
+    }
+
+    fn clear(&mut self) {
+        self.inner.clear();
     }
 }
