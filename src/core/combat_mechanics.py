@@ -221,8 +221,13 @@ class ImmortalEnemy:
             if self.break_state == BreakState.BROKEN:
                 return
             
+            # Расчет длительности брейка по формуле:
+            # Минимум 0.5 сек + 0.1 сек за каждые 50 единиц стойкости
+            min_duration = 0.5
+            additional_duration = (self.stats.base_stagger_max / 50.0) * 0.1
+            break_duration = max(min_duration, min_duration + additional_duration)
+            
             self.break_state = BreakState.BROKEN
-            break_duration = self.stats.base_stagger_max / 500.0  # 1 сек за 500 ед
             logger.warning(f"[{self.name}] !!! BREAK!!! Длительность: {break_duration:.2f}с")
             
             # Снижение резистов на 25%
