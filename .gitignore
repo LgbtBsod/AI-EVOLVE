@@ -1,6 +1,3 @@
-# Python compiled files
+# Compiled/Binary files
 __pycache__/
 *.pyc
-
-# Backup files
-*.bak
