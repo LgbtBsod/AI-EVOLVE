@@ -59,10 +59,13 @@ KNOWN_STATS = {
     "agility", "intelligence", "defense", "aspd", "crit_chance", "crit_dmg",
     "hp_regen", "lifesteal", "mana", "max_mana", "tenacity", "move_speed",
     "attack_damage", "kills",
+    # псевдо-стат runtime: фактический урон последнего удара героя
+    # (ctx.last_damage в sim; источник для heal {"pct": N, "of": "last_damage"})
+    "last_damage",
 }
 
 # ctx-поля, доступные только как источник (value.of / scale.of), но не как цель op
-CONTEXT_ONLY_STATS = {"hp_missing", "hp_missing_below_40", "kills"}
+CONTEXT_ONLY_STATS = {"hp_missing", "hp_missing_below_40", "kills", "last_damage"}
 
 # префиксы контекста цели/союзников (sim.target_ctx): enemy_hp_pct, ally_kills ...
 TARGET_PREFIXES = ("enemy_", "ally_", "allies_", "source_")

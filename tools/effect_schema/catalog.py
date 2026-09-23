@@ -106,8 +106,11 @@ _VAMPIRE_FORM = {
     "id": "vampires_fang", "tags": ["lifesteal", "weapon"],
     "trigger": {"kind": "event", "event": "attack_hit"},
     "ops": [
+        # лifesteal = 8% ОТ ФАКТИЧЕСКОГО УРОНА последнего удара
+        # (runtime-псевдостат ctx.last_damage), а не от текущего hp:
+        # {"pct": 8} без "of" резолвился бы от "hp" (стат op) — 8% своего HP.
         {"kind": "heal", "target": "self", "stat": "hp", "op": "add",
-         "value": {"pct": 8}, "flags": ["silent"]},
+         "value": {"pct": 8, "of": "last_damage"}, "flags": ["silent"]},
         {"kind": "mod", "target": "self", "stat": "strength", "op": "add",
          "value": {"flat": 5},
          "scale": {"every": 1, "of": "kills", "value": {"flat": 1}, "cap": 10}},
@@ -143,8 +146,25 @@ _JUDGEMENT_FORM = {
     "id": "judgement", "tags": ["execute", "weapon"],
     "trigger": {"kind": "event", "event": "attack"},
     "ops": [
+        # execute: добивание ниже 15% HP. Опциональный лifesteal-компонент
+        # (см. шаблон reaper_kiss): heal {"pct": N, "of": "last_damage"} —
+        # run_op("kill") фиксирует ctx.last_damage = фактический урон дobивания
+        # ДО смерти цели, поэтому процент берётся от реального снятого HP.
         {"kind": "kill", "target": "enemy",
          "when": "ctx.enemy_hp_pct < 15"},
+    ],
+}
+
+_REAPER_FORM = {
+    "id": "reaper_kiss", "tags": ["execute", "lifesteal", "weapon"],
+    "trigger": {"kind": "event", "event": "attack"},
+    "ops": [
+        {"kind": "kill", "target": "enemy",
+         "when": "ctx.enemy_hp_pct < 20"},
+        # 25% ОТ ФАКТИЧЕСКОГО УРОНА добиания (ctx.last_damage), а не от hp:
+        # {"pct": 25} без "of" резолвился бы от stat op ("hp") — 25% своего HP.
+        {"kind": "heal", "target": "self", "stat": "hp", "op": "add",
+         "value": {"pct": 25, "of": "last_damage"}, "flags": ["silent"]},
     ],
 }
 
@@ -171,6 +191,8 @@ CATALOG = {
                          _form_effect(**_MANTLE_FORM)),
     "rage_tonic": ("🔥 Rage Tonic (buff + HP cost)", _form_effect(**_RAGE_FORM)),
     "judgement": ("⚖️ Judgement (execute below 15%)", _form_effect(**_JUDGEMENT_FORM)),
+    "reaper_kiss": ("💀 Reaper Kiss (execute + last_damage lifesteal)",
+                    _form_effect(**_REAPER_FORM)),
     "phoenix_feather": ("🪶 Phoenix Feather (revive at 30% HP)",
                         _form_effect(**_REbirth_FORM)),
 }

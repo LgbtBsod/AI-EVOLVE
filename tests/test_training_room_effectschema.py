@@ -446,16 +446,19 @@ class TestUiLogicFullCycle(unittest.TestCase):
         """Execute: убивает цель <15% HP и НЕ трогает цель выше порога."""
         out = self._full_cycle_item(
             "judgement",
-            {"events": ["set_dummy 1000", "attack", "set_dummy 1000",
-                        "attack 5000"]})
+            {"dummy_max_hp": 5000.0,   # set_dummy 700 => 14% — ниже порога;
+                                       # set_dummy 1000 => 20% — выше порога
+             "events": ["set_dummy 1000", "attack 300", "set_dummy 700",
+                        "attack"]})
         steps = out["room"]["steps"]
-        # шаг 2: execute сработал до базового урона — dummy возрождён (1000),
-        # после атаки без урона остаётся 1000... но execute убивает:
-        self.assertEqual(steps[1]["kills"], 1)
-        self.assertAlmostEqual(steps[1]["dummy_hp"], 1000.0, delta=TOL)  # respawn
-        # шаг 4: dummy 1000 = 100% -> no execute, базовый урон 5000 -> смерть
-        self.assertEqual(steps[3]["kills"], 2)
-        self.assertAlmostEqual(steps[3]["dummy_hp"], 0.0, delta=TOL)
+        # шаг 2: dummy 1000/5000 = 20% -> execute НЕ срабатывает, базовый
+        # урон 300 -> 700 (не смерть)
+        self.assertEqual(steps[1]["kills"], 0)
+        self.assertAlmostEqual(steps[1]["dummy_hp"], 700.0, delta=TOL)
+        # шаг 4: dummy 700 = 14% < 15% -> execute убивает ДО базового урона;
+        # kills ровно 1 (без двойного подсчёта), манекен возрождён полным
+        self.assertEqual(steps[3]["kills"], 1)
+        self.assertAlmostEqual(steps[3]["dummy_hp"], 5000.0, delta=TOL)
 
     def test_phoenix_feather_full_cycle_revive(self):
         """Воскрешение при смерти: set hp=30% max, remove_buff enraged."""

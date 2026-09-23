@@ -1,3 +1,10 @@
-# Compiled/Binary files
+# Python compiled files
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage/

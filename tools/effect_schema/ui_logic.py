@@ -233,11 +233,16 @@ def run_training_room(item: dict, scenario: Optional[dict] = None) -> dict:
         elif kind == "enemy_attack" and len(parts) > 1:
             rt.receive_damage(float(parts[1]), t)
         elif kind == "kill":
-            # убить и возродить манекен (для стеков типа Vampire's Fang)
+            # убить текущего манекена, послать kill и возродить его же
+            # (для стеков типа Vampire's Fang; единая конвенция с
+            # sim.respawn_enemy — тот же объект, полное HP).
+            # kills инкрементирует рантайм: dummy.deal_damage не трогает
+            # hero.kills, а fire_event("kill") -> run_op("kill") увидит
+            # мёртвую цель и не засчитает повторный килл.
             dummy.deal_damage(dummy.current_hp)
+            rt.owner.kills += 1
             rt.fire_event("kill", t)
-            dummy = Unit("mannequin", max_hp=sc["dummy_max_hp"])
-            rt.enemy = dummy
+            rt.respawn_enemy()
         elif kind == "set_dummy" and len(parts) > 1:
             # установить HP текущего манекена (для execute-сценариев)
             dummy.current_hp = float(parts[1])

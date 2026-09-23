@@ -281,6 +281,29 @@ class EffectRuntime:
         self.log: list[str] = []
         self.active_mod_sources: set[str] = set()
         self._ev_depth = 0          # ре-ентранс fire_event (attack -> attack_hit ...)
+        # Контекст последнего нанесённого базовой атакой урона — источник для
+        # value {"ref": "ctx.last_damage"} (лifesteal "от фактического урона",
+        # а не от hp цели). Сбрасывается в 0 при каждом новом attack(), чтобы
+        # heal по ref не суммировался с прошлым ударом.
+        self.last_damage: float = 0.0
+        # Флаг "цель уже убита ops-эффектом в текущем цикле атаки" (execute).
+        # Единственная точка правды для kills-счётчика: run_op("kill") ставит
+        # флаг и инкрементирует kills; attack() засчитывает килл сам ТОЛЬКО
+        # если флаг не выставлен (смерть от базового удара). Так исключается
+        # двойной подсчёт и двойное событие "kill".
+        self._killed_this_attack: bool = False
+        # Слой событийных (накопительных) mod-ops: каждое событие attack_hit /
+        # kill применяет их ОДИН раз; refresh_passives() пересобирает
+        # owner.mods как event + passive-слой, поэтому повторные вызовы
+        # refresh идемпотентны (нет двойного применения scale-of-counter).
+        self._event_mods: dict[str, float] = {}
+        # --- hp_cross -----------------------------------------------------
+        # Зоны пересечения порога HP (kind="condition", threshold=N):
+        # name -> {"above": bool | None}. None = порог ещё не наблюдали.
+        self._hp_zones: dict[str, Optional[bool]] = {}
+        # Активные (пересекаемые сейчас) имена зон — источник для триггера
+        # {kind:"event", event:"hp_cross", cross:<name>} и фильтра "ctx.crossed".
+        self.crossed: set[str] = set()
 
     # public API ------------------------------------------------------------
     def target_ctx(self, prefix: str, t: Optional[Unit]) -> dict:
@@ -290,11 +313,11 @@ class EffectRuntime:
         c = t.ctx()
         return {f"{prefix}_{k}": v for k, v in c.items()}
 
-    def refresh_passives(self, t: float = 0.0):
-        """Пересчитать все passive/condition моды (сброс -> повторный应用)."""
-        self.owner.mods.clear()
-        ctx = {**self.owner.ctx(),
-               **self.target_ctx("enemy", self.enemy)}
+    def _passive_layer(self, ctx: dict) -> dict[str, float]:
+        """Пассивный слой mods — ЧИСТАЯ функция от переданного контекста
+        (hp_pct, kills, ...): passive/condition-эффекты, mod-ops. Никаких
+        побочных записей; вызывается из refresh_passives() и fire_event()."""
+        layer: dict[str, float] = {}
         for ef in self.effects:
             tr = ef.get("trigger", {})
             kind = tr.get("kind")
@@ -302,31 +325,124 @@ class EffectRuntime:
                 continue
             if kind == "condition" and not eval_pred(tr.get("when"), ctx):
                 continue
-            if not self._owner_has_ok(tr, t):
-                continue
             for o in ef.get("ops", []):
                 if o.get("kind") == "mod":
-                    self._apply_mod(o)
+                    self._apply_mod(o, ctx, sink=layer)
+        return layer
+
+    def refresh_passives(self, t: float = 0.0):
+        """Пересчитать owner.mods = событийный слой + пассивный слой.
+
+        Двухслойная модель mods юнита:
+          * СОБЫТИЙНЫЙ слой (`_event_mods`) — накопления от событийных
+            mod-ops (напр. Vampire's Fang: strength +5, +1 за kill);
+            каждое событие применяет их ровно один раз;
+          * ПАССИВНЫЙ слой — pure-функция состояния (_passive_layer).
+        mods пересобирается с нуля при каждом вызове => refresh ИДЕМПОТЕНТЕН
+        (ранее condition-эффекты со scale.of=kills применялись и в событии,
+        и в refresh — стаки удваивались).
+        """
+        ctx = {**self.owner.ctx(),
+               **self.target_ctx("enemy", self.enemy)}
+        ctx["last_damage"] = self.last_damage
+        self._scan_hp_cross(ctx, t)
+        layer = self._passive_layer(ctx)
+        event = getattr(self, "_event_mods", None) or {}
+        merged = {k: v for k, v in event.items()}
+        for k, v in layer.items():
+            merged[k] = merged.get(k, 0.0) + v
+        self.owner.mods = merged
+
+    # hp_cross ---------------------------------------------------------------
+    def _hp_zone_name(self, ef: dict) -> Optional[str]:
+        """Имя зоны пересечения для condition-эффекта с threshold."""
+        return (ef.get("meta") or {}).get("name") or ef.get("id")
+
+    def _scan_hp_cross(self, ctx: dict, t: float = 0.0):
+        """Детектор пересечений порога HP (семантика LoL Sorrow/Deadman).
+
+        condition-эффект с числовым полем `threshold` объявляет зону:
+          above = (ctx.hp_pct >= threshold). При СМЕНЕ состояния зоны
+          (первый наблюдённый переход не считается — baseline) шлётся
+          событие "hp_cross" с extra {"crossed": <имя зоны>}; имя остаётся
+          в self.crossed до следующего refresh (фильтр sub-effect'ов:
+          trigger {"kind":"event","event":"hp_cross","cross":<имя>}).
+        """
+        fresh: list[tuple[str, bool]] = []
+        for ef in self.effects:
+            tr = ef.get("trigger", {})
+            if tr.get("kind") != "condition" or "threshold" not in ef:
+                continue
+            name = self._hp_zone_name(ef)
+            thr = float(ef["threshold"])
+            above = ctx.get("hp_pct", 100.0) >= thr
+            prev = self._hp_zones.get(name)
+            self._hp_zones[name] = above
+            if prev is not None and prev != above:
+                fresh.append((name, above))
+        self.crossed = {n for n, _ in fresh}
+        for name, above in fresh:
+            self.fire_event("hp_cross", t, extra={"crossed": name})
+
+    def respawn_enemy(self):
+        """Вернуть боевого манекена в строй (полное HP) — тренировочная
+        конвенция комнаты: противник всегда доступен для следующего удара."""
+        e = self.enemy
+        if e is None:
+            return
+        e.current_hp = e._eff("max_hp")
+        e.alive = True
 
     def attack(self, t: float = 0.0, base_damage: Optional[float] = None):
         """Боевой цикл героя: attack -> (execute-ops) -> базовый урон по врагу
         -> attack_hit (лifesteal-эффекты)."""
         if not self.owner.alive or self.enemy is None or not self.enemy.alive:
             return
+        self._killed_this_attack = False
         self.fire_event("attack", t)
         if self.enemy is None or not self.enemy.alive:
-            return  # execute (judgement) уже сработал
+            # execute (judgement) уже сработал: kills+1 и событие kill посланы
+            # из run_op("kill"); здесь — только респавн тренировочного манекена
+            # и пересчёт пассивных модов (scale.of=kills обновился ДО респавна
+            # следующего удара).
+            if not self._killed_this_attack:
+                # страховка: цель умерла не через op "kill" (например deal-ops
+                # на событии attack) — засчитать килл здесь, каскад один раз
+                self.owner.kills += 1
+                self.log.append(f"t={t:.1f} KILL {self.enemy.name}")
+                self.fire_event("kill", t)
+            self.respawn_enemy()
+            self.refresh_passives(t)
+            return
         dmg = base_damage if base_damage is not None else self.owner._eff("attack_damage")
+        self.last_damage = 0.0
         if dmg > 0:
+            before = self.enemy.current_hp
             self.enemy.deal_damage(dmg)
+            # фактический урон (с учётом "избытка" над нулём) — для ctx.last_damage
+            self.last_damage = before - self.enemy.current_hp
             self.log.append(f"t={t:.1f} hero basic attack {dmg:.1f} "
                             f"-> {self.enemy.name} hp={self.enemy.current_hp:.1f}")
-        killed = not self.enemy.alive
+        killed = not self.enemy.alive and not self._killed_this_attack
+        # Порядок каскада: сначала "attack_hit" (лifesteal видит актуальный
+        # ctx.last_damage и цель ещё мёртвой не возрождена), затем kill-каскад
+        # (инкремент kills, событие "kill", респавн манекена), и только потом
+        # пересчёт пассивных модов — scale-источники вроде `kills` меняются
+        # внутри цикла, и следующие эффекты обязаны видеть актуальные статы.
+        # refresh идемпотентен (mods.clear() -> повторное применение).
         self.fire_event("attack_hit", t)
-        if killed and self.enemy is not None and not self.enemy.alive:
+        if killed:
+            # Инкремент kill-счётчика — ЕДИНСТВЕННЫЙ источник правды здесь;
+            # каскад события "kill" ниже не должен повторно попадать в
+            # run_op("kill") (он удвоил бы счётчик) — поэтому сам op "kill"
+            # шлёт fire_event("kill") только когда жертва ещё была жива.
             self.owner.kills += 1
             self.log.append(f"t={t:.1f} KILL {self.enemy.name}")
             self.fire_event("kill", t)
+            # тренировочный манекен возрождается сразу после каскада kill,
+            # чтобы следующее событие attack не игнорировалось mrt.m5()
+            self.respawn_enemy()
+        self.refresh_passives(t)
 
     def receive_damage(self, amount: float, t: float = 0.0):
         """Враг бьёт героя; после урона — событие take_damage (retaliation)."""
@@ -343,16 +459,42 @@ class EffectRuntime:
     def fire_event(self, event: str, t: float = 0.0, extra: Optional[dict] = None):
         ctx = {**self.owner.ctx(extra),
                **self.target_ctx("enemy", self.enemy)}
+        # псевдо-поле: фактический урон последнего базового удара — источник
+        # для value {"ref": "ctx.last_damage"} / {"pct": N, "of": "last_damage"}
+        ctx["last_damage"] = self.last_damage
+        mods_before = dict(self.owner.mods)
         for ef in self.effects:
             tr = ef.get("trigger", {})
             if tr.get("kind") != "event" or tr.get("event") != event:
                 continue
             if not self._owner_has_ok(tr, t):
                 continue
+            # фильтр по имени зоны пересечения для hp_cross-событий:
+            # trigger {"kind":"event","event":"hp_cross","cross":"Lost My Self"}
+            if tr.get("cross") and tr["cross"] not in self.crossed:
+                continue
             if tr.get("filter") and not eval_pred(tr["filter"], ctx):
                 continue
             self.run_ops(ef.get("ops", []), ctx, t, f"{ef['id']}#{event}",
                          event=event)
+        # После событийных ops пересобираем mods из слоёв, НО сохраняем
+        # накопления mod-ops, внесённые самим событием (delta над пассивным
+        # слоем до события). Так scale-of-counter событийные стаки
+        # (Vampire's Fang) применяются ровно один раз за событие и не
+        # теряются при последующем refresh_passives(); а чистые пассивные
+        # condition-эффекты (Lost My Self) не дублируются в событийный слой.
+        if self.owner.mods != mods_before:
+            # Дельта считается над ПОЛНЫМmods до события (он, как правило,
+            # = event + passive от предыдущего refresh), а не только над
+            # пассивным слоем: иначе чистые condition-моды (Lost My Self)
+            # при каждом событии ошибочно оседали бы в событийном слое и
+            # масштабировались бы по hp_pct на следующий цикл.
+            delta = {k: v - mods_before.get(k, 0.0)
+                     for k, v in self.owner.mods.items()
+                     if abs(v - mods_before.get(k, 0.0)) > 1e-12}
+            merged = dict(self.owner.mods)
+            for k, v in delta.items():
+                self._event_mods[k] = self._event_mods.get(k, 0.0) + v
         # каскад: attack порождает attack_hit только через attack();
         # здесь — ре-ентрансные события из ops (например kill внутри fail-ветки)
 
@@ -385,6 +527,11 @@ class EffectRuntime:
         amount = compute_amount(o, ctx)
 
         if kind == "mod":
+            # Событийные mod-ops — НАКОПИТЕЛЬНЫЕ стаки: применяются к
+            # owner.mods ровно один раз здесь; fire_event() после каскада
+            # выделит из них delta и закрепит в слое `_event_mods`, который
+            # не сбрасывается пересчётом пассивов. Раньше отсюда вызывался
+            # refresh_passives() — мод применялся повторно (стаки удваивались).
             self._apply_mod(o, ctx)
         elif kind == "heal":
             target.heal(amount)
@@ -449,19 +596,35 @@ class EffectRuntime:
                 self.run_ops(ef.get("ops", []), ctx, t, f"{src}->{eid}")
         elif kind == "kill":
             was_alive = target.alive and target.current_hp > 0
+            if was_alive:
+                # фиксируем фактический урон "добиания" в ctx.last_damage,
+                # чтобы heal по ref/pct-of last_damage (лifesteal на execute)
+                # считался от реального снятого HP, а не от заявленного dmg
+                if target is self.enemy:
+                    self.last_damage = target.current_hp
             target.deal_damage(target.current_hp, log=self._dmg_log(target))
             if was_alive:
                 if target is self.owner:
                     self.log.append(f"t={t:.1f} {src} KILL {target.name} (self!)"
                                     " -- revive/set-hp ops must follow")
+                    self.fire_event("die", t)
                 else:
+                    # Инкремент kills здесь — ЕДИНСТВЕННЫЙ для целей, убитых
+                    # ops-эффектом (execute). Флаг сообщает циклу attack(),
+                    # что килл уже засчитан и событие "kill" разослано, —
+                    # иначе счётчик удвоился бы (см. attack()).
                     self.owner.kills += 1
+                    if target is self.enemy:
+                        self._killed_this_attack = True
                     self.log.append(f"t={t:.1f} {src} KILL {target.name}")
                     # каскад событий: die у жертвы / kill у владельца
                     if target is self.enemy:
                         self.fire_event("kill", t)
-                    elif target is self.owner:
-                        self.fire_event("die", t)
+            # NOTE про единый счётчик kills: run_op("kill") инкрементирует
+            # kills ЗДЕСЬ; цикл attack() засчитывает киллы только когда цель
+            # умерла от базового удара (см. комментарий в attack()). Флаг
+            # _killed_this_attack связывает оба пути и исключает двойной
+            # подсчёт execute-убийств (judgement и т.п.).
 
     # helpers -----------------------------------------------------------------
     def _extend_buff(self, target, bid: str, ext: dict, ctx: dict,
@@ -477,28 +640,32 @@ class EffectRuntime:
         b["until"] += add
         self.log.append(f"t={t:.1f} {src} extend {bid} +{add:.1f}s")
 
-    def _apply_mod(self, o: dict, ctx: Optional[dict] = None):
+    def _apply_mod(self, o: dict, ctx: Optional[dict] = None,
+                   sink: Optional[dict] = None):
+        """Применить mod-оп. sink=None -> owner.mods (совместимость);
+        sink=dict -> накопление в отдельный слой (persistent/passive)."""
         if ctx is None:
             ctx = self.owner.ctx()
         stat = o.get("stat")
         amount = compute_amount(o, ctx)
         mo = o.get("op", "add")
-        cur = self.owner.mods.get(stat, 0.0)
+        dst = self.owner.mods if sink is None else sink
+        cur = dst.get(stat, 0.0)
         base = self.owner.base.get(stat, 0.0)
         if mo == "add":
-            self.owner.mods[stat] = cur + amount
+            dst[stat] = cur + amount
         elif mo == "sub":
-            self.owner.mods[stat] = cur - amount
+            dst[stat] = cur - amount
         elif mo == "mul":
-            self.owner.mods[stat] = (base + cur) * amount - base
+            dst[stat] = (base + cur) * amount - base
         elif mo == "div":
-            self.owner.mods[stat] = (base + cur) / amount - base if amount else cur
+            dst[stat] = (base + cur) / amount - base if amount else cur
         elif mo == "set":
-            self.owner.mods[stat] = amount - base
+            dst[stat] = amount - base
         elif mo == "min":
-            self.owner.mods[stat] = min(base + cur, amount) - base
+            dst[stat] = min(base + cur, amount) - base
         elif mo == "max":
-            self.owner.mods[stat] = max(base + cur, amount) - base
+            dst[stat] = max(base + cur, amount) - base
 
     def _duration(self, d, ctx) -> float:
         if d is None:
@@ -535,7 +702,10 @@ class EffectRuntime:
             return False
         ptr = parent.get("trigger", {})
         if ptr.get("kind") == "condition":
-            return eval_pred(ptr.get("when"), self.owner.ctx())
+            ctx = {**self.owner.ctx(),
+                   **self.target_ctx("enemy", self.enemy)}
+            ctx["last_damage"] = self.last_damage
+            return eval_pred(ptr.get("when"), ctx)
         return True
 
     def _dmg_log(self, target):
