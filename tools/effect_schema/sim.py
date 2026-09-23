@@ -106,10 +106,12 @@ def _ast_eval(node, ctx: dict):
             return all(vals)
         return any(vals)
     if isinstance(node, ast.Call):
-        fn = _ast_eval(node.func, ctx)
-        if fn not in _FUNCS.values():
+        fn = node.func
+        # вызов разрешён только простому имени из whitelist (max/min/...);
+        # ctx.foo(...) и (obj).__class__(...) — запрещены
+        if not isinstance(fn, ast.Name) or fn.id not in _FUNCS:
             raise PrediciationException("call of non-whitelisted function")
-        return fn(*[_ast_eval(a, ctx) for a in node.args])
+        return _FUNCS[fn.id](*[_ast_eval(a, ctx) for a in node.args])
     raise PrediciationException(f"expression element not allowed: "
                                 f"{type(node).__name__}")
 
@@ -278,17 +280,27 @@ class EffectRuntime:
         self.effects = effects
         self.log: list[str] = []
         self.active_mod_sources: set[str] = set()
+        self._ev_depth = 0          # ре-ентранс fire_event (attack -> attack_hit ...)
 
     # public API ------------------------------------------------------------
+    def target_ctx(self, prefix: str, t: Optional[Unit]) -> dict:
+        """Контекст цели с префиксом: enemy_hp_pct, ally_hp и т.д."""
+        if t is None:
+            return {}
+        c = t.ctx()
+        return {f"{prefix}_{k}": v for k, v in c.items()}
+
     def refresh_passives(self, t: float = 0.0):
         """Пересчитать все passive/condition моды (сброс -> повторный应用)."""
         self.owner.mods.clear()
+        ctx = {**self.owner.ctx(),
+               **self.target_ctx("enemy", self.enemy)}
         for ef in self.effects:
             tr = ef.get("trigger", {})
             kind = tr.get("kind")
             if kind not in ("passive", "condition"):
                 continue
-            if kind == "condition" and not eval_pred(tr.get("when"), self.owner.ctx()):
+            if kind == "condition" and not eval_pred(tr.get("when"), ctx):
                 continue
             if not self._owner_has_ok(tr, t):
                 continue
@@ -296,8 +308,41 @@ class EffectRuntime:
                 if o.get("kind") == "mod":
                     self._apply_mod(o)
 
+    def attack(self, t: float = 0.0, base_damage: Optional[float] = None):
+        """Боевой цикл героя: attack -> (execute-ops) -> базовый урон по врагу
+        -> attack_hit (лifesteal-эффекты)."""
+        if not self.owner.alive or self.enemy is None or not self.enemy.alive:
+            return
+        self.fire_event("attack", t)
+        if self.enemy is None or not self.enemy.alive:
+            return  # execute (judgement) уже сработал
+        dmg = base_damage if base_damage is not None else self.owner._eff("attack_damage")
+        if dmg > 0:
+            self.enemy.deal_damage(dmg)
+            self.log.append(f"t={t:.1f} hero basic attack {dmg:.1f} "
+                            f"-> {self.enemy.name} hp={self.enemy.current_hp:.1f}")
+        killed = not self.enemy.alive
+        self.fire_event("attack_hit", t)
+        if killed and self.enemy is not None and not self.enemy.alive:
+            self.owner.kills += 1
+            self.log.append(f"t={t:.1f} KILL {self.enemy.name}")
+            self.fire_event("kill", t)
+
+    def receive_damage(self, amount: float, t: float = 0.0):
+        """Враг бьёт героя; после урона — событие take_damage (retaliation)."""
+        if not self.owner.alive:
+            return
+        self.owner.deal_damage(amount)
+        self.log.append(f"t={t:.1f} {self.owner.name} takes {amount:.1f} "
+                        f"hp={self.owner.current_hp:.1f}")
+        died = not self.owner.alive
+        self.fire_event("take_damage", t)
+        if died and not self.owner.alive:
+            self.fire_event("die", t)
+
     def fire_event(self, event: str, t: float = 0.0, extra: Optional[dict] = None):
-        ctx = self.owner.ctx(extra)
+        ctx = {**self.owner.ctx(extra),
+               **self.target_ctx("enemy", self.enemy)}
         for ef in self.effects:
             tr = ef.get("trigger", {})
             if tr.get("kind") != "event" or tr.get("event") != event:
@@ -308,6 +353,8 @@ class EffectRuntime:
                 continue
             self.run_ops(ef.get("ops", []), ctx, t, f"{ef['id']}#{event}",
                          event=event)
+        # каскад: attack порождает attack_hit только через attack();
+        # здесь — ре-ентрансные события из ops (например kill внутри fail-ветки)
 
     def tick(self, t: float, dt: float):
         """regen + duration-истечение баффов + tick-события."""
@@ -381,6 +428,16 @@ class EffectRuntime:
             b = target.buffs.get(bid)
             if b:
                 ext = o.get("extend") or b.get("extend") or {}
+                ev = event
+                if ev is None and "#" in src:
+                    # fallback: событие зашито в src вида "effect#event(.fail)"
+                    ev = src.rsplit("#", 1)[-1].split(".", 1)[0]
+                # фильтр по событию: extend срабатывает только на ext["on"]
+                if ext.get("on") and ev != ext.get("on"):
+                    self.log.append(
+                        f"t={t:.1f} {src} extend {bid}: on={ext['on']} "
+                        f"!= event={ev!r} -> skip")
+                    return
                 self._extend_buff(target, bid, ext, ctx, t, src, buff_obj=b)
         elif kind == "remove_buff":
             target.buffs.pop(o.get("buff_id"), None)
@@ -391,9 +448,20 @@ class EffectRuntime:
             if ef:
                 self.run_ops(ef.get("ops", []), ctx, t, f"{src}->{eid}")
         elif kind == "kill":
+            was_alive = target.alive and target.current_hp > 0
             target.deal_damage(target.current_hp, log=self._dmg_log(target))
-            self.owner.kills += 1
-            self.log.append(f"t={t:.1f} {src} KILL {target.name}")
+            if was_alive:
+                if target is self.owner:
+                    self.log.append(f"t={t:.1f} {src} KILL {target.name} (self!)"
+                                    " -- revive/set-hp ops must follow")
+                else:
+                    self.owner.kills += 1
+                    self.log.append(f"t={t:.1f} {src} KILL {target.name}")
+                    # каскад событий: die у жертвы / kill у владельца
+                    if target is self.enemy:
+                        self.fire_event("kill", t)
+                    elif target is self.owner:
+                        self.fire_event("die", t)
 
     # helpers -----------------------------------------------------------------
     def _extend_buff(self, target, bid: str, ext: dict, ctx: dict,

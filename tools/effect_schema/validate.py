@@ -2,7 +2,31 @@
 
 from __future__ import annotations
 
-from .schema import OP_KINDS, TARGETS, OPS, TRIGGER_KINDS, EVENTS, is_stat
+from .schema import (OP_KINDS, TARGETS, OPS, TRIGGER_KINDS, EVENTS,
+                     CONTEXT_ONLY_STATS, is_stat)
+
+
+def _validate_pred(pred, path: str) -> list[str]:
+    """Строка-предикат должна компилироваться безопасным интерпретатором sim."""
+    if not isinstance(pred, str) or not pred.strip():
+        return [f"{path}: predicate must be a non-empty string"]
+    from .sim import eval_pred, PREDICATES  # лениво: sim импортирует только stdlib
+    if pred.strip() in PREDICATES:
+        return []
+    try:
+        # фиктивный ctx покрывает стандартные поля Unit.ctx + enemy_*/ally_*
+        smoke_ctx = {k: 50.0 for k in (
+            "hp", "max_hp", "hp_pct", "hp_missing", "strength", "stamina",
+            "crit_chance", "crit_dmg", "aspd", "hp_regen", "lifesteal",
+            "defense", "kills", "mana", "max_mana")}
+        smoke_ctx.update({f"enemy_{k}": 50.0 for k in
+                          ("hp", "max_hp", "hp_pct", "alive")})
+        smoke_ctx.update({f"ally_{k}": 50.0 for k in
+                          ("hp", "max_hp", "hp_pct", "alive")})
+        eval_pred(pred, smoke_ctx)   # smoke-прогон на фиктивном ctx
+        return []
+    except Exception as e:
+        return [f"{path}: invalid predicate {pred!r} ({type(e).__name__}: {e})"]
 
 
 def validate_effect(ef: dict, path: str = "effect") -> list[str]:
@@ -27,6 +51,10 @@ def validate_effect(ef: dict, path: str = "effect") -> list[str]:
             err(f"unknown event {tr.get('event')!r}")
         if k == "condition" and not tr.get("when"):
             err("condition trigger requires `when`")
+    for pk in ("when", "filter"):
+        pv = tr.get(pk) if isinstance(tr, dict) else None
+        if isinstance(pv, str) and pv:
+            errs += _validate_pred(pv, f"{path}.trigger.{pk}")
     ops = ef.get("ops")
     if not isinstance(ops, list) or not ops:
         err("ops must be a non-empty list")
@@ -58,11 +86,16 @@ def validate_op(o: dict, path: str) -> list[str]:
         err(f"unknown stat {st!r} (use custom:<name> for new stats)")
     if kind in ("mod", "heal", "drain", "set") and not st:
         err(f"kind={kind} requires stat")
+    if st in CONTEXT_ONLY_STATS:
+        err(f"stat {st!r} is read-only context field (usable only in value.of/scale.of)")
     if kind in ("buff", "extend", "remove_buff") and not o.get("buff_id"):
         err(f"kind={kind} requires buff_id")
     v = o.get("value")
     if kind in ("mod", "heal", "drain", "set", "deal") and v is None and o.get("scale") is None:
         err("needs value or scale")
+    when = o.get("when")
+    if isinstance(when, str) and when:
+        errs += _validate_pred(when, f"{path}.when")
     if isinstance(v, dict):
         if not any(k in v for k in ("flat", "pct", "ref")):
             err("value needs one of flat/pct/ref")

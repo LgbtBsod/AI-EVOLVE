@@ -198,16 +198,6 @@ def render_effect(ef, indent: int = 0) -> str:
     return "\n".join(lines)
 
 
-def _indent_block(text: str, _prefix: str) -> str:
-    return text
-
-
-def _table_expr_with_comments(op: dict, pad_in: str) -> str:
-    """Как _table_expr, но перед каждым ops-элементом сохраняем пустые пропуски."""
-    return _table_expr({k: v for k, v in op.items()
-                        if v not in (None, "", [], {})}, pad_in)
-
-
 # ---------------------------------------------------------------- item file
 
 def collect_predicates(effects: list) -> list[str]:

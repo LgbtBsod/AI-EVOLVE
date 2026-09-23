@@ -1,599 +1,440 @@
 """
-🎨 Web Item Builder - Flet UI для создания предметов с CAS эффектами
+🎨 Effect Schema Item Builder — Flet 1.0 UI
 
-Запуск: python tools/web_builder/app.py
-Доступ: http://localhost:8550
+Билдер предметов с эффектами по схеме Effect -> Ops[] (Effect Schema v1).
+Работает поверх tools.effect_schema.ui_logic: тот же код, что и в тестах
+(tests/test_training_room_effectschema.py), поэтому «Тест в тренировочной
+комнате» из UI идентичен прогону pytest.
+
+Запуск:      python tools/web_builder/app.py            (desktop)
+             python tools/web_builder/app.py --web      (web, порт 8550)
+
+Flet 1.0 API: ft.run(main), ft.FilledButton, ft.Colors.*, Dropdown(on_select).
 """
 
-import flet as ft
+from __future__ import annotations
+
 import json
-from pathlib import Path
-from datetime import datetime
-
-# Импорт CAS Engine для валидации
 import sys
-sys.path.insert(0, str(Path(__file__).parent.parent))
-from python_layer.l9_semantic.cas_engine_v2 import Condition, EffectModifier, CASSolver
+from pathlib import Path
 
-class ItemBuilderApp:
+ROOT = Path(__file__).resolve().parent.parent.parent
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import flet as ft  # noqa: E402
+
+from tools.effect_schema.catalog import CATALOG, get_template  # noqa: E402
+from tools.effect_schema.schema import (  # noqa: E402
+    OP_KINDS, TARGETS, OPS, TRIGGER_KINDS, EVENTS, KNOWN_STATS,
+)
+from tools.effect_schema import ui_logic  # noqa: E402
+
+# ---------------------------------------------------------------- enums → списки
+
+KINDS = sorted(OP_KINDS)
+TARGET_LIST = sorted(TARGETS)
+OP_LIST = sorted(OPS)
+TRIGGER_LIST = sorted(TRIGGER_KINDS)
+EVENT_LIST = sorted(EVENTS)
+STAT_LIST = sorted(KNOWN_STATS) + ["custom:<name>"]
+FLAG_LIST = ["no_crit", "true_damage", "silent"]
+
+
+def _opts(values):
+    return [ft.dropdown.Option(key=v, text=v) for v in values]
+
+
+def _s(x):
+    """None/'' -> '', числа -> строка без '.0' для целых."""
+    if x is None or x == "":
+        return ""
+    if isinstance(x, float) and x.is_integer():
+        return str(int(x))
+    return str(x)
+
+
+# ---------------------------------------------------------------- op form card
+
+class OpForm:
+    """Карточка одной операции: все поля чек-листа схемы."""
+
+    def __init__(self, app: "BuilderApp", data: dict | None = None,
+                 title: str = "Op", top_level: bool = True):
+        self.app = app
+        d = data or {}
+        self.kind = ft.Dropdown(label="kind *", width=160, value=d.get("kind", "mod"),
+                                options=_opts(KINDS), on_select=self._touched)
+        self.target = ft.Dropdown(label="target", width=130,
+                                  value=d.get("target", "self"),
+                                  options=_opts(TARGET_LIST), on_select=self._touched)
+        self.stat = ft.Dropdown(label="stat", width=190, editable=True,
+                                value=d.get("stat") or None,
+                                options=_opts(STAT_LIST), on_select=self._touched)
+        self.op = ft.Dropdown(label="op", width=120,
+                              value=d.get("op") or None,
+                              options=_opts(OP_LIST), on_select=self._touched)
+        v = d.get("value") or {}
+        self.v_flat = ft.TextField(label="value.flat", width=110,
+                                   value=_s(v.get("flat")), on_change=self._touched)
+        self.v_pct = ft.TextField(label="value.pct", width=110,
+                                  value=_s(v.get("pct")), on_change=self._touched)
+        self.v_of = ft.TextField(label="value.of", width=170,
+                                 value=_s(v.get("of")), on_change=self._touched)
+        self.v_ref = ft.TextField(label="value.ref", width=170,
+                                  value=_s(v.get("ref")), on_change=self._touched)
+        s = d.get("scale") or {}
+        self.s_every = ft.TextField(label="scale.every", width=120,
+                                    value=_s(s.get("every")), on_change=self._touched)
+        self.s_of = ft.TextField(label="scale.of", width=170,
+                                 value=_s(s.get("of")), on_change=self._touched)
+        sv = s.get("value") or {}
+        self.sv_flat = ft.TextField(label="scale.value.flat", width=140,
+                                    value=_s(sv.get("flat")), on_change=self._touched)
+        self.sv_pct = ft.TextField(label="scale.value.pct", width=140,
+                                   value=_s(sv.get("pct")), on_change=self._touched)
+        self.s_factor = ft.TextField(label="scale.factor", width=120,
+                                     value=_s(s.get("factor")), on_change=self._touched)
+        self.s_cap = ft.TextField(label="scale.cap", width=110,
+                                  value=_s(s.get("cap")), on_change=self._touched)
+        self.when = ft.TextField(label="when (ctx.hp_pct < 40)",
+                                 width=300, value=_s(d.get("when")),
+                                 on_change=self._touched)
+        self.buff_id = ft.TextField(label="buff_id", width=170,
+                                    value=_s(d.get("buff_id")), on_change=self._touched)
+        raw_dur = d.get("duration")
+        dur = raw_dur if isinstance(raw_dur, dict) else {}
+        base = dur.get("base", dur.get("flat"))
+        self.d_base = ft.TextField(label="duration.base", width=140,
+                                   value=_s(base), on_change=self._touched)
+        cd = d.get("cooldown") if isinstance(d.get("cooldown"), dict) else {}
+        self.cd_flat = ft.TextField(label="cooldown.flat", width=140,
+                                    value=_s(cd.get("flat")), on_change=self._touched)
+        ext = d.get("extend") or {}
+        self.ext_on = ft.TextField(label="extend.on", width=140,
+                                   value=_s(ext.get("on")), on_change=self._touched)
+        self.ext_flat = ft.TextField(label="extend.flat", width=140,
+                                     value=_s(ext.get("flat")), on_change=self._touched)
+        self.flags = ft.Dropdown(label="flags", width=160,
+                                 value=(d.get("flags") or [None])[0],
+                                 options=_opts(FLAG_LIST), on_select=self._touched)
+        self.remove_btn = ft.IconButton(ft.Icons.DELETE_OUTLINE,
+                                        icon_color=ft.Colors.RED_400,
+                                        tooltip="удалить операцию",
+                                        on_click=self._remove)
+        self.fail_switch = ft.Switch(label="fail-ветка",
+                                     value=bool(d.get("fail")),
+                                     on_change=self._toggle_fail)
+        self.fail_list_col = ft.Column([], spacing=4,
+                                       visible=bool(d.get("fail")))
+        self.add_fail_btn = ft.TextButton("+ fail op", icon=ft.Icons.ADD,
+                                          on_click=self._add_fail)
+        self.fail_ops: list[OpForm] = []
+        for f in d.get("fail") or []:
+            self._make_fail(f)
+        if not top_level:
+            self.remove_btn.visible = False
+            self.add_fail_btn.visible = False   # без рекурсии fail-in-fail
+
+        self.control = ft.Container(
+            content=ft.Column([
+                ft.Row([ft.Text(title, weight=ft.FontWeight.BOLD, size=13),
+                        ft.Container(expand=True), self.remove_btn]),
+                ft.Row([self.kind, self.target, self.stat, self.op], wrap=True),
+                ft.Row([self.v_flat, self.v_pct, self.v_of, self.v_ref], wrap=True),
+                ft.Row([self.s_every, self.s_of, self.sv_flat, self.sv_pct,
+                        self.s_factor, self.s_cap], wrap=True),
+                ft.Row([self.when, self.buff_id, self.d_base, self.cd_flat,
+                        self.ext_on, self.ext_flat, self.flags], wrap=True),
+                ft.Row([self.fail_switch, self.add_fail_btn]),
+                self.fail_list_col,
+            ], spacing=6),
+            padding=10, border_radius=8,
+            bgcolor=ft.Colors.with_opacity(0.04, ft.Colors.WHITE),
+            border=ft.Border.all(1, ft.Colors.with_opacity(0.15, ft.Colors.WHITE)),
+        )
+
+    # -- handlers ---------------------------------------------------------
+    def _touched(self, e=None):
+        self.app.dirty()
+
+    def _remove(self, e):
+        self.app.remove_op(self)
+
+    def _toggle_fail(self, e):
+        self.fail_list_col.visible = bool(self.fail_switch.value)
+        if not self.fail_list_col.visible:
+            self.fail_ops.clear()
+            self.fail_list_col.controls.clear()
+        self.app.page.update()
+
+    def _add_fail(self, e):
+        self._make_fail({})
+        self.fail_switch.value = True
+        self.fail_list_col.visible = True
+        self.app.page.update()
+
+    def _make_fail(self, data):
+        fo = OpForm(self.app, data, title="fail-op", top_level=False)
+        self.fail_ops.append(fo)
+        self.fail_list_col.controls.append(fo.control)
+
+    # -- to form dict -----------------------------------------------------
+    def to_form(self) -> dict:
+        value = {k: v.value for k, v in
+                 (("flat", self.v_flat), ("pct", self.v_pct),
+                  ("of", self.v_of), ("ref", self.v_ref)) if v.value}
+        scale = {k: v.value for k, v in
+                 (("every", self.s_every), ("of", self.s_of),
+                  ("factor", self.s_factor), ("cap", self.s_cap)) if v.value}
+        sv = {k: v.value for k, v in
+              (("flat", self.sv_flat), ("pct", self.sv_pct)) if v.value}
+        if sv:
+            scale["value"] = sv
+        out: dict = {"kind": self.kind.value or "mod",
+                     "target": self.target.value or "self",
+                     "stat": self.stat.value or "",
+                     "op": self.op.value or "",
+                     "value": value, "when": self.when.value or "",
+                     "buff_id": self.buff_id.value or "",
+                     "flags": [self.flags.value] if self.flags.value else []}
+        if scale:
+            out["scale"] = scale
+        if self.d_base.value:
+            try:
+                out["duration"] = {"base": float(self.d_base.value)}
+            except ValueError:
+                out["duration"] = {"base": self.d_base.value}
+        if self.cd_flat.value:
+            out["cooldown"] = {"flat": self.cd_flat.value}
+        ext = {k: v.value for k, v in
+               (("on", self.ext_on), ("flat", self.ext_flat)) if v.value}
+        if ext:
+            out["extend"] = ext
+        if self.fail_switch.value and self.fail_ops:
+            out["fail"] = [f.to_form() for f in self.fail_ops]
+        return out
+
+
+# ---------------------------------------------------------------- main app
+
+class BuilderApp:
     def __init__(self, page: ft.Page):
         self.page = page
-        self.page.title = "🛠️ CAS Item Builder"
-        self.page.theme_mode = ft.ThemeMode.DARK
-        self.page.window_width = 1400
-        self.page.window_height = 900
-        
-        # Текущее состояние билдера
-        self.item_name = ""
-        self.item_description = ""
-        self.base_stats = {}
-        self.conditions = []
-        self.effects = []
-        
-        # Шаблоны
-        self.templates = self.load_templates()
-        
-        self.build_ui()
-    
-    def load_templates(self):
-        """Загрузка预设ленных шаблонов"""
-        return {
-            "Sorrow of Berserk": {
-                "description": "Легендарный амулет берсерка. Сила растёт с потерей HP.",
-                "base_stats": {
-                    "max_hp_percent": 2000,
-                    "defense_percent": -80,
-                    "life_steal_percent": 20,
-                    "attack_speed_percent": 50
-                },
-                "effects": [
-                    {
-                        "name": "Passive Buffs (Low HP)",
-                        "condition": {"type": "hp_percent_lt", "value": 40},
-                        "effects": [
-                            {"op": "add_percent", "stat": "attack_damage", "value": 50},
-                            {"op": "add_percent", "stat": "move_speed", "value": 30},
-                            {"op": "add_flat", "stat": "tenacity", "value": 50}
-                        ]
-                    },
-                    {
-                        "name": "Escalation",
-                        "condition": {"type": "stat_gte", "stat": "current_hp_percent", "value": 0},
-                        "scaling": True,
-                        "effects": [
-                            {"op": "add_percent", "stat": "attack_damage", "value": 45, "scale_with": "missing_hp_percent", "scale_factor": 0.5},
-                            {"op": "add_percent", "stat": "crit_damage", "value": 27, "scale_with": "missing_hp_percent", "scale_factor": 0.3}
-                        ]
-                    },
-                    {
-                        "name": "Safety Net",
-                        "condition": {"type": "hp_would_die"},
-                        "cooldown": 180,
-                        "effects": [
-                            {"op": "set", "stat": "current_hp", "value": 1},
-                            {"op": "add_flat", "stat": "iframe_duration", "value": 2.0}
-                        ]
-                    },
-                    {
-                        "name": "Kill Refresh",
-                        "condition": {"type": "on_kill"},
-                        "effects": [
-                            {"op": "reset_cooldowns", "all_skills": True},
-                            {"op": "add_flat", "stat": "iframe_duration", "value": 0.5},
-                            {"op": "add_percent", "stat": "move_speed", "value": 100, "duration": 3.0}
-                        ]
-                    }
-                ]
-            },
-            "Bane's Scar Necklace": {
-                "description": "Проклятый амулет, требующий крови для силы.",
-                "base_stats": {
-                    "attack_damage_percent": 20,
-                    "strength_flat": -20,
-                    "attack_speed_percent": 25,
-                    "crit_chance_percent": 32.5,
-                    "hp_regen_percent": 15
-                },
-                "effects": [
-                    {
-                        "name": "Blood Cost",
-                        "condition": {"type": "on_spell_cast"},
-                        "cost": {"hp_percent": 1},
-                        "effects": [
-                            {"op": "add_percent", "stat": "spell_damage", "value": 1.5}
-                        ]
-                    },
-                    {
-                        "name": "Low HP Haste",
-                        "condition": {"type": "hp_percent_lte", "value": 30},
-                        "effects": [
-                            {"op": "add_percent", "stat": "attack_speed", "value": 50}
-                        ]
-                    }
-                ]
-            },
-            "Apocalypse Bringer": {
-                "description": "Оружие апокалипсиса для чистых душой воинов.",
-                "base_stats": {
-                    "strength_flat": 250,
-                    "attack_damage_percent": 75
-                },
-                "effects": [
-                    {
-                        "name": "Purity Power",
-                        "condition": {"type": "and", "conditions": [
-                            {"type": "stat_gte", "stat": "strength", "value": 500},
-                            {"type": "hp_percent_gt", "value": 90}
-                        ]},
-                        "effects": [
-                            {"op": "multiply", "stat": "attack_damage", "value": 2.0},
-                            {"op": "add_flat", "stat": "fire_damage", "value": 1000}
-                        ]
-                    }
-                ]
-            },
-            "Пустой предмет": {
-                "description": "Создайте свой уникальный предмет с нуля.",
-                "base_stats": {},
-                "effects": []
-            }
-        }
-    
-    def build_ui(self):
-        """Построение UI"""
-        # Левая панель - настройки предмета
-        left_panel = ft.Column([
-            ft.Text("🛠️ CAS Item Builder", size=24, weight=ft.FontWeight.BOLD),
+        page.title = "Effect Schema Item Builder"
+        page.theme_mode = ft.ThemeMode.DARK
+        page.padding = 16
+
+        self.item_name = ft.TextField(label="Название предмета", width=320,
+                                      value="Sorrow of Berserk")
+        self.item_desc = ft.TextField(label="Описание", width=320, value="")
+        self.ef_id = ft.TextField(label="effect.id *", width=220,
+                                  value="my_effect", on_change=self.dirty)
+        self.ef_tags = ft.TextField(label="tags (через запятую)", width=220,
+                                    on_change=self.dirty)
+        self.tr_kind = ft.Dropdown(label="trigger.kind", width=150, value="passive",
+                                   options=_opts(TRIGGER_LIST),
+                                   on_select=self.dirty)
+        self.tr_event = ft.Dropdown(label="trigger.event", width=170,
+                                    options=_opts(EVENT_LIST),
+                                    on_select=self.dirty)
+        self.tr_when = ft.TextField(label="trigger.when (ctx.hp_pct < 40)",
+                                    width=280, on_change=self.dirty)
+        self.tr_owner = ft.TextField(label="trigger.owner_has", width=200,
+                                     on_change=self.dirty)
+
+        self.ops_col = ft.Column([], spacing=8)
+        self.op_forms: list[OpForm] = []
+        self.template_dd = ft.Dropdown(label="Шаблон из каталога", width=320,
+                                       options=_opts(list(CATALOG)),
+                                       on_select=self.load_template)
+        self.status = ft.Text("", selectable=True)
+        self.json_out = ft.Markdown("", selectable=True)
+        self.lua_out = ft.Markdown("", selectable=True)
+        self.room_out = ft.Markdown("", selectable=True)
+        self._last_item: dict | None = None
+
+        left = ft.Column([
+            ft.Text("🧱 Предмет", size=18, weight=ft.FontWeight.BOLD),
+            self.item_name, self.item_desc,
             ft.Divider(),
-            
-            # Выбор шаблона
-            ft.Text("Выберите шаблон:", size=14, weight=ft.FontWeight.W_600),
-            ft.Dropdown(
-                label="Шаблон предмета",
-                options=[ft.dropdown.Option(name) for name in self.templates.keys()],
-                value="Sorrow of Berserk",
-                on_change=self.load_template,
-                expand=True
-            ),
-            
+            ft.Text("✨ Effect (контейнер)", size=18, weight=ft.FontWeight.BOLD),
+            self.template_dd,
+            ft.Row([self.ef_id, self.ef_tags], wrap=True),
+            ft.Row([self.tr_kind, self.tr_event, self.tr_when, self.tr_owner],
+                   wrap=True),
+            ft.Text("⚙️ Ops (операции)", size=18, weight=ft.FontWeight.BOLD),
+            ft.Row([ft.FilledButton("+ op", icon=ft.Icons.ADD,
+                                    on_click=self.add_op)]),
+            self.ops_col,
             ft.Divider(),
-            
-            # Название и описание
-            ft.TextField(
-                label="Название предмета",
-                value="Sorrow of Berserk",
-                on_change=lambda e: setattr(self, 'item_name', e.control.value),
-                expand=True
-            ),
-            ft.TextField(
-                label="Описание",
-                value=self.templates["Sorrow of Berserk"]["description"],
-                multiline=True,
-                min_lines=3,
-                on_change=lambda e: setattr(self, 'item_description', e.control.value),
-                expand=True
-            ),
-            
-            ft.Divider(),
-            
-            # Базовые статы
-            ft.Text("📊 Базовые статы:", size=14, weight=ft.FontWeight.W_600),
-            self.create_stat_row("max_hp_percent", "Макс. HP (%)", 2000),
-            self.create_stat_row("defense_percent", "Защита (%)", -80),
-            self.create_stat_row("life_steal_percent", "Вампиризм (%)", 20),
-            self.create_stat_row("attack_speed_percent", "Скорость атаки (%)", 50),
-            self.create_stat_row("attack_damage_percent", "Урон от атак (%)", 0),
-            self.create_stat_row("crit_chance_percent", "Шанс крита (%)", 0),
-            self.create_stat_row("strength_flat", "Сила (+flat)", 0),
-            self.create_stat_row("intelligence_flat", "Интеллект (+flat)", 0),
-            
-            ft.Divider(),
-            
-            # Кнопки действий
             ft.Row([
-                ft.ElevatedButton(
-                    "💾 Сохранить в Lua",
-                    icon=ft.icons.SAVE,
-                    on_click=self.save_lua,
-                    bgcolor=ft.colors.GREEN_700,
-                    color=ft.colors.WHITE,
-                    expand=True
-                ),
-                ft.ElevatedButton(
-                    "🧪 Тестировать",
-                    icon=ft.icons.SCIENCE,
-                    on_click=self.test_item,
-                    bgcolor=ft.colors.BLUE_700,
-                    color=ft.colors.WHITE,
-                    expand=True
-                ),
-            ]),
-            ft.ElevatedButton(
-                "📋 Экспорт в JSON",
-                icon=ft.icons.CODE,
-                on_click=self.export_json,
-                bgcolor=ft.colors.GREY_700,
-                color=ft.colors.WHITE,
-                expand=True
-            ),
-        ], scroll=ft.ScrollMode.AUTO, spacing=10)
-        
-        # Центральная панель - эффекты CAS
-        self.effects_container = ft.Column([], scroll=ft.ScrollMode.AUTO, spacing=10)
-        center_panel = ft.Container(
-            content=ft.Column([
-                ft.Text("⚡ CAS Эффекты:", size=14, weight=ft.FontWeight.W_600),
-                ft.ElevatedButton(
-                    "➕ Добавить эффект",
-                    icon=ft.icons.ADD,
-                    on_click=self.add_effect,
-                    bgcolor=ft.colors.ORANGE_700,
-                    color=ft.colors.WHITE
-                ),
-                self.effects_container,
-            ], scroll=ft.ScrollMode.AUTO),
-            padding=20,
-            border=ft.border.all(1, ft.colors.GREY_800),
-            border_radius=10,
-            expand=True
-        )
-        
-        # Правая панель - предпросмотр и лог
-        right_panel = ft.Column([
-            ft.Text("👁️ Предпросмотр:", size=14, weight=ft.FontWeight.W_600),
-            ft.Container(
-                content=ft.Text("Загрузите шаблон или создайте предмет...", italic=True),
-                padding=15,
-                border=ft.border.all(1, ft.colors.GREY_800),
-                border_radius=5,
-                bgcolor=ft.colors.GREY_900,
-                expand=True
-            ),
-            ft.Divider(),
-            ft.Text("📝 Лог операций:", size=14, weight=ft.FontWeight.W_600),
-            ft.Container(
-                content=self.create_log_container(),
-                padding=10,
-                border=ft.border.all(1, ft.colors.GREY_800),
-                border_radius=5,
-                bgcolor=ft.colors.BLACK,
-                height=300,
-                expand=True
-            ),
-        ], scroll=ft.ScrollMode.AUTO)
-        
-        # Основная раскладка
-        main_layout = ft.Row([
-            ft.Container(content=left_panel, width=400),
-            center_panel,
-            ft.Container(content=right_panel, width=350),
-        ], expand=True, spacing=20)
-        
-        self.page.add(main_layout)
-        
-        # Загрузка шаблона по умолчанию
-        self.load_template(None)
-    
-    def create_stat_row(self, stat_key, label, default_value):
-        """Создание строки для редактирования стата"""
-        return ft.Row([
-            ft.Text(label, size=12, width=150),
-            ft.TextField(
-                value=str(default_value),
-                width=100,
-                keyboard_type=ft.KeyboardType.NUMBER,
-                data=stat_key,
-                on_change=self.update_base_stats
-            ),
-            ft.Text("%" if "percent" in stat_key else "", size=12),
-        ], spacing=5)
-    
-    def update_base_stats(self, e):
-        """Обновление базовых статов"""
-        stat_key = e.control.data
-        try:
-            value = float(e.control.value)
-            self.base_stats[stat_key] = value
-            self.log(f"Стат {stat_key} = {value}")
-        except ValueError:
-            pass
-    
-    def add_effect(self, e):
-        """Добавление нового CAS эффекта"""
-        effect_card = ft.Container(
-            content=ft.Column([
-                ft.Row([
-                    ft.TextField(
-                        label="Название эффекта",
-                        value="Новый эффект",
-                        expand=True,
-                        text_size=12
-                    ),
-                    ft.IconButton(
-                        icon=ft.icons.DELETE,
-                        tooltip="Удалить эффект",
-                        icon_color=ft.colors.RED,
-                        onclick=lambda _, ec=effect_card: self.remove_effect(ec)
-                    ),
-                ]),
-                
-                # Условия
-                ft.Text("Условие (Condition):", size=12, weight=ft.FontWeight.W_600),
-                ft.Dropdown(
-                    label="Тип условия",
-                    options=[
-                        ft.dropdown.Option("hp_percent_lt", "HP < %"),
-                        ft.dropdown.Option("hp_percent_gt", "HP > %"),
-                        ft.dropdown.Option("hp_percent_lte", "HP ≤ %"),
-                        ft.dropdown.Option("hp_percent_gte", "HP ≥ %"),
-                        ft.dropdown.Option("stat_gte", "Стат ≥ значения"),
-                        ft.dropdown.Option("stat_lte", "Стат ≤ значения"),
-                        ft.dropdown.Option("stat_eq", "Стат == значения"),
-                        ft.dropdown.Option("has_buff", "Есть бафф"),
-                        ft.dropdown.Option("has_debuff", "Есть дебафф"),
-                        ft.dropdown.Option("equipped_item", "Надет предмет"),
-                        ft.dropdown.Option("on_kill", "При убийстве"),
-                        ft.dropdown.Option("on_spell_cast", "При касте скилла"),
-                        ft.dropdown.Option("hp_would_die", "При смертельном уроне"),
-                        ft.dropdown.Option("and", "И (комбинированное)"),
-                        ft.dropdown.Option("or", "ИЛИ (комбинированное)"),
-                    ],
-                    value="hp_percent_lt",
-                    width=200,
-                    text_size=11
-                ),
-                ft.Row([
-                    ft.TextField(label="Стат (если нужно)", width=150, text_size=11),
-                    ft.TextField(label="Значение", width=100, text_size=11, keyboard_type=ft.KeyboardType.NUMBER),
-                    ft.TextField(label="Бафф/Дебафф имя", width=150, text_size=11),
-                ]),
-                
-                # Эффекты
-                ft.Text("Действия (Effects):", size=12, weight=ft.FontWeight.W_600),
-                ft.Container(
-                    content=ft.Column([], spacing=5),
-                    data="effects_list"
-                ),
-                ft.ElevatedButton(
-                    "➕ Добавить действие",
-                    icon=ft.icons.ADD,
-                    height=30,
-                    on_click=lambda _, ec=effect_card: self.add_action(ec),
-                    text_size=11
-                ),
-                
-                # Cooldown
-                ft.Row([
-                    ft.TextField(label="Кулдаун (сек)", width=120, keyboard_type=ft.KeyboardType.NUMBER, text_size=11),
-                    ft.Checkbox(label="Scaling эффект", value=False, scale=0.8),
-                ]),
-            ], spacing=8),
-            padding=15,
-            border=ft.border.all(1, ft.colors.BLUE_800),
-            border_radius=8,
-            bgcolor=ft.colors.GREY_900,
-            margin=ft.margin.only(bottom=10)
-        )
-        
-        self.effects_container.controls.append(effect_card)
+                ft.FilledButton("Валидировать", icon=ft.Icons.CHECK,
+                                on_click=self.validate),
+                ft.FilledButton("Собрать Lua", icon=ft.Icons.CODE,
+                                on_click=self.build_lua),
+                ft.FilledButton("Тест в тренировочной комнате",
+                                icon=ft.Icons.SCIENCE, on_click=self.test_room),
+            ], wrap=True),
+            self.status,
+        ], scroll=ft.ScrollMode.AUTO, expand=3, spacing=8)
+
+        def _panel(md: ft.Markdown, flex: int) -> ft.Container:
+            return ft.Container(
+                ft.Column([md], scroll=ft.ScrollMode.AUTO, expand=True),
+                expand=flex,
+                bgcolor=ft.Colors.with_opacity(0.05, ft.Colors.BLACK),
+                border_radius=8, padding=10)
+
+        right = ft.Column([
+            ft.Text("JSON предмета", weight=ft.FontWeight.BOLD),
+            _panel(self.json_out, 2),
+            ft.Text("Lua", weight=ft.FontWeight.BOLD),
+            _panel(self.lua_out, 2),
+            ft.Text("Тренировочная комната", weight=ft.FontWeight.BOLD),
+            _panel(self.room_out, 3),
+        ], scroll=ft.ScrollMode.AUTO, expand=2, spacing=8)
+
+        page.add(ft.Row([left, right],
+                        vertical_alignment=ft.CrossAxisAlignment.START,
+                        spacing=16, expand=True))
+        self.add_op(None, quiet=True)  # стартовая пустая op
+
+    # -- helpers ------------------------------------------------------------
+    def dirty(self, e=None):
+        self.status.value = "● несохранённые изменения"
+        self.status.color = ft.Colors.AMBER_400
         self.page.update()
-        self.log("Добавлен новый эффект")
-    
-    def remove_effect(self, effect_card):
-        """Удаление эффекта"""
-        self.effects_container.controls.remove(effect_card)
-        self.page.update()
-        self.log("Эффект удалён")
-    
-    def add_action(self, effect_card):
-        """Добавление действия к эффекту"""
-        effects_list = None
-        for ctrl in effect_card.content.controls:
-            if hasattr(ctrl, 'data') and ctrl.data == "effects_list":
-                effects_list = ctrl.content
-                break
-        
-        if effects_list:
-            action_row = ft.Row([
-                ft.Dropdown(
-                    options=[
-                        ft.dropdown.Option("add_flat", "+ Flat"),
-                        ft.dropdown.Option("add_percent", "+ %"),
-                        ft.dropdown.Option("multiply", "× Множитель"),
-                        ft.dropdown.Option("set", "= Установить"),
-                        ft.dropdown.Option("reset_cooldowns", "Сбросить КД"),
-                    ],
-                    value="add_percent",
-                    width=130,
-                    text_size=10
-                ),
-                ft.TextField(label="Стат", width=100, text_size=10),
-                ft.TextField(label="Значение", width=80, keyboard_type=ft.KeyboardType.NUMBER, text_size=10),
-                ft.Checkbox(label="Длительность", value=False, scale=0.7),
-                ft.TextField(width=60, text_size=10, hint_text="сек"),
-                ft.IconButton(
-                    icon=ft.icons.CLOSE,
-                    icon_color=ft.colors.RED,
-                    icon_size=18,
-                    onclick=lambda _, ar=action_row: self.remove_action(ar, effects_list)
-                ),
-            ], spacing=5)
-            
-            effects_list.controls.append(action_row)
-            self.page.update()
-    
-    def remove_action(self, action_row, effects_list):
-        """Удаление действия"""
-        effects_list.controls.remove(action_row)
-        self.page.update()
-    
+
+    def add_op(self, e=None, quiet: bool = False):
+        self.op_forms.append(OpForm(self, {}, title=f"ops[{len(self.op_forms)}]"))
+        self.rebuild_ops(quiet=quiet)
+
+    def remove_op(self, opf: OpForm):
+        if opf in self.op_forms:
+            self.op_forms.remove(opf)
+        self.rebuild_ops()
+
+    def rebuild_ops(self, quiet: bool = False):
+        for i, f in enumerate(self.op_forms):
+            f.control.content.controls[0].controls[0].value = f"ops[{i}]"
+        self.ops_col.controls = [f.control for f in self.op_forms]
+        if not quiet:
+            self.dirty()
+
     def load_template(self, e):
-        """Загрузка шаблона"""
-        dropdown = self.page.controls[0].controls[0].controls[1].controls[1]
-        template_name = dropdown.value
-        
-        if template_name not in self.templates:
+        tid = self.template_dd.value
+        if not tid:
             return
-        
-        template = self.templates[template_name]
-        
-        # Обновление названия и описания
-        self.page.controls[0].controls[0].controls[1].controls[3].value = template_name
-        self.page.controls[0].controls[0].controls[1].controls[4].value = template["description"]
-        
-        # Обновление базовых статов
-        stat_fields = self.page.controls[0].controls[0].controls[1].controls[6].controls
-        for row in stat_fields[2:]:  # Пропускаем заголовки
-            if isinstance(row, ft.Row) and len(row.controls) > 1:
-                stat_field = row.controls[1]
-                stat_key = stat_field.data
-                if stat_key in template.get("base_stats", {}):
-                    stat_field.value = str(template["base_stats"][stat_key])
-        
-        # Очистка и загрузка эффектов
-        self.effects_container.controls.clear()
-        for effect_data in template.get("effects", []):
-            self.load_effect_from_data(effect_data)
-        
+        ef = get_template(tid).to_json()
+        self.ef_id.value = ef["id"]
+        self.ef_tags.value = ", ".join(ef.get("tags", []))
+        tr = ef.get("trigger", {})
+        self.tr_kind.value = tr.get("kind", "passive")
+        self.tr_event.value = tr.get("event")
+        when = tr.get("when", "")
+        self.tr_when.value = when if isinstance(when, str) else ""
+        self.tr_owner.value = tr.get("owner_has", "")
+        self.op_forms = [OpForm(self, o, title=f"ops[{i}]")
+                         for i, o in enumerate(ef.get("ops", []))]
+        self.rebuild_ops()
+        self._set_status(f"Загружен шаблон «{tid}»", ft.Colors.GREEN_400)
+
+    def _set_status(self, msg, color=ft.Colors.LIGHT_BLUE_400):
+        self.status.value = msg
+        self.status.color = color
         self.page.update()
-        self.log(f"Загружен шаблон: {template_name}")
-    
-    def load_effect_from_data(self, effect_data):
-        """Загрузка эффекта из данных"""
-        # Упрощённая загрузка - можно расширить
-        self.log(f"Загрузка эффекта: {effect_data.get('name', 'Unknown')}")
-    
-    def create_log_container(self):
-        """Создание контейнера лога"""
-        return ft.Column([], scroll=ft.ScrollMode.AUTO, spacing=3)
-    
-    def log(self, message):
-        """Добавление сообщения в лог"""
-        timestamp = datetime.now().strftime("%H:%M:%S")
-        log_entry = ft.Text(f"[{timestamp}] {message}", size=10, font_family="monospace")
-        
-        log_container = self.page.controls[0].controls[2].controls[3].content
-        log_container.controls.append(log_entry)
-        
-        # Автопрокрутка вниз
-        if len(log_container.controls) > 50:
-            log_container.controls.pop(0)
-        
-        self.page.update()
-    
-    def save_lua(self, e):
-        """Сохранение в Lua формат"""
-        item_data = self.collect_item_data()
-        
-        lua_content = self.generate_lua(item_data)
-        
-        # Сохранение в файл
-        output_path = Path(__file__).parent.parent.parent / "lua_content" / "items" / "custom"
-        output_path.mkdir(parents=True, exist_ok=True)
-        
-        filename = f"{self.item_name.replace(' ', '_').lower()}.lua"
-        filepath = output_path / filename
-        
-        with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(lua_content)
-        
-        self.log(f"✅ Сохранено в Lua: {filename}")
-        
-        # Показать диалог
-        self.page.dialog = ft.AlertDialog(
-            title=ft.Text("✅ Успешно!"),
-            content=ft.Text(f"Предмет сохранён:\n{filepath}"),
-            actions=[
-                ft.TextButton("OK", on_click=lambda e: self.close_dialog())
-            ],
-            modal=True
-        )
-        self.page.dialog.open = True
-        self.page.update()
-    
-    def collect_item_data(self):
-        """Сбор данных предмета из UI"""
-        return {
-            "name": self.item_name,
-            "description": self.item_description,
-            "base_stats": self.base_stats,
-            "effects": []  # Нужно собрать из UI
+
+    # -- form -> state --------------------------------------------------------
+    def collect_form(self) -> dict:
+        effect_form = {
+            "id": (self.ef_id.value or "").strip() or "unnamed",
+            "tags": [t.strip() for t in (self.ef_tags.value or "").split(",")
+                     if t.strip()],
+            "trigger": {"kind": self.tr_kind.value or "passive",
+                        "event": self.tr_event.value or "",
+                        "when": self.tr_when.value or "",
+                        "owner_has": self.tr_owner.value or ""},
+            "ops": [f.to_form() for f in self.op_forms],
         }
-    
-    def generate_lua(self, item_data):
-        """Генерация Lua кода"""
-        lua = f"""-- {item_data['name']}
--- {item_data['description']}
--- Сгенерировано в CAS Item Builder: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+        return {"name": self.item_name.value,
+                "description": self.item_desc.value,
+                "effects": [effect_form]}
 
-return {{
-    name = "{item_data['name']}",
-    description = "{item_data['description']}",
-    
-    base_stats = {{
-"""
-        for stat, value in item_data['base_stats'].items():
-            lua += f'        {stat} = {value},\n'
-        
-        lua += """    },
-    
-    cas_effects = {
-"""
-        # Добавить эффекты (нужно дособрать из UI)
-        lua += """    },
-}
-"""
-        return lua
-    
-    def test_item(self, e):
-        """Тестирование предмета через CAS Engine"""
-        item_data = self.collect_item_data()
-        
-        try:
-            # Валидация через CAS Engine
-            solver = CASSolver()
-            
-            # Тестовый сценарий
-            test_state = {
-                "current_hp_percent": 10,
-                "max_hp": 21000,
-                "current_hp": 2100,
-                "attack_damage": 100,
-                "defense": 50,
-            }
-            
-            self.log("🧪 Запуск тестирования...")
-            self.log(f"Тестовое состояние: HP={test_state['current_hp_percent']}%")
-            
-            # Здесь будет реальная симуляция
-            self.log("✅ Предмет валиден (CAS Engine)")
-            
-        except Exception as ex:
-            self.log(f"❌ Ошибка тестирования: {ex}")
-    
-    def export_json(self, e):
-        """Экспорт в JSON"""
-        item_data = self.collect_item_data()
-        
-        output_path = Path(__file__).parent.parent.parent / "tools" / "web_builder" / "exports"
-        output_path.mkdir(parents=True, exist_ok=True)
-        
-        filename = f"{self.item_name.replace(' ', '_').lower()}.json"
-        filepath = output_path / filename
-        
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(item_data, f, indent=2, ensure_ascii=False)
-        
-        self.log(f"📋 Экспортировано в JSON: {filename}")
-    
-    def close_dialog(self):
-        """Закрытие диалога"""
-        self.page.dialog.open = False
+    # -- actions ---------------------------------------------------------------
+    def validate(self, e=None):
+        form = self.collect_form()
+        item = ui_logic.build_item_json(form)
+        errs = ui_logic.validate(item)
+        self._last_item = item
+        self.json_out.value = "```json\n" + \
+            json.dumps(item, ensure_ascii=False, indent=2) + "\n```"
+        if errs:
+            self._set_status(f"❌ ошибок: {len(errs)}", ft.Colors.RED_400)
+            self.room_out.value = "**Ошибки валидации:**\n" + \
+                "\n".join(f"- `{x}`" for x in errs)
+        else:
+            self._set_status("✅ схема валидна", ft.Colors.GREEN_400)
         self.page.update()
 
+    def build_lua(self, e=None):
+        if not self._last_item:
+            self.validate()
+        item = self._last_item
+        if ui_logic.validate(item):
+            self._set_status("сначала исправь ошибки валидации",
+                             ft.Colors.RED_400)
+            return
+        lua = ui_logic.to_lua(item)
+        try:
+            ui_logic.lua_load(lua)
+            self._set_status("Lua собран и загружен lupa ✅",
+                             ft.Colors.GREEN_400)
+        except ImportError:
+            self._set_status("Lua собран (lupa не установлена)",
+                             ft.Colors.AMBER_400)
+        except Exception as ex:
+            self._set_status(f"lupa load failed: {ex}", ft.Colors.RED_400)
+        self.lua_out.value = "```lua\n" + lua + "\n```"
+        self.page.update()
+
+    def test_room(self, e=None):
+        if not self._last_item:
+            self.validate()
+        item = self._last_item
+        if ui_logic.validate(item):
+            self._set_status("валидация не пройдена", ft.Colors.RED_400)
+            return
+        report = ui_logic.run_training_room(
+            item, scenario={"hero_hp": 100.0,
+                            "events": ["use", "attack", "attack"]})
+        lines = ["### 🏋️ Тренировочная комната (hero hp=100/1000)", ""]
+        for st in report["steps"]:
+            lines.append(f"- event **{st['event']}** → hero hp={st['hero_hp']}, "
+                         f"манекен hp={st['dummy_hp']}")
+        s = report["summary"]
+        lines += ["", f"**Итог:** HP {s['hp']}/{s['max_hp']} ({s['hp_pct']}%), "
+                      f"kills={s['kills']}",
+                  f"- моды: `{json.dumps(s['mods'], ensure_ascii=False)}`",
+                  f"- баффы: `{json.dumps(s['buffs'], ensure_ascii=False)}`",
+                  "", "**Лог эффектов:**", "```"]
+        lines += report["log"][:40]
+        lines.append("```")
+        self.room_out.value = "\n".join(lines)
+        self._set_status("тренировочная комната прогнана ✅",
+                         ft.Colors.GREEN_400)
+        self.page.update()
+
+
+# ---------------------------------------------------------------- entry point
 
 def main(page: ft.Page):
-    app = ItemBuilderApp(page)
+    BuilderApp(page)
+
 
 if __name__ == "__main__":
-    ft.app(target=main)
+    web = "--web" in sys.argv
+    if web:
+        ft.run(main, view=ft.AppView.WEB_BROWSER, port=8550)
+    else:
+        ft.run(main)

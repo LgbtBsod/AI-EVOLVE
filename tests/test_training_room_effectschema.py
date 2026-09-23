@@ -391,6 +391,133 @@ class TestUiLogicFullCycle(unittest.TestCase):
                 self.assertTrue(out.get("lupa_ok") in (True, None), tid)
                 self.assertIn("room", out)
 
+    # -- новые предметы каталога: полный цикл + аналитика -------------------
+
+    def _full_cycle_item(self, tid, scenario):
+        form = {"name": template_names()[tid],
+                "description": "test",
+                "effects": [get_template(tid).to_json()]}
+        out = ui_logic.full_cycle(form, scenario=scenario)
+        self.assertEqual(out["errors"], [], f"{tid}: {out['errors']}")
+        self.assertTrue(out.get("lupa_ok") in (True, None), tid)
+        return out
+
+    def test_vampires_fang_full_cycle(self):
+        """Лifesteal 8% от урона + strength-скалинг по kills (scale.of='kills')."""
+        out = self._full_cycle_item(
+            "vampires_fang",
+            {"hero_hp": 500.0, "base_stats": {"strength": 100.0},
+             "dummy_max_hp": 200.0,
+             "events": ["attack 100", "kill", "attack 100"]})
+        steps = out["room"]["steps"]
+        # атака 1: враг 200->100, heal 8 => 508; килла нет
+        self.assertAlmostEqual(steps[0]["hero_hp"], 508.0, delta=TOL)
+        self.assertEqual(steps[0]["kills"], 0)
+        # kill-событие: манекен умирает/возрождается, kills+1
+        self.assertEqual(steps[1]["kills"], 1)
+        self.assertAlmostEqual(steps[1]["dummy_hp"], 200.0, delta=TOL)
+        # атака 2: strength 100+5*1=105 (mod не влияет на прямой урон),
+        # heal 8 => 516
+        self.assertAlmostEqual(steps[2]["hero_hp"], 516.0, delta=TOL)
+        mods = out["room"]["summary"]["mods"]
+        self.assertAlmostEqual(mods.get("strength", 0.0), 5.0, delta=TOL)
+
+    def test_mantle_of_thorns_full_cycle(self):
+        """Реталиация: 20% от ТЕКУЩЕГО hp героя уроном по атакующему."""
+        out = self._full_cycle_item(
+            "mantle_of_thorns",
+            {"hero_hp": 800.0, "events": ["enemy_attack 100"]})
+        st = out["room"]["steps"][0]
+        self.assertAlmostEqual(st["hero_hp"], 700.0, delta=TOL)   # 800-100
+        self.assertAlmostEqual(st["dummy_hp"], 5000.0 - 140.0, delta=TOL)
+
+    def test_rage_tonic_full_cycle(self):
+        """Бафф enraged 8с (+1с за каждые 10% ниже 40 HP) + drain 10% hp."""
+        out = self._full_cycle_item(
+            "rage_tonic", {"hero_hp": 300.0, "events": ["use"]})
+        st = out["room"]["steps"][0]
+        self.assertAlmostEqual(st["hero_hp"], 270.0, delta=TOL)   # 300 - 10%
+        buffs = out["room"]["summary"]["buffs"]
+        self.assertIn("enraged", buffs)
+        # hp_pct=30 -> below40=10 -> +1с => until 9.0
+        self.assertAlmostEqual(buffs["enraged"], 9.0, delta=1e-3)
+
+    def test_judgement_full_cycle_execute_and_noexecute(self):
+        """Execute: убивает цель <15% HP и НЕ трогает цель выше порога."""
+        out = self._full_cycle_item(
+            "judgement",
+            {"events": ["set_dummy 1000", "attack", "set_dummy 1000",
+                        "attack 5000"]})
+        steps = out["room"]["steps"]
+        # шаг 2: execute сработал до базового урона — dummy возрождён (1000),
+        # после атаки без урона остаётся 1000... но execute убивает:
+        self.assertEqual(steps[1]["kills"], 1)
+        self.assertAlmostEqual(steps[1]["dummy_hp"], 1000.0, delta=TOL)  # respawn
+        # шаг 4: dummy 1000 = 100% -> no execute, базовый урон 5000 -> смерть
+        self.assertEqual(steps[3]["kills"], 2)
+        self.assertAlmostEqual(steps[3]["dummy_hp"], 0.0, delta=TOL)
+
+    def test_phoenix_feather_full_cycle_revive(self):
+        """Воскрешение при смерти: set hp=30% max, remove_buff enraged."""
+        item = ui_logic.build_item_json(
+            {"name": "combo", "effects": [
+                get_template("rage_tonic").to_json(),
+                get_template("phoenix_feather").to_json()]})
+        self.assertEqual(validate_item(item), [])
+        hero = Unit("hero", max_hp=1000.0)
+        dummy = Unit("mannequin", max_hp=5000.0)
+        rt = EffectRuntime(hero, item["effects"], enemy=dummy)
+        hero.current_hp = 50.0
+        rt.refresh_passives()
+        rt.fire_event("use", t=0.0)          # rage: drain 10% -> 45, buff enraged
+        self.assertIn("enraged", hero.buffs)
+        rt.receive_damage(100.0, t=1.0)      # смертельно -> die -> revive 300
+        self.assertTrue(hero.alive)
+        self.assertAlmostEqual(hero.current_hp, 300.0, delta=TOL)
+        self.assertNotIn("enraged", hero.buffs)   # remove_buff от феникса
+
+
+class TestTrainingRoomCombatLoop(unittest.TestCase):
+    """Общий игровой цикл комнаты: attack/receive_damage/kill/die каскады."""
+
+    def test_attack_chain_events(self):
+        fired = []
+        hero = Unit("hero", max_hp=1000.0)
+        dummy = Unit("dummy", max_hp=100.0)
+        effects = [{"id": "watch", "trigger": {"kind": "event", "event": "x"},
+                    "ops": []}]
+        rt = EffectRuntime(hero, effects, enemy=dummy)
+        orig = rt.fire_event
+        def spy(ev, t=0.0, extra=None):
+            fired.append(ev)
+            return orig(ev, t, extra)
+        rt.fire_event = spy
+        rt.attack(t=0.0, base_damage=150.0)  # one-shot dummy
+        self.assertEqual(fired, ["attack", "attack_hit", "kill"])
+        self.assertEqual(hero.kills, 1)
+
+    def test_receive_damage_death_triggers_die(self):
+        hero = Unit("hero", max_hp=100.0)
+        dummy = Unit("dummy", max_hp=1000.0)
+        item = ui_logic.build_item_json(
+            {"name": "t", "effects": [get_template("phoenix_feather").to_json()]})
+        rt = EffectRuntime(hero, item["effects"], enemy=dummy)
+        rt.receive_damage(999.0)
+        self.assertTrue(hero.alive)
+        self.assertAlmostEqual(hero.current_hp, 30.0, delta=TOL)
+
+    def test_kill_op_does_not_double_count(self):
+        """Повторный kill по уже мёртвой цели не добавляет стаков kills."""
+        hero = Unit("hero", max_hp=1000.0)
+        dummy = Unit("dummy", max_hp=100.0)
+        item = ui_logic.build_item_json(
+            {"name": "t", "effects": [get_template("judgement").to_json()]})
+        rt = EffectRuntime(hero, item["effects"], enemy=dummy)
+        dummy.deal_damage(100.0)             # уже мёртв
+        ctx = {**hero.ctx(), **rt.target_ctx("enemy", dummy)}
+        rt.run_ops([{"kind": "kill", "target": "enemy"}], ctx, 0.0, "test")
+        self.assertEqual(hero.kills, 0)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
