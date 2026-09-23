@@ -69,16 +69,56 @@ class GameMaster:
             logger.error(f"GM Execution failed: {e}", exc_info=True)
 
     def _spawn_enemy(self, params: Dict):
+        """Создать врага через EntityManager."""
         enemy_id = str(uuid.uuid4())
         logger.info(f"[GM] Spawning enemy {enemy_id} at {params.get('pos')}")
-        # TODO: Integrate with EntityManager
-        # self.entity_manager.create_entity(...) 
+        
+        if self.entity_manager:
+            entity = self.entity_manager.create_entity(
+                entity_type='enemy',
+                position=params.get('pos', [0, 0, 0]),
+                game=params.get('game'),
+                enemy_type=params.get('enemy_type', 'slime'),
+                level=params.get('level'),
+                color=params.get('color')
+            )
+            if entity:
+                logger.info(f"[GM] Враг {entity.entity_id} создан успешно")
+            else:
+                logger.error(f"[GM] Не удалось создать врага")
 
     def _spawn_loot(self, params: Dict):
+        """Создать предмет через EntityManager."""
         logger.info(f"[GM] Spawning loot: {params.get('type')} at {params.get('pos')}")
+        
+        if self.entity_manager:
+            entity = self.entity_manager.create_entity(
+                entity_type='base',
+                position=params.get('pos', [0, 0, 0]),
+                entity_type_param='loot',
+                name=params.get('type', 'item'),
+                loot_type=params.get('type'),
+                rarity=params.get('rarity', 'common')
+            )
+            if entity:
+                logger.info(f"[GM] Предмет {entity.entity_id} создан")
 
     def _place_trap(self, params: Dict):
+        """Установить ловушку через EntityManager."""
         logger.info(f"[GM] Placing trap: {params.get('type')} at {params.get('pos')}")
+        
+        if self.entity_manager:
+            entity = self.entity_manager.create_entity(
+                entity_type='base',
+                position=params.get('pos', [0, 0, 0]),
+                entity_type_param='trap',
+                name=f"trap_{params.get('type', 'default')}",
+                trap_type=params.get('type'),
+                damage=params.get('damage', 10),
+                trigger_radius=params.get('trigger_radius', 1.0)
+            )
+            if entity:
+                logger.info(f"[GM] Ловушка {entity.entity_id} установлена")
 
     def _change_weather(self, params: Dict):
         logger.info(f"[GM] Weather changed to: {params.get('condition')}")

@@ -7,7 +7,7 @@
 import random
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, Optional, List
 
 
 class DialogueOutcome(Enum):
@@ -121,7 +121,8 @@ class DialogueSystem:
     
     def start_dialogue(self, npc_id: str, player_charisma: float = 0.5,
                        player_reputation: float = 0.0,
-                       request_type: str = "exit_direction") -> DialogueResult:
+                       request_type: str = "exit_direction",
+                       player_pos: Optional[List[float]] = None) -> DialogueResult:
         """
         Начать диалог с NPC
         
@@ -130,6 +131,7 @@ class DialogueSystem:
             player_charisma: Харизма игрока (0.0 - 1.0)
             player_reputation: Репутация игрока (-1.0 - 1.0)
             request_type: Тип запроса (exit_direction, gossip, help)
+            player_pos: Позиция игрока для расчёта направления к выходу
         
         Returns:
             DialogueResult с результатом диалога
@@ -168,9 +170,9 @@ class DialogueSystem:
                 )
             
             if roll < success_chance * 0.7:  # Полный успех
-                return self._provide_exit_hint(npc, accuracy=1.0)
+                return self._provide_exit_hint(npc, accuracy=1.0, player_pos=player_pos)
             elif roll < success_chance:  # Частичный успех
-                return self._provide_exit_hint(npc, accuracy=npc.exit_hint_accuracy * 0.5)
+                return self._provide_exit_hint(npc, accuracy=npc.exit_hint_accuracy * 0.5, player_pos=player_pos)
             else:  # Провал
                 return DialogueResult(
                     outcome=DialogueOutcome.FAILURE,
@@ -195,10 +197,11 @@ class DialogueSystem:
         }
         return modifiers.get(personality, 1.0)
     
-    def _provide_exit_hint(self, npc: NPCProfile, accuracy: float = 1.0) -> DialogueResult:
+    def _provide_exit_hint(self, npc: NPCProfile, accuracy: float = 1.0, 
+                           player_pos: Optional[List[float]] = None) -> DialogueResult:
         """Предоставить подсказку о выходе"""
         # Генерируем направление с учетом точности
-        true_direction = self._get_true_exit_direction()
+        true_direction = self._get_true_exit_direction(player_pos)
         
         if accuracy >= 1.0:
             direction = true_direction
@@ -229,7 +232,8 @@ class DialogueSystem:
                 'direction': direction,
                 'distance_estimate': distance,
                 'accuracy': accuracy,
-                'true_direction': true_direction if accuracy >= 1.0 else None
+                'true_direction': true_direction if accuracy >= 1.0 else None,
+                'player_position': player_pos
             },
             message=f"{npc.name}: \"{message}\"",
             reputation_change=0.1
@@ -276,11 +280,33 @@ class DialogueSystem:
             reputation_change=-0.2
         )
     
-    def _get_true_exit_direction(self) -> str:
-        """Получить истинное направление к выходу (заглушка)"""
-        # В реальной игре должно вычисляться относительно позиции игрока
-        directions = ['север', 'юг', 'восток', 'запад', 'северо-восток', 'юго-запад']
-        return random.choice(directions)
+    def _get_true_exit_direction(self, player_pos: Optional[List[float]] = None) -> str:
+        """
+        Получить истинное направление к выходу.
+        
+        Args:
+            player_pos: Позиция игрока [x, y, z]. Если None, используется случайное направление.
+        
+        Returns:
+            Направление в виде строки ('север', 'юг', 'восток', 'запад', ...)
+        """
+        if player_pos is None:
+            # Fallback для обратной совместимости
+            directions = ['север', 'юг', 'восток', 'запад', 'северо-восток', 'юго-запад']
+            return random.choice(directions)
+        
+        # Вычисляем направление к выходу относительно позиции игрока
+        # В реальной игре здесь должна быть позиция выхода из уровня
+        exit_pos = getattr(self, '_exit_position', [100, 100, 0])  # Дефолтная позиция выхода
+        
+        dx = exit_pos[0] - player_pos[0]
+        dy = exit_pos[1] - player_pos[1]
+        
+        # Определяем основное направление
+        if abs(dx) > abs(dy):
+            return 'восток' if dx > 0 else 'запад'
+        else:
+            return 'север' if dy > 0 else 'юг'
     
     def _get_random_wrong_direction(self, true_direction: str) -> str:
         """Получить неправильное направление"""
