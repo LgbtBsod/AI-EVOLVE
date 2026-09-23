@@ -275,9 +275,14 @@ class EffectRuntime:
                 self.log.append(f"t={t:.1f} {src} drain {cost:.2f} -> hp={target.current_hp:.1f}")
         elif kind == "buff":
             bid = o.get("buff_id")
-            dur = self._duration(o.get("duration"), ctx)
-            cd = resolve_value(o.get("cooldown"), ctx) if o.get("cooldown") else None
             prev = target.buffs.get(bid)
+            # кулдаун на повторную активацию щита/баффа
+            cd = resolve_value(o.get("cooldown"), ctx) if o.get("cooldown") else None
+            if cd is not None and prev is not None and \
+                    t - prev.get("last_cd", -1e18) < cd:
+                self.log.append(f"t={t:.1f} {src} buff {bid} ON COOLDOWN")
+                return
+            dur = self._duration(o.get("duration"), ctx)
             until = max(prev.get("until", t) if prev else t, t) + dur
             target.buffs[bid] = {"until": until, "extend": o.get("extend"),
                                  "cooldown": cd, "last_cd": t}
@@ -286,7 +291,12 @@ class EffectRuntime:
             bid = o.get("buff_id")
             b = target.buffs.get(bid)
             if b:
-                ext = o.get("extend", {})
+                # extend-правило может висеть на самом баффе (из ops buff)
+                ext = o.get("extend") or b.get("extend") or {}
+                if ext.get("on") and src.rsplit(".", 1)[-1].rsplit("#", 1)[-1] != ext["on"] \
+                        and ext["on"] not in src:
+                    self.log.append(f"t={t:.1f} {src} extend {bid}: on={ext['on']} mismatch -> skip")
+                    return
                 add = resolve_value({"flat": ext.get("flat")} if ext.get("flat") is not None
                                     else {"pct": ext.get("pct"), "of": "max_hp"}
                                     if ext.get("pct") is not None else {}, ctx)
