@@ -1,11 +1,36 @@
-```gitignore
-# Python compiled files
-*.pyc
+```
+# Python cache
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
 
-# Test cache files
+# Dependencies
+venv/
+.venv/
+.env
+.env.local
+.env.*
+
+# Test cache
 .pytest_cache/
+.coverage
+coverage/
 
-# Training room output (assuming generated files)
-training_room_output/
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+target/
 ```
