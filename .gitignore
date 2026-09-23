@@ -1,2 +1,10 @@
+# Python bytecode and caches
 __pycache__/
 *.pyc
+
+# Editor/IDE files
+.vscode/
+.idea/
+
+# System files
+.DS_Store
