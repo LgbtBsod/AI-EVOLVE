@@ -1,22 +1,11 @@
-```
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-env/
-venv/
-.venv/
-.ENV
-.ENV.*
-.venv/
-.venv.*
-
-# Build artifacts
+```gitignore
+# Python compiled files
 *.pyc
 __pycache__/
 
-# Test outputs
+# Test cache files
+.pytest_cache/
+
+# Training room output (assuming generated files)
 training_room_output/
 ```
