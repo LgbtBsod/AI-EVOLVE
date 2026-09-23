@@ -19,12 +19,14 @@ pub mod storage;
 pub mod ffi;
 pub mod probe;
 pub mod semantic_core;
+pub mod training_room;
 
 pub use simulation::{SimulationEnv, World, Entity};
 pub use generator::WorldGenerator;
 pub use storage::Database;
 pub use probe::{ProbeConfig, FrameAnalysis, PerceptualHash};
 pub use semantic_core::{LogCompressor, StateDiffCalculator, EventCorrelator};
+pub use training_room::{TrainingRoomEngine, EffectContract, SimulationResult};
 
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
