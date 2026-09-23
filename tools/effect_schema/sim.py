@@ -12,15 +12,21 @@ Effect Schema v1 -- reference runtime (Python)
 условие true), event(use/attack/kill/tick). Поддерживаемые ops:
 mod/heal/drain/deal/set/buff/extend/remove_buff/apply_effect/kill.
 
-Предикаты: строковые выражения вида "ctx.hp_pct < 40" вычисляются через
-безопасный eval над ctx; именованные -- через реестр unit.PREDICATES.
+Предикаты: БЕЗОПАСНЫЙ мини-язык выражений (никакого eval!). Поддерживается
+грамматика: сравнения (< <= > >= == !=) над ctx.<поле>, числовыми литералами,
+скобками, + - * / и константами max/min(...). Именованные предикаты берутся
+из реестра PREDICATES. Любое иное выражение отвергается PrediciationException
+(ранее здесь был сырой eval, допускавший sandbox-escape через
+dunder-атрибуты, например "max.__class__.__subclasses__").
 """
 
 from __future__ import annotations
 
+import ast
 import math
+import operator as _op
 import re
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 # ---------------------------------------------------------------- predicates
 
@@ -29,22 +35,111 @@ def _hp_missing_below_40(ctx) -> float:
     return max(0.0, 40.0 - ctx.get("hp_pct", 100.0))
 
 
-PREDICATES = {
+PREDICATES: dict[str, Callable[[dict], bool]] = {
     "low_hp_40": lambda ctx: ctx.get("hp_pct", 100.0) < 40,
+}
+
+_ALLOWED_CTX: dict[str, Callable[[dict], float]] = {
+    "hp_missing_below_40": _hp_missing_below_40,
 }
 
 _EXPR_RE = re.compile(r"^ctx\.(\w+)\s*(<=|>=|<|>|==|!=)\s*([\d.]+)$")
 
-_ALLOWED_CTX = {"hp_missing_below_40": _hp_missing_below_40}
+
+class PrediciationException(ValueError):
+    """Выражение-предикат не проходит строгую whitelist-грамматику."""
 
 
-def eval_pred(pred: Optional[str], ctx: dict) -> bool:
+# ---- безопасный AST-интерпретатор выражений предикатов -------------------
+
+_BINOPS = {ast.Add: _op.add, ast.Sub: _op.sub, ast.Mult: _op.mul,
+           ast.Div: _op.truediv, ast.Mod: _op.mod, ast.Pow: _op.pow}
+_CMPOPS = {ast.Lt: _op.lt, ast.LtE: _op.le, ast.Gt: _op.gt,
+           ast.GtE: _op.ge, ast.Eq: _op.eq, ast.NotEq: _op.ne}
+_FUNCS = {"max": max, "min": min, "floor": math.floor, "ceil": math.ceil,
+          "abs": abs}
+
+
+def _ast_eval(node, ctx: dict):
+    if isinstance(node, ast.Expression):
+        return _ast_eval(node.body, ctx)
+    if isinstance(node, ast.Constant):
+        if isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
+            return node.value
+        raise PrediciationException(f"literal {node.value!r} not allowed")
+    if isinstance(node, ast.Name):
+        if node.id in _FUNCS:
+            return _FUNCS[node.id]
+        raise PrediciationException(f"unknown name {node.id!r} "
+                                    "(only ctx.<field> and max/min/floor/ceil/abs)")
+    if isinstance(node, ast.Attribute):
+        # разрешено ТОЛЬКО ctx.<известное поле>; никаких dunder-атрибутов
+        if not isinstance(node.value, ast.Name) or node.value.id != "ctx":
+            raise PrediciationException("attribute access must be ctx.<field>")
+        key = node.attr
+        if key.startswith("_"):
+            raise PrediciationException(f"private attribute {key!r} forbidden")
+        if key in ctx:
+            return ctx[key]
+        if key in _ALLOWED_CTX:
+            return _ALLOWED_CTX[key](ctx)
+        raise PrediciationException(f"unknown ctx field {key!r}")
+    if isinstance(node, ast.BinOp) and type(node.op) in _BINOPS:
+        return _BINOPS[type(node.op)](_ast_eval(node.left, ctx),
+                                      _ast_eval(node.right, ctx))
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
+        v = _ast_eval(node.operand, ctx)
+        return v if isinstance(node.op, ast.UAdd) else -v
+    if isinstance(node, ast.Compare):
+        left = _ast_eval(node.left, ctx)
+        for c_op, comp in zip(node.ops, node.comparators):
+            if type(c_op) not in _CMPOPS:
+                raise PrediciationException("comparison operator not allowed")
+            right = _ast_eval(comp, ctx)
+            if not _CMPOPS[type(c_op)](left, right):
+                return False
+            left = right
+        return True
+    if isinstance(node, ast.BoolOp):
+        vals = [_ast_eval(v, ctx) for v in node.values]
+        if isinstance(node.op, ast.And):
+            return all(vals)
+        return any(vals)
+    if isinstance(node, ast.Call):
+        fn = _ast_eval(node.func, ctx)
+        if fn not in _FUNCS.values():
+            raise PrediciationException("call of non-whitelisted function")
+        return fn(*[_ast_eval(a, ctx) for a in node.args])
+    raise PrediciationException(f"expression element not allowed: "
+                                f"{type(node).__name__}")
+
+
+_AST_CACHE: dict[str, ast.Expression] = {}
+
+
+def _compile_pred(expr: str) -> ast.Expression:
+    cached = _AST_CACHE.get(expr)
+    if cached is not None:
+        return cached
+    try:
+        tree = ast.parse(expr.strip(), mode="eval")
+    except SyntaxError as e:
+        raise PrediciationException(f"invalid predicate expression {expr!r}: {e}") from e
+    _AST_CACHE[expr] = tree
+    return tree
+
+
+def eval_pred(pred: Optional[Any], ctx: dict) -> bool:
+    """Вычислить предикат (строка-выражение / имя из PREDICATES / callable)."""
     if not pred:
         return True
     if callable(pred):
         return bool(pred(ctx))
-    m = _EXPR_RE.match(pred.strip())
-    if m:
+    pred = str(pred).strip()
+    if pred in PREDICATES:
+        return bool(PREDICATES[pred](ctx))
+    m = _EXPR_RE.match(pred)
+    if m:  # быстрый путь для канонической формы "ctx.x OP num"
         key, op_, rhs = m.group(1), m.group(2), float(m.group(3))
         left = ctx.get(key)
         if left is None and key in _ALLOWED_CTX:
@@ -52,27 +147,11 @@ def eval_pred(pred: Optional[str], ctx: dict) -> bool:
         if left is None:
             raise KeyError(f"ctx.{key} not found for predicate {pred!r}")
         return {
-            "<": lambda a, b: a < b, ">": lambda a, b: a > b,
-            "<=": lambda a, b: a <= b, ">=": lambda a, b: a >= b,
-            "==": lambda a, b: a == b, "!=": lambda a, b: a != b,
+            "<": _op.lt, ">": _op.gt, "<=": _op.le,
+            ">=": _op.ge, "==": _op.eq, "!=": _op.ne,
         }[op_](left, rhs)
-    # свободное python-выражение над ctx (для генератора/редактора)
-    env = dict(_ALLOWED_CTX)
-    env["ctx"] = _CtxProxy(ctx)
-    env["max"] = max
-    env["min"] = min
-    return bool(eval(pred, {"__builtins__": {}}, env))  # noqa: S307
-
-
-class _CtxProxy(dict):
-    def __getattr__(self, k):
-        try:
-            v = self[k]
-        except KeyError:
-            if k in _ALLOWED_CTX:
-                return _ALLOWED_CTX[k](self)
-            raise
-        return v
+    # общий случай: whitelist AST (без eval!)
+    return bool(_ast_eval(_compile_pred(pred), ctx))
 
 
 # ---------------------------------------------------------------- values
@@ -90,10 +169,13 @@ def resolve_value(v: dict, ctx: dict, default_stat: Optional[str] = None) -> flo
         path = v["ref"]
         if path.startswith("ctx."):
             path = path[4:]
+        # только dict-навигация по whitelist-полям (без getattr — см. аудит:
+        # getattr допускал обход вида "__class__.__subclasses__")
         cur: Any = ctx
         for part in path.split("."):
-            cur = _ctx_get(cur if isinstance(cur, dict) else {}, part) \
-                if isinstance(cur, dict) else getattr(cur, part)
+            if not isinstance(cur, dict):
+                raise KeyError(f"ref {v['ref']!r}: cannot descend into {type(cur).__name__}")
+            cur = _ctx_get(cur, part)
         return float(cur)
     return 0.0
 
@@ -224,7 +306,8 @@ class EffectRuntime:
                 continue
             if tr.get("filter") and not eval_pred(tr["filter"], ctx):
                 continue
-            self.run_ops(ef.get("ops", []), ctx, t, f"{ef['id']}#{event}")
+            self.run_ops(ef.get("ops", []), ctx, t, f"{ef['id']}#{event}",
+                         event=event)
 
     def tick(self, t: float, dt: float):
         """regen + duration-истечение баффов + tick-события."""
@@ -239,11 +322,13 @@ class EffectRuntime:
         self.fire_event("tick", t)
 
     # ops -------------------------------------------------------------------
-    def run_ops(self, ops: list[dict], ctx: dict, t: float, src: str):
+    def run_ops(self, ops: list[dict], ctx: dict, t: float, src: str,
+                event: Optional[str] = None):
         for o in ops:
-            self.run_op(o, ctx, t, src)
+            self.run_op(o, ctx, t, src, event=event)
 
-    def run_op(self, o: dict, ctx: dict, t: float, src: str):
+    def run_op(self, o: dict, ctx: dict, t: float, src: str,
+               event: Optional[str] = None):
         kind = o.get("kind")
         if o.get("when") and not eval_pred(o["when"], ctx):
             return
@@ -269,29 +354,34 @@ class EffectRuntime:
             cost = amount
             if cost > target.current_hp:
                 self.log.append(f"t={t:.1f} {src} drain FAIL (cost {cost:.2f} > hp {target.current_hp:.1f})")
-                self.run_ops(o.get("fail", []), ctx, t, src + ".fail")
+                self.run_ops(o.get("fail", []), ctx, t, src + ".fail", event=event)
             else:
                 target.current_hp -= cost
                 self.log.append(f"t={t:.1f} {src} drain {cost:.2f} -> hp={target.current_hp:.1f}")
         elif kind == "buff":
             bid = o.get("buff_id")
-            dur = self._duration(o.get("duration"), ctx)
-            cd = resolve_value(o.get("cooldown"), ctx) if o.get("cooldown") else None
             prev = target.buffs.get(bid)
+            # кулдаун на повторную активацию щита/баффа
+            cd = resolve_value(o.get("cooldown"), ctx) if o.get("cooldown") else None
+            if cd is not None and prev is not None and \
+                    t - prev.get("last_cd", -1e18) < cd:
+                self.log.append(f"t={t:.1f} {src} buff {bid} ON COOLDOWN")
+                return
+            dur = self._duration(o.get("duration"), ctx)
             until = max(prev.get("until", t) if prev else t, t) + dur
             target.buffs[bid] = {"until": until, "extend": o.get("extend"),
                                  "cooldown": cd, "last_cd": t}
             self.log.append(f"t={t:.1f} {src} buff {bid} +{dur:.1f}s (until {until:.1f})")
+            # декларация extend внутри ops-buff: срабатывает при событии ext["on"]
+            ext = o.get("extend") or {}
+            if ext and event and event == ext.get("on"):
+                self._extend_buff(target, bid, ext, ctx, t, src)
         elif kind == "extend":
             bid = o.get("buff_id")
             b = target.buffs.get(bid)
             if b:
-                ext = o.get("extend", {})
-                add = resolve_value({"flat": ext.get("flat")} if ext.get("flat") is not None
-                                    else {"pct": ext.get("pct"), "of": "max_hp"}
-                                    if ext.get("pct") is not None else {}, ctx)
-                b["until"] += add
-                self.log.append(f"t={t:.1f} {src} extend {bid} +{add:.1f}s")
+                ext = o.get("extend") or b.get("extend") or {}
+                self._extend_buff(target, bid, ext, ctx, t, src, buff_obj=b)
         elif kind == "remove_buff":
             target.buffs.pop(o.get("buff_id"), None)
             self.log.append(f"t={t:.1f} {src} remove_buff {o.get('buff_id')}")
@@ -306,6 +396,19 @@ class EffectRuntime:
             self.log.append(f"t={t:.1f} {src} KILL {target.name}")
 
     # helpers -----------------------------------------------------------------
+    def _extend_buff(self, target, bid: str, ext: dict, ctx: dict,
+                     t: float, src: str, buff_obj=None):
+        """Продлить бафф `bid` по extend-правилу {on, flat|pct}."""
+        b = buff_obj if buff_obj is not None else target.buffs.get(bid)
+        if b is None:
+            return
+        add = resolve_value(
+            {"flat": ext["flat"]} if ext.get("flat") is not None
+            else {"pct": ext.get("pct"), "of": ext.get("of", "max_hp")}
+            if ext.get("pct") is not None else {}, ctx)
+        b["until"] += add
+        self.log.append(f"t={t:.1f} {src} extend {bid} +{add:.1f}s")
+
     def _apply_mod(self, o: dict, ctx: Optional[dict] = None):
         if ctx is None:
             ctx = self.owner.ctx()

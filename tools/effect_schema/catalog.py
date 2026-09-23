@@ -56,7 +56,7 @@ def _lost_my_self_attack():
                    Op(kind="buff", target="self", buff_id="last_will",
                       duration={"base": 5,
                                 "scale": {"every": 10, "of": "hp_missing_below_40",
-                                          "factor": 2}},
+                                          "value": {"flat": 5}, "factor": 2}},
                       cooldown={"flat": 30},
                       extend={"on": "kill", "flat": 5}),
                ]),
