@@ -95,8 +95,8 @@ class TestActionSpace:
         assert len(action_space.HIGH_LEVEL_ACTIONS) > 0
         
         # Check low level structure
-        assert hasattr(action_space, 'LOW_LEVEL_BOUNDS')
-        assert isinstance(action_space.LOW_LEVEL_BOUNDS, dict)
+        assert hasattr(action_space, 'low_level_params')
+        assert isinstance(action_space.low_level_params, dict)
     
     def test_action_creation(self):
         """Test creating valid actions."""
@@ -157,57 +157,110 @@ class TestRewardShaper:
         """Test combat-related rewards."""
         reward_calc = RewardShaper()
         
-        # Positive reward for dealing damage
-        damage_dealt = 10.0
-        reward = reward_calc.compute_damage_reward(damage_dealt)
+        # Positive reward for dealing damage (no other factors)
+        reward = reward_calc.compute_reward(
+            delta_distance=0.0,
+            damage_dealt=10.0,
+            damage_taken=0.0,
+            killed=False,
+            died=False,
+            items_picked=0,
+            quest_progress=0.0,
+            following_directive=True
+        )
         assert reward > 0
         
         # Negative reward for taking damage
-        damage_taken = 5.0
-        reward = reward_calc.compute_damage_penalty(damage_taken)
+        reward = reward_calc.compute_reward(
+            delta_distance=0.0,
+            damage_dealt=0.0,
+            damage_taken=5.0,
+            killed=False,
+            died=False,
+            items_picked=0,
+            quest_progress=0.0,
+            following_directive=True
+        )
         assert reward < 0
     
     def test_progress_reward(self):
         """Test progress-based rewards."""
         reward_calc = RewardShaper()
         
-        # Reward for moving towards goal
-        distance_delta = -2.0  # Getting closer
-        reward = reward_calc.compute_progress_reward(distance_delta)
+        # Reward for moving towards goal (negative delta = getting closer)
+        reward = reward_calc.compute_reward(
+            delta_distance=-2.0,
+            damage_dealt=0.0,
+            damage_taken=0.0,
+            killed=False,
+            died=False,
+            items_picked=0,
+            quest_progress=0.0,
+            following_directive=True
+        )
         assert reward > 0
         
         # Penalty for moving away from goal
-        distance_delta = 3.0  # Getting farther
-        reward = reward_calc.compute_progress_reward(distance_delta)
+        reward = reward_calc.compute_reward(
+            delta_distance=3.0,
+            damage_dealt=0.0,
+            damage_taken=0.0,
+            killed=False,
+            died=False,
+            items_picked=0,
+            quest_progress=0.0,
+            following_directive=True
+        )
         assert reward < 0
     
-    def test_survival_reward(self):
-        """Test survival rewards."""
+    def test_kill_death_rewards(self):
+        """Test kill and death rewards."""
         reward_calc = RewardShaper()
         
-        # Small positive reward for surviving
-        reward = reward_calc.compute_survival_reward()
-        assert reward > 0
+        # Large positive reward for killing enemy
+        kill_reward = reward_calc.compute_reward(
+            delta_distance=0.0,
+            damage_dealt=0.0,
+            damage_taken=0.0,
+            killed=True,
+            died=False,
+            items_picked=0,
+            quest_progress=0.0,
+            following_directive=True
+        )
         
-        # Large penalty for death
-        reward = reward_calc.compute_death_penalty()
-        assert reward < 0
-        assert abs(reward) > reward_calc.compute_survival_reward()
+        # Large negative reward for dying
+        death_reward = reward_calc.compute_reward(
+            delta_distance=0.0,
+            damage_dealt=0.0,
+            damage_taken=0.0,
+            killed=False,
+            died=True,
+            items_picked=0,
+            quest_progress=0.0,
+            following_directive=True
+        )
+        
+        assert kill_reward > 0
+        assert death_reward < 0
+        assert abs(death_reward) > kill_reward  # Death should be worse than kill is good
     
     def test_total_reward_calculation(self):
         """Test combined reward calculation."""
         reward_calc = RewardShaper()
         
-        # Simulate combat scenario
-        reward_info = {
-            'damage_dealt': 15.0,
-            'damage_taken': 5.0,
-            'enemy_killed': True,
-            'progress_delta': -1.0,
-            'survived': True,
-        }
+        # Simulate combat scenario with multiple factors
+        total_reward = reward_calc.compute_reward(
+            delta_distance=-1.0,
+            damage_dealt=15.0,
+            damage_taken=5.0,
+            killed=True,
+            died=False,
+            items_picked=2,
+            quest_progress=0.1,
+            following_directive=True
+        )
         
-        total_reward = reward_calc.compute_reward(reward_info)
         assert isinstance(total_reward, float)
         assert np.isfinite(total_reward)
 
