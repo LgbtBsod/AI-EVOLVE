@@ -128,7 +128,9 @@ class TestEffectManager:
         effect = SorrowLostMySelfEffect("player_1")
         effect_manager.register_effect(effect)
         
-        assert "player_1_sorrow_lost_my_self" in effect_manager.effects
+        # ID теперь включает счётчик: player_1_sorrow_lost_my_self_1
+        assert len(effect_manager.effects) == 1
+        assert any("player_1_sorrow_lost_my_self" in key for key in effect_manager.effects.keys())
         assert effect.subscription is not None
     
     def test_activate_deactivate_effect(self):

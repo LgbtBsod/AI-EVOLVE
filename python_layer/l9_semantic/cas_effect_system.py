@@ -137,6 +137,117 @@ class EffectState(Enum):
     EXPIRED = "expired"         # Истёк время действия
 
 
+class EffectType(Enum):
+    """Типы эффектов по механике воздействия"""
+    PASSIVE = "passive"                 # Всегда активен (implicit)
+    TRIGGERED = "triggered"             # По условию (HP < 40%)
+    BUFF = "buff"                       # Временный положительный
+    DEBUFF = "debuff"                   # Временный отрицательный
+    DOT = "dot"                         # Damage over Time
+    HOT = "hot"                         # Heal over Time
+    AOE = "aoe"                         # Area of Effect
+    PROJECTILE = "projectile"           # Снаряд
+    GROUND_TARGETED = "ground_targeted" # На землю (лужи, колонны)
+    CHANNELING = "channeling"           # Требуется канал
+    AURA = "aura"                       # Аура вокруг персонажа
+    CHAIN = "chain"                     # Цепная реакция
+
+
+class TargetingMode(Enum):
+    """Режимы таргетинга"""
+    SELF = "self"               # На себя
+    SINGLE_TARGET = "single"    # Одна цель
+    AREA_AROUND_SELF = "area_self"  # Вокруг себя
+    AREA_AROUND_TARGET = "area_target"  # Вокруг цели
+    AREA_GROUND = "ground"      # Точка на земле
+    CONE = "cone"               # Конус перед персонажем
+    LINE = "line"               # Линия (blame)
+    GLOBAL = "global"           # На весь экран/карту
+
+
+@dataclass
+class EffectArea:
+    """Конфигурация области действия"""
+    shape: str = "circle"  # circle, cone, line, rectangle
+    radius: float = 0.0    # метры
+    angle: float = 0.0     # градусы для конуса
+    length: float = 0.0    # для линии
+    width: float = 0.0     # для линии/прямоугольника
+    max_targets: int = 0   # 0 = без лимита
+    friendly_fire: bool = False  # Можно ли бить своих
+
+
+@dataclass
+class EffectTick:
+    """Конфигурация периодического эффекта (DoT/HoT)"""
+    tick_rate: float = 1.0        # сек между тиками
+    tick_count: int = 0           # кол-во тиков (0 = бесконечно)
+    duration: float = 0.0         # общая длительность (альтернатива tick_count)
+    can_stack: bool = False       # Может ли стакаться
+    max_stacks: int = 1           # Максимум стаков
+    stack_type: str = "time"      # "time" (продлевает) или "intensity" (усиливает)
+    tick_event: str = "damage"    # "damage", "heal", "apply_buff", "custom"
+
+
+@dataclass
+class CrowdControl:
+    """Параметры crowd control эффектов"""
+    type: str = "slow"            # slow, stun, silence, root, fear, charm, knockback
+    strength: float = 0.0         # сила (0.5 = 50% slow, 1.0 = full stun)
+    duration: float = 0.0         # секунды
+    diminishing_returns: bool = True  # Уменьшается ли эффект при повторении
+    cc_type_group: str = "movement"  # "movement", "action", "control" (для DR)
+
+
+@dataclass
+class EffectConfig:
+    """
+    Полная конфигурация эффекта в едином интерфейсе.
+    Позволяет описать любой эффект: от простой банки хила до сложной AoE атаки с колоннами.
+    """
+    # Базовые свойства
+    effect_type: EffectType = EffectType.PASSIVE
+    targeting: TargetingMode = TargetingMode.SELF
+    area: Optional[EffectArea] = None
+    
+    # Периодические эффекты (DoT/HoT)
+    tick: Optional[EffectTick] = None
+    
+    # Crowd Control
+    cc: Optional[CrowdControl] = None
+    
+    # Статы и модификаторы
+    stat_modifiers: Dict[str, float] = field(default_factory=dict)
+    
+    # Условия активации (CAS триггеры)
+    trigger_conditions: List[Dict[str, Any]] = field(default_factory=list)
+    
+    # Длительности
+    duration: float = 0.0       # общая длительность
+    cast_time: float = 0.0      # время каста
+    cooldown: float = 0.0       # перезарядка
+    
+    # Стоимость
+    mana_cost: float = 0.0
+    hp_cost: float = 0.0
+    stamina_cost: float = 0.0
+    can_kill: bool = False      # Может ли стоимость убить (False → остановка на 1 HP)
+    
+    # Поведение
+    can_stack: bool = False
+    max_stacks: int = 1
+    stack_type: str = "time"    # "time" или "intensity"
+    
+    # Визуал и звук (для рендера)
+    visual_template: str = ""   # имя визуального эффекта
+    sound_template: str = ""    # имя звука
+    icon: str = ""              # иконка в UI
+    
+    # Метаданные
+    tags: List[str] = field(default_factory=list)  # ["fire", "aoe", "dot"]
+    description: str = ""
+
+
 class BaseEffect:
     """
     Базовый класс эффекта.
@@ -145,10 +256,11 @@ class BaseEffect:
     
     _instance_counter = 0  # Класс-уровень счётчик для уникальных ID
     
-    def __init__(self, effect_id: str, item_source: str):
+    def __init__(self, effect_id: str, item_source: str, config: Optional[EffectConfig] = None):
         BaseEffect._instance_counter += 1
         self.effect_id = f"{effect_id}_{BaseEffect._instance_counter}"  # Уникальный ID
         self.item_source = item_source
+        self.config = config
         self.state = EffectState.INACTIVE
         self.subscription: Optional[Subscription] = None
         self.activation_time: Optional[float] = None
@@ -156,10 +268,18 @@ class BaseEffect:
         self.cooldown_until: Optional[float] = None
         
         # Статы, которые эффект предоставляет
-        self.stat_modifiers: Dict[str, float] = {}
+        self.stat_modifiers: Dict[str, float] = config.stat_modifiers.copy() if config else {}
         
         # Внутреннее состояние
         self.internal_state: Dict[str, Any] = {}
+        
+        # Для периодических эффектов
+        self.current_stacks = 0
+        self.last_tick_time: Optional[float] = None
+        
+        # Для AoE и таргетинга
+        self.area_config: Optional[EffectArea] = config.area if config else None
+        self.cc_config: Optional[CrowdControl] = config.cc if config else None
     
     def get_subscription_config(self) -> Dict[str, Any]:
         """
