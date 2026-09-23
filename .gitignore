@@ -1,61 +1,52 @@
 ```
-# Python cache
+# Python
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
 # Virtual environments
-.venv/
 venv/
-env/
+ENV/
+env.bak/
+.venv/
 
-# Dependencies
-pip/
-setuptools/
-wheel/
+# Testing
+.coverage
+coverage/
+htmlcov/
+.nox/
+.tox/
+.coverage.*
 
-# Build artifacts
-build/
-dist/
-*.egg-info/
-
-# Rust build artifacts
-rust_core/target/
-
-# Logs
-*.log
-
-# Environment files
-.env
-.env.local
-*.env.*
-
-# IDE and editor files
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
+*.tmp
 
-# OS generated files
-.DS_Store
-Thumbs.db
+# Logs
+*.log
 
-# Coverage reports
-.coverage
-htmlcov/
-coverage/
-
-# Testing
-.pytest_cache/
-.mypy_cache/
-
-# Distribution / packaging
-*.tar.gz
-*.whl
-
-# Rust core specific
-rust_core/**/*.so
-rust_core/**/*.dylib
-rust_core/**/*.dll
+# Environment variables
+.env
+.env.local
+.env.*
 ```
