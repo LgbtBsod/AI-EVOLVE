@@ -74,10 +74,11 @@ class StaggerBar:
         self.current = 0.0
         
     def get_break_duration(self) -> float:
-        """Расчет длительности брейка: 1 сек за каждые 500 ед. макс стойки"""
-        # Формула: (MaxStagger / 500) * BaseDuration * Resist
-        ratio = self.max_stagger / 500.0
-        return ratio * self.break_duration_base * self.break_duration_resist
+        """Расчет длительности брейка: мин 0.5 сек + 0.1 сек за каждые 50 ед. макс стойки"""
+        # Формула: 0.5 + (MaxStagger / 50) * 0.1
+        min_duration = 0.5
+        additional_duration = (self.max_stagger / 50.0) * 0.1
+        return max(min_duration, min_duration + additional_duration) * self.break_duration_resist
 
 @dataclass
 class CharacterCCStats:
