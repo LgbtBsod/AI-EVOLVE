@@ -1,0 +1,62 @@
+{
+  "metadata": {
+    "scenario": "defense_test",
+    "timestamp": 1790155505.7243989,
+    "format_version": "1.0"
+  },
+  "summary": {
+    "dps": 734.0,
+    "total_damage": 3670.0,
+    "total_hits": 10,
+    "crit_rate": 0.0,
+    "average_hit": 367.0
+  },
+  "breakdown": {
+    "player_auto_attack": 10.0
+  },
+  "timeline_sample": [
+    [
+      0.0,
+      205.0
+    ],
+    [
+      0.5,
+      590.0
+    ],
+    [
+      1.0,
+      975.0
+    ],
+    [
+      1.5,
+      1360.0
+    ],
+    [
+      2.0,
+      1745.0
+    ],
+    [
+      2.5,
+      2130.0
+    ],
+    [
+      3.0,
+      2515.0
+    ],
+    [
+      3.5,
+      2900.0
+    ],
+    [
+      4.0,
+      3285.0
+    ],
+    [
+      4.5,
+      3670.0
+    ]
+  ],
+  "recommendations": [
+    "Mannequin equipment active - defense testing enabled"
+  ]
+}

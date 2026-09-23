@@ -1,0 +1,60 @@
+{
+  "metadata": {
+    "scenario": "basic_dps_test",
+    "timestamp": 1790155116.8896167,
+    "format_version": "1.0"
+  },
+  "summary": {
+    "dps": 115.0,
+    "total_damage": 1150.0,
+    "total_hits": 10,
+    "crit_rate": 0.0,
+    "average_hit": 115.0
+  },
+  "breakdown": {
+    "player_auto_attack": 1150.0
+  },
+  "timeline_sample": [
+    [
+      0.0,
+      115.0
+    ],
+    [
+      1.0,
+      230.0
+    ],
+    [
+      2.0,
+      345.0
+    ],
+    [
+      3.0,
+      460.0
+    ],
+    [
+      4.0,
+      575.0
+    ],
+    [
+      5.0,
+      690.0
+    ],
+    [
+      6.0,
+      805.0
+    ],
+    [
+      7.0,
+      920.0
+    ],
+    [
+      8.0,
+      1035.0
+    ],
+    [
+      9.0,
+      1150.0
+    ]
+  ],
+  "recommendations": []
+}
