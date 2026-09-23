@@ -237,8 +237,14 @@ def _unquote(s: str) -> str:
 
 
 def parse_lua(text: str):
-    # strip leading `return`
+    # strip leading comments, then `return` (префикс `--...` совпадал с
+    # регэкспом из-за того, что `.` матчит и `-`)
     text = text.strip()
+    while text.startswith("--"):
+        nl = text.find("\n")
+        if nl == -1:
+            return None
+        text = text[nl + 1:].lstrip()
     m = re.match(r"^return\s+", text)
     if m:
         text = text[m.end():]
