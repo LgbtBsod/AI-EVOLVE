@@ -89,12 +89,90 @@ def _last_will_buff():
     )
 
 
+# ---------------------------------------------------------------- built via builder form
+#
+# Эти предметы определены ЧЕРЕЗ ui_logic-формы (тот же путь, что и кнопки
+# «Валидировать / Собрать Lua / Тест» в Flet-билдере) — dogfooding схемы.
+
+def _form_effect(**kw):
+    """Ленивая фабрика: форма билдера -> Effect (через общий UI-пайплайн)."""
+    def make():
+        from .ui_logic import effect_from_form
+        return effect_from_form(kw)
+    return make
+
+
+_VAMPIRE_FORM = {
+    "id": "vampires_fang", "tags": ["lifesteal", "weapon"],
+    "trigger": {"kind": "event", "event": "attack_hit"},
+    "ops": [
+        {"kind": "heal", "target": "self", "stat": "hp", "op": "add",
+         "value": {"pct": 8}, "flags": ["silent"]},
+        {"kind": "mod", "target": "self", "stat": "strength", "op": "add",
+         "value": {"flat": 5},
+         "scale": {"every": 1, "of": "kills", "value": {"flat": 1}, "cap": 10}},
+    ],
+}
+
+_MANTLE_FORM = {
+    "id": "mantle_of_thorns", "tags": ["armor", "retaliation"],
+    "trigger": {"kind": "event", "event": "take_damage"},
+    "ops": [
+        {"kind": "deal", "target": "enemy", "stat": "hp", "op": "sub",
+         "value": {"pct": 20, "of": "hp"}, "flags": ["no_crit"]},
+    ],
+}
+
+_RAGE_FORM = {
+    "id": "rage_tonic", "tags": ["consumable", "buff"],
+    "trigger": {"kind": "event", "event": "use"},
+    "ops": [
+        {"kind": "buff", "target": "self", "buff_id": "enraged",
+         "duration": {"base": 8,
+                      "scale": {"every": 10, "of": "hp_missing_below_40",
+                                "value": {"flat": 1}}},
+         "cooldown": {"flat": 20}},
+        {"kind": "drain", "target": "self", "stat": "hp", "op": "sub",
+         "value": {"pct": 10},
+         "fail": [{"kind": "set", "target": "self", "stat": "hp",
+                   "op": "set", "value": {"flat": 1}}]},
+    ],
+}
+
+_JUDGEMENT_FORM = {
+    "id": "judgement", "tags": ["execute", "weapon"],
+    "trigger": {"kind": "event", "event": "attack"},
+    "ops": [
+        {"kind": "kill", "target": "enemy",
+         "when": "ctx.enemy_hp_pct < 15"},
+    ],
+}
+
+_REbirth_FORM = {
+    "id": "phoenix_feather", "tags": ["revive", "trinket"],
+    "trigger": {"kind": "event", "event": "die"},
+    "ops": [
+        {"kind": "set", "target": "self", "stat": "hp", "op": "set",
+         "value": {"pct": 30, "of": "max_hp"}},
+        {"kind": "remove_buff", "target": "self", "buff_id": "enraged"},
+    ],
+}
+
+
 CATALOG = {
     "health_potion": ("🧪 Health Potion (+40 HP)", _health_potion),
     "lost_my_self": ("😡 Lost My Self (berserk passive)", _lost_my_self),
     "lost_my_self.attack": ("🩸 Blood Price (drain+deal on attack)", _lost_my_self_attack),
     "venom_bite": ("🐍 Venom Bite (apply debuff)", _poison_dot),
     "last_will": ("🛡 Last Will (timed buff)", _last_will_buff),
+    "vampires_fang": ("🦇 Vampire's Fang (lifesteal + kill scaling)",
+                      _form_effect(**_VAMPIRE_FORM)),
+    "mantle_of_thorns": ("🌵 Mantle of Thorns (retaliate on hit)",
+                         _form_effect(**_MANTLE_FORM)),
+    "rage_tonic": ("🔥 Rage Tonic (buff + HP cost)", _form_effect(**_RAGE_FORM)),
+    "judgement": ("⚖️ Judgement (execute below 15%)", _form_effect(**_JUDGEMENT_FORM)),
+    "phoenix_feather": ("🪶 Phoenix Feather (revive at 30% HP)",
+                        _form_effect(**_REbirth_FORM)),
 }
 
 

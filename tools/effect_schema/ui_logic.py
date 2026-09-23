@@ -203,10 +203,17 @@ def run_training_room(item: dict, scenario: Optional[dict] = None) -> dict:
     """Прогнать предмет в тренировочной комнате (sim.EffectRuntime).
 
     scenario: {hero_hp, hero_max_hp, dummy_max_hp, base_stats, events[]}
+      - "use"            — использовать предмет
+      - "attack"         — полный цикл атаки героя (attack -> dmg -> attack_hit
+                           -> kill), урон = base_damage (или attack_damage-стат)
+      - "enemy_attack N" — враг бьёт героя на N (take_damage +Possible die)
+      - "kill"           — убить текущего манекена и возродить нового
+      - "tick T DT"      — тик времени
+      - "die" / прочие   — прямое fire_event
     Возвращает отчёт: шаги событий + финальное состояние героя/манекена.
     """
     sc = {"hero_max_hp": 1000.0, "dummy_max_hp": 5000.0, "hero_hp": None,
-          "base_stats": {}, "events": ["use", "attack"]}
+          "base_stats": {}, "events": ["use", "attack"], "base_damage": 0.0}
     sc.update(scenario or {})
     hero = Unit("hero", max_hp=sc["hero_max_hp"], **sc["base_stats"])
     dummy = Unit("mannequin", max_hp=sc["dummy_max_hp"])
@@ -215,10 +222,36 @@ def run_training_room(item: dict, scenario: Optional[dict] = None) -> dict:
         hero.current_hp = float(sc["hero_hp"])
     rt.refresh_passives()
     steps = []
+    t = 0.0
     for ev in sc["events"]:
-        rt.fire_event(ev)
-        steps.append({"event": ev, "hero_hp": round(hero.current_hp, 3),
-                      "dummy_hp": round(dummy.current_hp, 3)})
+        label = str(ev)
+        parts = label.split()
+        kind = parts[0]
+        if kind == "attack":
+            rt.attack(t, base_damage=float(parts[1]) if len(parts) > 1
+                      else sc["base_damage"])
+        elif kind == "enemy_attack" and len(parts) > 1:
+            rt.receive_damage(float(parts[1]), t)
+        elif kind == "kill":
+            # убить и возродить манекен (для стеков типа Vampire's Fang)
+            dummy.deal_damage(dummy.current_hp)
+            rt.fire_event("kill", t)
+            dummy = Unit("mannequin", max_hp=sc["dummy_max_hp"])
+            rt.enemy = dummy
+        elif kind == "set_dummy" and len(parts) > 1:
+            # установить HP текущего манекена (для execute-сценариев)
+            dummy.current_hp = float(parts[1])
+            dummy.alive = dummy.current_hp > 0
+        elif kind == "tick" and len(parts) > 2:
+            t += float(parts[1])
+            rt.tick(t, float(parts[2]))
+        else:
+            rt.fire_event(label, t)
+        steps.append({"event": label, "t": round(t, 3),
+                      "hero_hp": round(hero.current_hp, 3),
+                      "hero_alive": hero.alive,
+                      "dummy_hp": round(dummy.current_hp, 3),
+                      "kills": hero.kills})
     from .sim import summarize
     return {"steps": steps, "summary": summarize(rt), "log": list(rt.log)}
 

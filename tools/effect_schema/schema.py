@@ -54,15 +54,31 @@ EVENTS = {
 
 # известные статы (не закрытый список; кастомные -- через "custom:<name>")
 KNOWN_STATS = {
-    "hp", "max_hp", "hp_pct", "hp_missing_below_40", "strength", "stamina",
+    "hp", "max_hp", "hp_pct", "hp_missing", "hp_missing_below_40",
+    "strength", "stamina",
     "agility", "intelligence", "defense", "aspd", "crit_chance", "crit_dmg",
     "hp_regen", "lifesteal", "mana", "max_mana", "tenacity", "move_speed",
-    "attack_damage",
+    "attack_damage", "kills",
 }
+
+# ctx-поля, доступные только как источник (value.of / scale.of), но не как цель op
+CONTEXT_ONLY_STATS = {"hp_missing", "hp_missing_below_40", "kills"}
+
+# префиксы контекста цели/союзников (sim.target_ctx): enemy_hp_pct, ally_kills ...
+TARGET_PREFIXES = ("enemy_", "ally_", "allies_", "source_")
 
 
 def is_stat(name: str) -> bool:
-    return name in KNOWN_STATS or name.startswith("custom:")
+    """Валидное имя стата/ctx-поля (включая префиксные enemy_*/ally_*)."""
+    if not isinstance(name, str) or not name:
+        return False
+    if name.startswith("custom:"):
+        return True
+    for pfx in TARGET_PREFIXES:
+        if name.startswith(pfx):
+            name = name[len(pfx):]
+            break
+    return name in KNOWN_STATS
 
 
 # ---------------------------------------------------------------- descriptors
