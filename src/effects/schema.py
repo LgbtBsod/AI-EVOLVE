@@ -39,7 +39,10 @@ OP_KINDS = {
     "apply_effect",  # применить другой эффект по id
     "kill",         # убить цель
     "summon",       # призвать существ: summon = тип, count = сколько (менеджер эффектов)
+    "move",         # переместить: mode = charge | knockback | pull | blink | strafe, distance
 }
+
+MOVE_MODES = {"charge", "knockback", "pull", "blink", "strafe"}
 
 # area - все враждебные в радиусе (radius; center = "target" | "self")
 TARGETS = {"self", "enemy", "ally", "allies", "source", "area"}

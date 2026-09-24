@@ -19,7 +19,7 @@ lua_content/dev_tools.lua: agent.player_keys), без god-mode, плюс
   в БД прогонов (tools/probe_db.py).
 
 Команды (через ';' или с новой строки, '#' - комментарий):
-    spawn enemy|trap|chest [xN]   клавиши 1/2/3 (N раз)
+    spawn enemy|trap|chest|boss [xN]   клавиши 1/2/3/4 (N раз); boss - босс текущего акта
     attack [xN]                   space: удар по ближайшему врагу в радиусе
     interact [SEC]                удерживать e SEC секунд (по умолчанию 0.5)
     wait SEC                      прокрутить игру на SEC секунд игрового времени
@@ -143,8 +143,8 @@ def parse_script(text):
         if verb == "spawn":
             tokens = rest.split()
             n = repeat(tokens)
-            if len(tokens) != 1 or tokens[0] not in ("enemy", "trap", "chest"):
-                raise ScriptError(f"{src!r}: expected 'spawn enemy|trap|chest [xN]'")
+            if len(tokens) != 1 or tokens[0] not in ("enemy", "trap", "chest", "boss"):
+                raise ScriptError(f"{src!r}: expected 'spawn enemy|trap|chest|boss [xN]'")
             commands.append(("press", {"key": keys[tokens[0]], "times": n, "what": tokens[0]}, src))
         elif verb == "attack":
             tokens = rest.split()

@@ -27,7 +27,7 @@ DEFAULTS = {
         "hypotheses_shown": 5,
     },
     "agent": {
-        "player_keys": {"enemy": "1", "trap": "2", "chest": "3", "attack": "space", "interact": "e"},
+        "player_keys": {"enemy": "1", "trap": "2", "chest": "3", "boss": "4", "attack": "space", "interact": "e"},
         "max_wait_per_command": 600, "max_repeat": 10, "observe_nearest": 3,
     },
     "db": {"path": "dev_probe_output/probe.sqlite", "keep_runs": 200},

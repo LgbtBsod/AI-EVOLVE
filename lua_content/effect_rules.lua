@@ -27,17 +27,18 @@ return {
     stamina = { max = "max_stamina", regen = "stamina_regen" },
   },
 
-  -- атрибуты -> производные статы игры (за единицу атрибута). Эффект «+20% силы»
-  -- меняет strength, а в бою это становится уроном и т.д. по этой таблице.
+  -- характеристики -> производные статы (за 1 очко). Герой получает 5 очков за
+  -- уровень, обычный враг 10, элита 15, босс +10 к каждой (world.lua -> progression);
+  -- предметы и эффекты тоже меняют характеристики («+20% силы»).
   attributes = {
-    strength     = { attack_damage = 0.5 },
-    agility      = { crit_chance = 0.2, aspd = 0.01 },
-    intelligence = { max_mana = 2 },
-    vitality     = { max_hp = 5, hp_regen = 0.05 },
-    wisdom       = { mana_regen = 0.05 },
-    endurance    = { max_stamina = 3, stamina_regen = 0.05 },
-    luck         = { crit_chance = 0.1 },
-    charisma     = {},
+    strength     = { attack_damage = 0.6, max_hp = 1 },
+    agility      = { crit_chance = 0.15, aspd = 0.008, dodge = 0.1 },
+    intelligence = { spell_power = 0.8, max_mana = 3 },
+    vitality     = { max_hp = 6, hp_regen = 0.04 },
+    wisdom       = { mana_regen = 0.08, spell_power = 0.2 },
+    endurance    = { max_stamina = 3, stamina_regen = 0.05, defense = 0.3 },
+    luck         = { crit_chance = 0.1, dodge = 0.05 },
+    charisma     = {},   -- цены у торговцев и отношение NPC (социальная часть)
   },
 
   -- именованные условия (trigger.when = "low_hp_40"): одно выражение для
@@ -52,9 +53,9 @@ return {
     max_mana    = { min = 0 },
     max_stamina = { min = 0 },
     crit_chance = { min = 0, max = 100 },
-    aspd        = { min = 0.1 },   -- атак в секунду; 0 = герой никогда не бьёт
     move_speed  = { min = 0 },
     tenacity    = { min = 0, max = 100 },
     dodge       = { min = 0, max = 75 },
+    aspd        = { min = 0.1, max = 4 },  -- больше 4 ударов в секунду не бывает
   },
 }

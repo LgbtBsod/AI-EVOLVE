@@ -29,3 +29,18 @@ def load_abilities() -> dict[str, dict]:
             for ab in boss.get("skills") or []:
                 out[ab["id"]] = ab
     return out
+
+
+@lru_cache(maxsize=1)
+def load_bosses() -> dict[str, dict]:
+    """id -> описание босса (статы, вид, skills - список id навыков)."""
+    from ..content import lua_bridge
+    path = lua_bridge.CONTENT / "bosses.lua"
+    if not path.exists():
+        return {}
+    try:
+        data = lua_bridge.load(path, cache=True)
+    except Exception as exc:
+        logger.warning("bosses: not loaded: %s", exc)
+        return {}
+    return {b["id"]: {**b, "skills": [ab["id"] for ab in b.get("skills") or []]} for b in data.get("bosses") or []}

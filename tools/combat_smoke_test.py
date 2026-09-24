@@ -311,8 +311,10 @@ def test_character_levels_up_from_experience():
     check("level actually incremented", player.level == 2)
     check("leftover experience is 0, not silently dropped or duplicated",
           player.experience == 0)
-    check("stats actually grow on level up (max_health increased)", player.max_health > max_hp_before)
-    check("health is topped up to the new max on level up", player.health == player.max_health)
+    # level-up даёт 5 очков характеристик (их тратит герой; статы из них считает
+    # менеджер эффектов - tests/test_progression.py), а не фиксированный рост HP
+    check("level up grants 5 attribute points", player.attribute_points == 5)
+    check("no hidden flat stat growth or full heal on level up", player.max_health == max_hp_before)
 
     # Enough XP to cross two thresholds in one call - while loop, not a single if.
     player2 = make_player(game)
@@ -407,9 +409,11 @@ def test_hero_hp_never_exceeds_max_after_hits():
     player.take_damage(10.0)
     check("next hit starts from the current HP, not the component's stale value",
           before - 10.0 <= player.health < before)
-    player.add_experience(player.experience_to_next_level)  # level-up: max_health +15, полное лечение
+    # рост максимума (очки живучести через менеджер эффектов) + лечение до нового максимума
+    player.max_health += 15
+    player.health = player.max_health
     player.take_damage(1.0)
-    check("after level-up a hit lands on the new max_health", player.max_health - 1.0 <= player.health < player.max_health)
+    check("after max_health grows a hit lands on the new max_health", player.max_health - 1.0 <= player.health < player.max_health)
 
 
 def test_stealth_attack_applies_poison_via_combat_system():

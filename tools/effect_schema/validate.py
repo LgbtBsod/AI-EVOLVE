@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .schema import (OP_KINDS, TARGETS, OPS, TRIGGER_KINDS, EVENTS, FLAGS,
+from .schema import (OP_KINDS, TARGETS, OPS, TRIGGER_KINDS, EVENTS, FLAGS, MOVE_MODES,
                      CONTEXT_ONLY_STATS, RESOURCE_STATS, is_stat)
 
 
@@ -123,6 +123,8 @@ def validate_op(o: dict, path: str, item_effects=()) -> list[str]:
         err("kind=apply_effect requires buff_id (the id of the effect to apply)")
     if kind == "summon" and not o.get("summon"):
         err("kind=summon requires summon (creature type)")
+    if kind == "move" and o.get("mode") not in MOVE_MODES:
+        err(f"kind=move requires mode in {sorted(MOVE_MODES)}")
     if o.get("target") == "area" and o.get("center", "target") not in ("target", "self"):
         err("area center must be 'target' or 'self'")
     if o.get("every") is not None:

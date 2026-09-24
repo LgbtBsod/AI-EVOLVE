@@ -223,6 +223,11 @@ class Character(BaseEntity):
         self.exploration_retarget_interval = 2.0
         self.last_exploration_target_time = 0.0
         
+        # Характеристики (сила, ловкость ... - см. lua_content/effect_rules.lua) и
+        # нераспределённые очки: 5 за уровень, тратит сам герой
+        self.attributes: dict[str, float] = {}
+        self.attribute_points = 0
+
         # Дополнительные характеристики игрока
         self.is_player = is_player
         if is_player:
@@ -1190,6 +1195,14 @@ class Character(BaseEntity):
             self.node.removeNode()
             self.node = None
     
+    @staticmethod
+    def _points_per_level() -> int:
+        try:
+            from ..gameplay.progression import progression
+            return int(progression()["hero_points_per_level"])
+        except Exception:  # без Lua-контента - правило по умолчанию
+            return 5
+
     def add_experience(self, amount: float) -> int:
         """Начисляет опыт и повышает уровень, пока хватает накопленного опыта.
 
@@ -1206,20 +1219,13 @@ class Character(BaseEntity):
             self.experience -= self.experience_to_next_level
             self.level += 1
             levels_gained += 1
-            # Рост порога следующего уровня и самих характеристик - не
-            # драматичный, но заметный прогресс за каждый уровень.
+            # Порог растёт; вместо фиксированного роста статов - очки
+            # характеристик (world.lua -> progression.hero_points_per_level),
+            # их распределяет сам герой (src/gameplay/progression.HeroGrowth).
+            # Полного лечения нет: повышение уровня посреди боя снимало всё
+            # напряжение (docs/GAMEPLAY_REVIEW.md).
             self.experience_to_next_level = int(self.experience_to_next_level * 1.25)
-            self.max_health += 15
-            self.max_mana += 5
-            self.max_stamina += 5
-            self.physical_damage += 2
-            self.magical_damage += 1
-            self.defense += 1
-            # Полное восстановление при левел-апе - обычная награда за прогресс,
-            # а не просто число в характеристиках.
-            self.health = self.max_health
-            self.mana = self.max_mana
-            self.stamina = self.max_stamina
+            self.attribute_points = int(getattr(self, "attribute_points", 0) or 0) + self._points_per_level()
             logger.info(f"{self.entity_id}: level up -> {self.level}")
         return levels_gained
 

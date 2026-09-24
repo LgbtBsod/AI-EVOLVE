@@ -44,13 +44,14 @@ DEFAULT_RULES: dict[str, dict] = {
                   "mana": {"max": "max_mana", "regen": "mana_regen"},
                   "stamina": {"max": "max_stamina", "regen": "stamina_regen"}},
     "bounds": {"max_hp": {"min": 1}, "max_mana": {"min": 0}, "max_stamina": {"min": 0},
-               "crit_chance": {"min": 0, "max": 100}, "aspd": {"min": 0.1}, "move_speed": {"min": 0},
+               "crit_chance": {"min": 0, "max": 100}, "aspd": {"min": 0.1, "max": 4}, "move_speed": {"min": 0},
                "tenacity": {"min": 0, "max": 100}, "dodge": {"min": 0, "max": 75}},
     "predicates": {"low_hp_40": "ctx.hp_pct < 40"},
-    "attributes": {"strength": {"attack_damage": 0.5}, "agility": {"crit_chance": 0.2, "aspd": 0.01},
-                   "intelligence": {"max_mana": 2}, "vitality": {"max_hp": 5, "hp_regen": 0.05},
-                   "wisdom": {"mana_regen": 0.05}, "endurance": {"max_stamina": 3, "stamina_regen": 0.05},
-                   "luck": {"crit_chance": 0.1}, "charisma": {}},
+    "attributes": {"strength": {"attack_damage": 0.6, "max_hp": 1}, "agility": {"crit_chance": 0.15, "aspd": 0.008, "dodge": 0.1},
+                   "intelligence": {"spell_power": 0.8, "max_mana": 3}, "vitality": {"max_hp": 6, "hp_regen": 0.04},
+                   "wisdom": {"mana_regen": 0.08, "spell_power": 0.2},
+                   "endurance": {"max_stamina": 3, "stamina_regen": 0.05, "defense": 0.3},
+                   "luck": {"crit_chance": 0.1, "dodge": 0.05}, "charisma": {}},
 }
 
 
@@ -438,6 +439,8 @@ class EffectRuntime:
         self._effect_fired_at: dict[str, float] = {}   # Effect.cooldown
         self._compiled: dict[str, Callable[[dict], Any]] = {}  # условие -> замыкание (_test)
         self._periodic: list[dict] = []                        # DoT/HoT (every + duration)
+        self._last_hit_at = -1e9                               # ctx.since_hit
+        self._last_attack_at = -1e9                            # ctx.since_attack
         self._buff_fields = buff_fields(effects)               # buff_id -> имя поля ctx
         self._now = 0.0
         # --- hp_cross -----------------------------------------------------
@@ -468,6 +471,9 @@ class EffectRuntime:
         который выдают эффекты: `ctx.buff_enraged > 0` включает бонусы на время баффа."""
         ctx = {**self.owner.ctx(extra), **self.target_ctx("enemy", self.enemy)}
         ctx["last_damage"] = self.last_damage
+        # секунд с последнего полученного урона / нанесённого удара (перки «пока не бьют»)
+        ctx["since_hit"] = min(999.0, self._now - self._last_hit_at)
+        ctx["since_attack"] = min(999.0, self._now - self._last_attack_at)
         for bid, field in self._buff_fields.items():
             b = self.owner.buffs.get(bid)
             ctx[field] = max(0.0, b.get("until", 0.0) - self._now) if b else 0.0
@@ -613,6 +619,7 @@ class EffectRuntime:
         if not self.owner.alive or self.enemy is None or not self.enemy.alive:
             return
         self._killed_this_attack = False
+        self._last_attack_at = t
         self.fire_event("attack", t)
         if self.enemy is None or not self.enemy.alive:
             # execute (judgement) уже сработал: kills+1 и событие kill посланы
@@ -669,6 +676,7 @@ class EffectRuntime:
             self.log.append(f"t={t:.1f} {self.owner.name} ignores {amount:.1f} damage (iframe {shield})")
             return
         self.owner.deal_damage(amount)
+        self._last_hit_at = t
         self.log.append(f"t={t:.1f} {self.owner.name} takes {amount:.1f} "
                         f"hp={self.owner.current_hp:.1f}")
         died = not self.owner.alive
@@ -763,8 +771,9 @@ class EffectRuntime:
                                    "until": t + self._duration(o["duration"], ctx), "src": src})
             self.log.append(f"t={t:.1f} {src} {kind} over time {amount:.2f} every {every:g}s")
             return
-        if kind == "summon":
-            self.log.append(f"t={t:.1f} {src} summon {o.get('summon')} x{o.get('count', 1)} (no world in training room)")
+        if kind in ("summon", "move"):
+            what = f"summon {o.get('summon')} x{o.get('count', 1)}" if kind == "summon" else f"move {o.get('mode')}"
+            self.log.append(f"t={t:.1f} {src} {what} (no world in training room)")
             return
 
         if kind == "mod":

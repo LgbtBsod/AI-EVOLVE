@@ -126,6 +126,7 @@ class EntityState:
         self.items: list = []
         self.item_effects: list[dict] = []        # все эффекты надетых предметов
         self.extra_effects: list[dict] = []       # действующие части расходников (Тоник ярости)
+        self.perk_effects: list[dict] = []        # перки характеристик (lua_content/perks.lua)
         self.equipment_stats: dict[str, float] = {}
         self.external: dict[Any, tuple[float, dict[str, float]]] = {}   # ключ -> (до, {стат: вклад})
         self.applied: dict[str, float] = {}
@@ -143,24 +144,24 @@ class EntityState:
     # ---------------------------------------------------------------- effects
     @property
     def event_effects(self) -> list[dict]:
-        return [ef for ef in self.item_effects + self.extra_effects
-                if (ef.get("trigger") or {}).get("kind") == "event"]
+        return [ef for ef in self.all_effects() if (ef.get("trigger") or {}).get("kind") == "event"]
 
     def rebuild_runtime(self) -> None:
         """Пассивы и условия - в EffectRuntime (слои модов, amplify); события - в менеджере."""
-        passive = [ef for ef in self.item_effects + self.extra_effects
+        passive = [ef for ef in self.all_effects()
                    if (ef.get("trigger") or {}).get("kind") in ("passive", "condition")]
         keep = self.runtime
         self.runtime = EffectRuntime(self.unit, passive, enemy=keep.enemy)
         self.runtime._compiled = keep._compiled
+        self.runtime._last_hit_at, self.runtime._last_attack_at = keep._last_hit_at, keep._last_attack_at
         # поля buff_<id> - для всех баффов предмета, не только пассивных
-        self.runtime._buff_fields = buff_fields(self.item_effects + self.extra_effects)
-        ids = {ef["id"] for ef in self.item_effects + self.extra_effects}
+        self.runtime._buff_fields = buff_fields(self.all_effects())
+        ids = {ef["id"] for ef in self.all_effects()}
         self.runtime._op_contrib = {k: v for k, v in keep._op_contrib.items()
                                     if str(k[0]).split("#")[0].split("->")[0] in ids}
 
     def all_effects(self) -> list[dict]:
-        return self.item_effects + self.extra_effects
+        return self.item_effects + self.extra_effects + self.perk_effects
 
     # ---------------------------------------------------------------- sync
     def _speed_attr(self) -> str:
@@ -181,8 +182,9 @@ class EntityState:
             if attr in base:
                 u.base[stat] = base[attr] * scale + shift
         u.base["move_speed"] = base.get(self._speed_attr(), u.base.get("move_speed", 5.0))
+        allocated = getattr(self.entity, "attributes", None) or {}
         for attr in rules()["attributes"]:
-            u.base[attr] = 0.0
+            u.base[attr] = float(allocated.get(attr, 0.0))   # очки уровня; предметы/эффекты - поверх
         for k, v in self.equipment_stats.items():
             u.base[k] = u.base.get(k, 0.0) + v
         for until, layer in self.external.values():
@@ -301,6 +303,18 @@ class EffectManager:
         st.rebuild_runtime()
         st.refresh(self.now)
 
+    def set_perks(self, entity, effects: list[dict]) -> None:
+        """Перки характеристик (src/gameplay/progression.perk_effects) - такие же эффекты, как у предметов."""
+        st = self.state(entity)
+        if st is None:
+            return
+        if [e["id"] for e in effects] == [e["id"] for e in st.perk_effects] and \
+                [e.get("meta") for e in effects] == [e.get("meta") for e in st.perk_effects]:
+            return
+        st.perk_effects = [dict(e) for e in effects]
+        st.rebuild_runtime()
+        st.refresh(self.now)
+
     # ---------------------------------------------------------------- time
     def update(self, dt: float) -> None:
         self.now += dt
@@ -399,6 +413,7 @@ class EffectManager:
         st.cooldowns[ab["id"]] = self.now + self.cooldown_of(st, ab)
         tags = tuple(ab.get("tags") or ())
         if "attack" in tags:
+            st.runtime._last_attack_at = self.now
             self.emit(caster, "attack", other=target)
             if target is not None and not is_alive(target):
                 return CastResult(True, "executed")   # казнь предметом на событии attack
@@ -574,6 +589,8 @@ class EffectManager:
                     hits.append(hit)
         elif kind == "summon":
             self._summon(st, o, ctx)
+        elif kind == "move":
+            self._move(st, tgt_st, o, primary)
 
     def _duration(self, d, ctx) -> float:
         if isinstance(d, (int, float)):
@@ -630,6 +647,38 @@ class EffectManager:
             ang = 2 * math.pi * i / max(1, count) + self.rng.random()
             self.world.spawn_summon(o.get("summon", "basic"), x + 2.5 * math.cos(ang), y + 2.5 * math.sin(ang),
                                     st.faction, int(getattr(st.entity, "level", 1) or 1), st.entity)
+
+    def _move(self, st, tgt_st, o, primary) -> None:
+        """Рывок к цели, отбрасывание, притягивание, переход за спину цели."""
+        mode, dist = o.get("mode"), float(o.get("distance", 5.0) or 5.0)
+        other = primary if tgt_st is st else st.entity   # от кого/к кому двигаться
+        if other is None:
+            return
+        mx, my = position(tgt_st.entity)
+        ox, oy = position(other)
+        dx, dy = mx - ox, my - oy
+        d = math.hypot(dx, dy) or 1.0
+        ux, uy = dx / d, dy / d
+        if mode == "knockback":          # цель - от источника
+            nx, ny = mx + ux * dist, my + uy * dist
+        elif mode == "pull":             # цель - к источнику, до 1.5 от него
+            step = max(0.0, min(dist, d - 1.5))
+            nx, ny = mx - ux * step, my - uy * step
+        elif mode == "charge":           # сам - к цели, до 1.5 от неё
+            step = max(0.0, min(dist, d - 1.5))
+            nx, ny = mx - ux * step, my - uy * step
+        elif mode == "strafe":           # шаг в сторону, поперёк линии атаки
+            side = 1.0 if self.rng.random() < 0.5 else -1.0
+            nx, ny = mx - uy * dist * side, my + ux * dist * side
+        else:                            # blink: за спину цели
+            nx, ny = ox - ux * 1.5, oy - uy * 1.5
+        if self.world is not None and hasattr(self.world, "clamp_position"):
+            nx, ny = self.world.clamp_position(nx, ny)
+        e = tgt_st.entity
+        if hasattr(e, "move_to"):
+            e.move_to(nx, ny)
+        else:
+            e.x, e.y = nx, ny
 
     # ---------------------------------------------------------------- resources
     def _spend(self, st: EntityState, res: str, amount: float, lethal: bool = False) -> None:
@@ -721,6 +770,8 @@ class EffectManager:
                 self.emit(src, "crit", other=tgt, last_damage=amount)
         if "reflect" not in flags:
             self.emit(tgt, "take_damage", other=src, last_damage=amount)
+        # since_hit обновляется ПОСЛЕ реакций: их условия видят время до этого удара
+        tgt_st.runtime._last_hit_at = self.now
         if info.killed:
             src.kills = int(getattr(src, "kills", 0) or 0) + 1
             self.emit(src, "kill", other=tgt, last_damage=amount)

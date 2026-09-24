@@ -131,3 +131,10 @@ def test_digest_and_diff_are_compact():
     out = diff(item, changed)
     assert out[0] == "+ new" and out[1].startswith("~ hit") and "sub 7" in out[1]
     assert diff(item, item) == ["no differences"]
+
+
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_sparse_integer_keys_stay_a_mapping(backend):
+    # { [76] = ... } - номера уровней, а не список: lupa раньше терял ключи
+    assert lua_bridge.load("return { [76] = 'a', [80] = 'b' }", backend=backend) == {"76": "a", "80": "b"}
+    assert lua_bridge.load("return { 'x', 'y' }", backend=backend) == ["x", "y"]

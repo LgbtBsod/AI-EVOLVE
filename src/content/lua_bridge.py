@@ -59,7 +59,9 @@ def lua_to_py(obj) -> Any:
     """Таблица lupa -> dict/list (после export.lua в ней только данные)."""
     if hasattr(obj, "keys") and callable(obj.keys):
         keys = list(obj.keys())
-        if keys and all(isinstance(k, int) for k in keys):
+        # список - только сплошные ключи 1..n (как у serde в rust_core); разреженные
+        # числовые ключи ({ [76] = ... }) - словарь со строковыми ключами
+        if keys and all(isinstance(k, int) for k in keys) and sorted(keys) == list(range(1, len(keys) + 1)):
             return [lua_to_py(obj[k]) for k in sorted(keys)]
         return {str(k): lua_to_py(obj[k]) for k in keys}
     if isinstance(obj, bytes):

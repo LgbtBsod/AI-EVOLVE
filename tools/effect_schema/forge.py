@@ -170,7 +170,8 @@ def coverage_effects(rng: random.Random, preds: PredGen) -> list[dict]:
                           "every": 1, "duration": {"flat": 3}, "flags": ["true_damage"]},
                          {"kind": "heal", "target": "self", "stat": "hp", "op": "add", "value": {"flat": 3},
                           "every": 1, "duration": {"flat": 3}},
-                         {"kind": "summon", "target": "self", "summon": "skeleton", "count": 2}]})
+                         {"kind": "summon", "target": "self", "summon": "skeleton", "count": 2},
+                         {"kind": "move", "target": "enemy", "mode": "knockback", "distance": 3}]})
 
     # 5) казнь, owner_has, кулдаун эффекта
     effs.append({"id": "execute", "tags": ["forge"], "trigger": {"kind": "event", "event": "attack"},

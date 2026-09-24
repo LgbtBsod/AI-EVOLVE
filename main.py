@@ -85,7 +85,7 @@ class Game(ShowBase):
         self.dev_mode = dev_mode
         self.scene = None  # игровой мир; выставляет GameScene при загрузке game_world
         self._keys = {
-            "1": False, "2": False, "3": False,
+            "1": False, "2": False, "3": False, "4": False,
             "e": False, "space": False, "mouse1": False,
         }
 
