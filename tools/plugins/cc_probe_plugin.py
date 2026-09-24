@@ -8,7 +8,8 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass
 from enum import Enum
 import sys
-sys.path.insert(0, '/workspace')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 # Используем базовый класс плагина из ядра
 from src.core.base_plugin import BasePlugin

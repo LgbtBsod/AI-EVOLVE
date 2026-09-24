@@ -11,7 +11,8 @@ from enum import Enum
 
 # Импортируем наши механики
 import sys
-sys.path.append('/workspace/src/core')
+from pathlib import Path
+sys.path.append(str(Path(__file__).resolve().parents[2] / 'src' / 'core'))
 from combat_advanced import (
     Entity, DamageType, ReflectConfig, RoomConfig, RoomEffectType, 
     GameRoom, ContextualTask, Task, EmotionState

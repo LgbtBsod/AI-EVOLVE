@@ -26,16 +26,11 @@
    логики сэмплинга) — и начинается со строки "Status: OK/CRASHED/STOPPED
    EARLY" плюс кодом возврата процесса (0 - чисто, 1 - краш), чтобы можно
    было проверить исход одной командой, не открывая файл.
-8. --seed сидирует и random, и RNGManager проекта (если есть) - без этого
-   два прогона "до/после фикса" нельзя честно сравнить, потому что криты/
-   промахи/точки спавна каждый раз разные. ВАЖНО: это снижает разброс
-   между прогонами (одинаковая стартовая точка RNG), но НЕ гарантирует
-   побитово одинаковый повтор - блуждание врагов дёргает random() каждый
-   игровой кадр, а dt игры завязан на реальное время рендера, которое от
-   прогона к прогону чуть плавает. Честная побитовая детерминированность
-   потребовала бы фиксированного шага времени (ClockObject.MNonRealTime) -
-   пока не реализовано, это следующий кандидат, если понадобится точное
-   сравнение "до/после".
+8. --seed сидирует и random, и RNGManager проекта. Вместе с --fast прогон
+   ПОБИТОВО повторяем: fixed-step виртуальные часы (tools/probe_runtime.py)
+   отвязывают dt и таймеры игры (time.time()/perf_counter()) от настенного
+   времени. Без --fast dt по-прежнему плавает - только меньший разброс.
+   Каждый прогон пишет repro.sh с точной командой повтора.
 9. (опционально, нужен Pillow: pip install -r tools/requirements-dev.txt)
    Детект "пустого"/залитого одним цветом кадра - ловит поломку рендера,
    которую внутреннее состояние игры не увидит (HP/позиции продолжают
@@ -48,15 +43,18 @@
     stdout - до 2 строк + одна пометка "further ... suppressed" (см.
     log_event). Ничего не удаляется с диска - только то, что стоит открыть
     по умолчанию.
-11. (опционально, нужен OpenCV: pip install -r tools/requirements-dev.txt)
-    Умная визуальная аналитика для снижения токенов:
-    - Perceptual hash (256-bit) + кластеризация похожих кадров — агент
-      получает только репрезентативные скриншоты вместо дубликатов
-    - Детекция UI элементов (HP бары, цифры урона, статус эффекты) через
-      цветовую сегментацию — не нужно парсить game state JSON
-    - SSIM-ready данные для сравнения "до/после" без открытия изображений
-    - Edge density + brightness stats для оценки визуальной сложности
-    - Авто-детекция проблем: "урон был но цифр нет" = UI сломан
+11. Кадровая аналитика: Rust (rust_core.ProbeAnalyzer, пороги - из
+    lua_content/probe_config.lua) -> Pillow -> OpenCV-дополнения. 256-битный
+    perceptual hash кластеризует похожие кадры: в summary.md остаются только
+    визуально разные, контакт-лист собирается из них.
+12. Режимы без окна: --render offscreen (скриншоты есть, окна нет; нужен
+    OpenGL, на Linux - xvfb-run) и --render none (без графики вообще, работает
+    в любом контейнере). Звук всегда выключен: раньше ALSA/OpenAL печатали
+    ~40 строк мусора в stdout на каждый прогон.
+13. Гипотезы и прогнозы (tools/probe_analysis.py, числа считает Rust -
+    rust_core.RunAnalytics, пороги - lua_content/dev_tools.lua): "симптом ->
+    вероятная причина -> файл" и "когда герой умрёт при таком темпе". Прогон
+    складывается в SQLite (tools/probe_db.py: stats/why/predict/compare/trend).
 
 ВАЖНО - для логических правок (формулы урона/крита, is_alive()/is_defeated,
 AI-таргетинг/движение) СНАЧАЛА запускай tools/combat_smoke_test.py: без окна,
@@ -67,6 +65,9 @@ CombatSystem, AI retreat/targeting). Возвращайся к dev_probe.py, к�
 именно визуальная/рендер/сценовая проверка, а не просто "правильно ли считает
 формула".
 
+Чтобы УПРАВЛЯТЬ игрой как игрок (spawn/attack/wait/expect) - tools/agent_play.py:
+без окна, ~200x быстрее реального времени, детерминированно.
+
 Результат одного прогона — ОДИН файл summary.md, с него и надо начинать
 чтение. state.jsonl / game.log / frame_NNN.json / panda3d.log — только если
 summary на что-то указывает и нужно копнуть глубже.
@@ -74,7 +75,9 @@ summary на что-то указывает и нужно копнуть глу�
 Использование (этот проект):
     .venv/Scripts/python.exe tools/dev_probe.py --duration 30
     .venv/Scripts/python.exe tools/dev_probe.py --action-at 1:1 --action-at 1:2 --action-at 1:3
-    .venv/Scripts/python.exe tools/dev_probe.py --seed 42 --duration 20   # воспроизводимый прогон
+    .venv/Scripts/python.exe tools/dev_probe.py --seed 42 --duration 20   # меньший разброс
+    python tools/dev_probe.py --render none --fast --seed 42 --duration 120 --action-at 1:1  # логика, <1 с
+    xvfb-run -a python tools/dev_probe.py --headless --fast --seed 42 --screenshot-interval 10
 
 Переиспользование в другом Panda3D-проекте:
     - Всё, что касается запуска окна (screenshot+пиксельная проекция через
@@ -83,8 +86,8 @@ summary на что-то указывает и нужно копнуть глу�
     - --entry-module/--game-class/--game-kwargs говорят инструменту, как
       импортировать и создать игру другого проекта, не трогая код инструмента.
     - Единственное, что реально завязано на модель данных ЭТОГО проекта —
-      функции get_entities()/get_combat_system() ниже (помечены как
-      ADAPTER). Под другой проект достаточно поправить их так, чтобы они
+      функции get_entities()/get_combat_system() в tools/probe_runtime.py
+      (помечены как ADAPTER). Под другой проект достаточно поправить их так, чтобы они
       возвращали список (entity, is_player) и объект с
       register_event_handler(callback) (или None, если боёвки нет) —
       остальной код опирается только на getattr()-совместимый минимум
@@ -95,10 +98,9 @@ summary на что-то указывает и нужно копнуть глу�
         --game-kwargs '{"headless": false}'
 """
 import argparse
-import importlib
 import json
 import logging
-import random
+import shlex
 import sys
 import tempfile
 import time
@@ -134,7 +136,21 @@ except ImportError:
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from panda3d.core import Filename, Point2, TextNode, loadPrcFileData  # noqa: E402
+from panda3d.core import Filename, Point2, TextNode  # noqa: E402
+
+import probe_analysis as analysis  # noqa: E402
+import probe_runtime as runtime  # noqa: E402
+# ADAPTER-функции живут в probe_runtime (общие с agent_play.py); имена
+# оставлены здесь для обратной совместимости импортов из dev_probe.
+from probe_runtime import (  # noqa: E402,F401
+    entity_id_of, entity_state, get_combat_system, get_entities, get_scene,
+)
+
+try:  # кадровая аналитика на Rust (rust_core/src/probe), конфиг - lua_content/probe_config.lua
+    from rust_core import ProbeAnalyzer as _RustProbeAnalyzer
+    RUST_PROBE_AVAILABLE = True
+except ImportError:
+    RUST_PROBE_AVAILABLE = False
 
 LOW_HP_FRACTION = 0.2
 PINNED_SECONDS_THRESHOLD = 5.0
@@ -161,10 +177,11 @@ def parse_args():
         description="Agent-oriented playtest probe: annotated screenshots + one summary.md",
         epilog="For logic-only changes (combat formulas, is_alive()/is_defeated latching, AI "
                "targeting/movement math), run tools/combat_smoke_test.py FIRST instead: no window, "
-               "no screenshots, sub-second. Reach for this full windowed run only when the change "
-               "needs visual/rendering/timing verification.",
+               "no screenshots, sub-second. To DRIVE the game like a player (spawn/attack/wait/expect) "
+               "use tools/agent_play.py - windowless and ~200x faster than real time. Reach for this "
+               "probe when the change needs visual/rendering verification.",
     )
-    parser.add_argument("--duration", type=float, default=30.0, help="total seconds to run")
+    parser.add_argument("--duration", type=float, default=30.0, help="total seconds to run (game seconds with --fast)")
     parser.add_argument("--sample-interval", type=float, default=1.0, help="seconds between cheap state samples")
     parser.add_argument("--full", action="store_true", help="use the full-size map instead of the dev map")
     parser.add_argument("--out", type=str, default=None,
@@ -175,6 +192,16 @@ def parse_args():
     )
     parser.add_argument("--screenshot-interval", type=float, default=0.0,
                          help="also take a screenshot every N seconds regardless of events (0 = events only)")
+    parser.add_argument("--render", choices=runtime.RENDER_MODES, default="window",
+                         help="window (default) | offscreen (no window, screenshots still work; needs OpenGL, "
+                              "e.g. xvfb-run on Linux) | none (no graphics at all: logic-only, no screenshots, "
+                              "works in any container)")
+    parser.add_argument("--headless", action="store_true", help="shortcut for --render offscreen")
+    parser.add_argument("--fast", action="store_true",
+                         help="fixed-step virtual game clock: runs as fast as the machine allows (render=none: "
+                              "~200x real time) and together with --seed makes runs byte-for-byte reproducible")
+    parser.add_argument("--fps", type=int, default=runtime.DEFAULT_FPS,
+                         help="simulation step for --fast (frames per game second)")
     parser.add_argument("--entry-module", type=str, default="main",
                          help="module to import for the game entry point (default: this project's main.py)")
     parser.add_argument("--game-class", type=str, default="Game",
@@ -184,10 +211,9 @@ def parse_args():
                               "Defaults to {\"dev_mode\": not --full} for this project. "
                               "(json.loads as the argparse type: malformed JSON fails cleanly at parse time.)")
     parser.add_argument("--seed", type=int, default=None,
-                         help="seed Python's random module + the game's RNGManager (if present) to reduce "
-                              "run-to-run variance for before/after comparisons. NOT byte-exact reproduction: "
-                              "per-frame random calls (e.g. enemy wander jitter) still depend on wall-clock "
-                              "frame timing, which isn't fixed by this flag")
+                         help="seed Python's random module + the game's RNGManager (if present). With --fast the "
+                              "run is byte-for-byte reproducible; without it per-frame dt still follows the wall "
+                              "clock, so repeated runs only have reduced variance")
     parser.add_argument("--verbosity", type=int, choices=[0, 1, 2], default=1,
                          help="stdout noise level: 0 = only the final RESULT line, 1 (default) = anomalies/"
                               "fatal errors too, 2 = every event (screenshots, kills, HP crossings). "
@@ -199,6 +225,8 @@ def parse_args():
                               "save once after confirming a run is good, then every subsequent run's own "
                               "output already carries the before/after verdict without a separate diff step")
     args = parser.parse_args()
+    if args.headless:
+        args.render = "offscreen"
 
     if args.duration <= 0:
         parser.error("--duration must be > 0")
@@ -212,48 +240,6 @@ def parse_args():
     if args.game_kwargs is not None and not isinstance(args.game_kwargs, dict):
         parser.error(f"--game-kwargs must be a JSON object, got {type(args.game_kwargs).__name__}")
     return args
-
-
-def get_scene(game):
-    """ADAPTER (project-specific): return the object holding .player/.enemies, or None.
-
-    AI-EVOLVE boots through GameCore + SceneManager: the active scene instance
-    (GameScene) hosts the actual gameplay scene as .world. game.scene is kept
-    as a fallback for the legacy boot path and for other projects."""
-    scene_manager = getattr(game, "scene_manager", None)
-    get_active = getattr(scene_manager, "get_active_scene_data", None)
-    if get_active is not None:
-        data = get_active()
-        instance = getattr(data, "instance", None) if data else None
-        world = getattr(instance, "world", None)
-        if world is not None:
-            return world
-        if instance is not None and hasattr(instance, "player"):
-            return instance
-    return getattr(game, "scene", None)
-
-
-def get_entities(game):
-    """ADAPTER (project-specific): return [(entity, is_player), ...] for every unit in the scene.
-
-    For AI-EVOLVE this reads the active scene's .player/.enemies. Point
-    get_scene() at a different project's scene to reuse the tool elsewhere."""
-    scene = get_scene(game)
-    if scene is None:
-        return []
-    entities = []
-    if getattr(scene, "player", None) is not None:
-        entities.append((scene.player, True))
-    for enemy in getattr(scene, "enemies", []):
-        entities.append((enemy, False))
-    return entities
-
-
-def get_combat_system(game):
-    """ADAPTER (project-specific): return an object with register_event_handler(callback), or None.
-
-    Combat-event capture is skipped gracefully if this returns None."""
-    return getattr(game, "combat_system", None)
 
 
 class EntityLabel:
@@ -277,10 +263,6 @@ class EntityLabel:
         self.text_node.setText(text)
 
 
-def entity_id_of(entity):
-    return getattr(entity, "entity_id", None) or f"obj_{id(entity)}"
-
-
 def short_id(entity_id):
     return entity_id.rsplit("_", 1)[-1][-5:]
 
@@ -288,16 +270,6 @@ def short_id(entity_id):
 def label_text(entity, is_player):
     kind = "HERO" if is_player else getattr(entity, "enemy_type", entity.__class__.__name__)
     return f"{kind} #{short_id(entity_id_of(entity))}\nHP {entity.health:.0f}/{entity.max_health:.0f}"
-
-
-def entity_state(entity, is_player):
-    return {
-        "id": entity_id_of(entity),
-        "type": "hero" if is_player else getattr(entity, "enemy_type", entity.__class__.__name__),
-        "hp": round(entity.health, 1),
-        "max_hp": entity.max_health,
-        "pos": [round(entity.x, 1), round(entity.y, 1)],
-    }
 
 
 def world_to_screen(game, node_path):
@@ -568,142 +540,6 @@ def _track_entities_across_frames(prev_entities, curr_entities, prev_frame_shape
     }
 
 
-def generate_auto_hypothesis(summary_data, visual_analysis, combat_events, kill_count, pinned_reported, blank_frame_count):
-    """Auto-generate diagnostic hypotheses for agents based on collected data.
-    
-    This reduces agent token costs by providing pre-computed analysis instead of
-    requiring the agent to infer causes from raw data. Each hypothesis includes:
-    - issue_type: categorization for filtering
-    - description: human-readable summary
-    - evidence: data points supporting the hypothesis
-    - confidence: high/medium/low based on evidence strength
-    - suggested_checks: concrete next steps for debugging
-    
-    Returns None if no issues detected or CV2 not available."""
-    hypotheses = []
-    
-    # Check for UI rendering issues
-    ui_state = visual_analysis.get("ui_state", {})
-    frames_with_damage = visual_analysis.get("frames_with_damage_numbers", 0)
-    
-    if kill_count > 0 and frames_with_damage == 0:
-        hypotheses.append({
-            "issue_type": "UI_RENDERING",
-            "description": "Damage numbers not visible despite successful kills - UI layer may be broken or occluded",
-            "evidence": {
-                "kills_recorded": kill_count,
-                "frames_with_damage_numbers": frames_with_damage,
-                "total_screenshots": len(combat_events) if combat_events else 0,
-            },
-            "confidence": "high",
-            "suggested_checks": [
-                "Check Canvas.active status during combat",
-                "Verify DamageNumber prefab is instantiated",
-                "Check UI layer z-order vs game world",
-                "Inspect damage number parent transforms",
-            ],
-        })
-    
-    # Check for render failures
-    if blank_frame_count > 0:
-        confidence = "high" if blank_frame_count > 5 else ("medium" if blank_frame_count > 2 else "low")
-        hypotheses.append({
-            "issue_type": "RENDER_FAILURE",
-            "description": f"Blank/solid-color frames detected - graphics rendering may have failed",
-            "evidence": {
-                "blank_frames": blank_frame_count,
-                "total_samples": summary_data.get("sample_count", 0),
-                "blank_ratio": round(blank_frame_count / max(summary_data.get("sample_count", 1), 1), 3),
-            },
-            "confidence": confidence,
-            "suggested_checks": [
-                "Check GPU driver logs",
-                "Verify Panda3D pipe creation succeeded",
-                "Check for OpenGL context errors",
-                "Review panda3d.log for rendering errors",
-            ],
-        })
-    
-    # Check for motion anomalies (too little movement = stuck/freezing)
-    motion_analysis = visual_analysis.get("motion_analysis", {})
-    action_intensity = motion_analysis.get("action_intensity", "unknown")
-    
-    if action_intensity == "low" and kill_count == 0 and summary_data.get("elapsed", 0) > 10:
-        hypotheses.append({
-            "issue_type": "MOTION_ANOMALY",
-            "description": "Very low scene motion detected with no kills - entities may be frozen or stuck",
-            "evidence": {
-                "avg_motion_ratio": motion_analysis.get("avg_motion_ratio", 0),
-                "action_intensity": action_intensity,
-                "kills": kill_count,
-                "duration": summary_data.get("elapsed", 0),
-            },
-            "confidence": "medium",
-            "suggested_checks": [
-                "Check AI state machines for deadlock",
-                "Verify pathfinding is functioning",
-                "Check for animation system freezes",
-                "Review entity update loops",
-            ],
-        })
-    
-    # Check for player pinning issues
-    if pinned_reported:
-        hypotheses.append({
-            "issue_type": "PLAYER_PINNED",
-            "description": "Player was pinned at low HP for extended period without dying - possible death latch bug",
-            "evidence": {
-                "min_hp": summary_data.get("min_hp"),
-                "end_hp": summary_data.get("end_hp"),
-                "pinned_duration_threshold": 5.0,
-            },
-            "confidence": "high",
-            "suggested_checks": [
-                "Check Character.is_defeated() logic",
-                "Verify health cannot go negative",
-                "Check for damage immunity buffs",
-                "Review death state transitions",
-            ],
-        })
-    
-    # Check for entity tracking anomalies
-    entity_tracking = visual_analysis.get("entity_tracking", {})
-    total_spawned = entity_tracking.get("total_spawned", 0)
-    total_despawned = entity_tracking.get("total_despawned", 0)
-    
-    if total_spawned > 0 and total_despawned == 0 and kill_count == 0:
-        hypotheses.append({
-            "issue_type": "ENTITY_LIFECYCLE",
-            "description": "Entities spawned but none despawned - possible cleanup leak or missing death handling",
-            "evidence": {
-                "spawned": total_spawned,
-                "despawned": total_despawned,
-                "kills": kill_count,
-            },
-            "confidence": "medium",
-            "suggested_checks": [
-                "Check enemy death cleanup routines",
-                "Verify object pooling release calls",
-                "Review scene graph node removal",
-                "Check for reference cycles preventing GC",
-            ],
-        })
-    
-    # Return top hypothesis or None
-    if hypotheses:
-        # Sort by confidence (high > medium > low)
-        confidence_order = {"high": 0, "medium": 1, "low": 2}
-        hypotheses.sort(key=lambda h: confidence_order.get(h["confidence"], 3))
-        
-        return {
-            "primary_hypothesis": hypotheses[0],
-            "additional_hypotheses": hypotheses[1:],
-            "total_issues_detected": len(hypotheses),
-        }
-    
-    return None
-
-
 def _detect_ui_changes(img_array, prev_ui_state=None):
     """Detect changes in UI elements (HP bars, status icons) using color segmentation.
     
@@ -782,61 +618,30 @@ def _detect_ui_changes(img_array, prev_ui_state=None):
 
 
 def _cluster_similar_frames(screenshots_data, max_clusters=10):
-    """Cluster visually similar frames using perceptual hashes.
-    
-    Groups frames that look nearly identical, allowing agents to skip
-    redundant screenshots. Returns cluster assignments and representative
-    frame indices for each cluster.
-    
-    This reduces token costs by identifying which screenshots are worth
-    opening vs which are duplicates of already-seen situations."""
-    if not CV2_AVAILABLE or len(screenshots_data) < 2:
+    """Cluster visually similar frames by their wide perceptual hash (256-bit:
+    Rust ProbeAnalyzer or OpenCV). Returns cluster count and, for each kept
+    cluster, the index (into screenshots_data) of its first frame - agents
+    open only those instead of near-duplicates. Needs no OpenCV itself."""
+    valid = [(i, shot["phash_wide"]) for i, shot in enumerate(screenshots_data) if shot.get("phash_wide") is not None]
+    if len(valid) < 2:
         return None
-    
-    try:
-        hashes = []
-        valid_indices = []
-        
-        for i, shot in enumerate(screenshots_data):
-            phash = shot.get("phash_cv2")
-            if phash is not None:
-                hashes.append(phash)
-                valid_indices.append(i)
-        
-        if len(hashes) < 2:
-            return None
-        
-        clusters = []
-        representatives = []
-        
-        for i, h in enumerate(hashes):
-            assigned = False
-            for cluster_idx, (cluster_hashes, rep_idx) in enumerate(clusters):
-                min_dist = min(_hamming_cv2(h, ch) for ch in cluster_hashes)
-                if min_dist <= VISUAL_SIMILARITY_HAMMING_THRESHOLD:
-                    cluster_hashes.append(h)
-                    clusters[cluster_idx] = (cluster_hashes, rep_idx)
-                    assigned = True
-                    break
-            
-            if not assigned:
-                clusters.append(([h], i))
-                representatives.append(i)
-        
-        if len(clusters) > max_clusters:
-            cluster_sizes = [(len(ch), idx) for idx, (ch, _) in enumerate(clusters)]
-            cluster_sizes.sort(reverse=True)
-            top_indices = [idx for _, idx in cluster_sizes[:max_clusters]]
-            representatives = [valid_indices[i] for i in top_indices]
-        
-        return {
-            "clusters": len(clusters),
-            "representatives": representatives,
-            "compression_ratio": round(len(valid_indices) / max(len(representatives), 1), 2),
-        }
-        
-    except Exception:
-        return None
+    clusters = []  # [[hashes...], representative_frame_index]
+    for idx, h in valid:
+        for cluster in clusters:
+            if min(_hamming(h, ch) for ch in cluster[0]) <= VISUAL_SIMILARITY_HAMMING_THRESHOLD:
+                cluster[0].append(h)
+                break
+        else:
+            clusters.append([[h], idx])
+    total = len(clusters)
+    if total > max_clusters:
+        clusters = sorted(clusters, key=lambda c: -len(c[0]))[:max_clusters]
+    representatives = sorted(c[1] for c in clusters)
+    return {
+        "clusters": total,
+        "representatives": representatives,
+        "compression_ratio": round(len(valid) / max(len(representatives), 1), 2),
+    }
 
 
 def _hamming_cv2(a, b):
@@ -863,28 +668,66 @@ def _hamming(a, b):
     return bin(a ^ b).count("1")
 
 
-def analyze_screenshot(path, prev_frame_array=None):
-    """Optional (needs Pillow) visual sanity check that catches rendering
-    failures game state alone can't: a crashed graphics context, an empty
-    scene graph, or a window stuck on a loading/black screen all still leave
-    game logic (HP, positions, combat) running fine, so state.jsonl alone
-    would report a perfectly healthy run while the window shows nothing.
-    Also returns a cheap perceptual hash (`phash`) so callers can tell two
-    frames apart without a second image decode.
-    
-    With OpenCV available, additionally returns:
-    - phash_cv2: 256-bit perceptual hash (more robust than Pillow's 64-bit)
-    - ssim_ready: numpy array for SSIM comparison with other frames
-    - ui_state: detected UI elements (HP bars, damage numbers, status effects)
-    - motion_stats: optical flow metrics vs previous frame (when prev_frame_array provided)
-    - brightness_anomaly: sudden flash/fade detection
-    - entity_tracking: tracked entities from previous frame
-    
-    These advanced features enable agents to understand scene dynamics
-    without watching video sequences, reducing token costs for temporal analysis."""
+_rust_probe = {"analyzer": None}
+
+
+def _rust_analyzer():
+    """rust_core.ProbeAnalyzer, настроенный из lua_content/probe_config.lua
+    (слой контента; без lupa - дефолты Rust). Один экземпляр на прогон:
+    он помнит предыдущий кадр для motion-метрик."""
+    if not RUST_PROBE_AVAILABLE:
+        return None
+    if _rust_probe["analyzer"] is None:
+        config = {}
+        try:
+            import lupa.lua55 as lua
+            table = lua.LuaRuntime().execute((ROOT / "lua_content" / "probe_config.lua").read_text(encoding="utf-8"))
+            for key in ("blank_frame_stddev_threshold", "visual_hash_bits", "hamming_threshold",
+                        "motion_detection_threshold", "brightness_anomaly_threshold"):
+                if table[key] is not None:
+                    config[key] = table[key]
+        except Exception:
+            pass
+        _rust_probe["analyzer"] = _RustProbeAnalyzer(config)
+    return _rust_probe["analyzer"]
+
+
+def analyze_screenshot(path, prev_frame_array=None, prev_brightness=None):
+    """Visual sanity check that catches rendering failures game state alone
+    can't: a crashed graphics context, an empty scene graph, or a window stuck
+    on a loading/black screen all still leave game logic (HP, positions,
+    combat) running fine, so state.jsonl alone would report a perfectly
+    healthy run while the window shows nothing.
+
+    Backends, best first (all optional, each adds to the same dict):
+    - Rust (rust_core.ProbeAnalyzer, rust_core/src/probe): blank detection,
+      256-bit perceptual hash (`phash_wide`), brightness, edge density and
+      motion vs the previous frame - no Pillow/OpenCV needed;
+    - Pillow: blank detection + cheap 64-bit `phash` (fallback);
+    - OpenCV: UI colour segmentation, optical flow, 256-bit hash if Rust is absent.
+    `prev_brightness` is the previous frame's brightness dict (flash/fade check)."""
     result = {}
-    
-    if PIL_AVAILABLE:
+
+    analyzer = _rust_analyzer()
+    if analyzer is not None:
+        try:
+            r = analyzer.analyze_frame(Path(path).read_bytes())
+            bright = r.get("brightness") or {}
+            result.update({
+                "pixel_stddev": round(bright.get("stddev", 0.0), 2),
+                "likely_blank": bool(r.get("is_blank")),
+                "brightness_stats": {"mean": round(bright.get("mean", 0.0), 2), "std": round(bright.get("stddev", 0.0), 2)},
+                "edge_density": round(r.get("edge_density", 0.0), 4),
+                "analysis_backend": "rust",
+            })
+            if r.get("perceptual_hash"):
+                result["phash_wide"] = int(r["perceptual_hash"], 16)
+            if r.get("motion"):
+                result["motion_stats"] = r["motion"]
+        except Exception as exc:
+            result["rust_error"] = repr(exc)
+
+    if PIL_AVAILABLE and "likely_blank" not in result:
         try:
             with Image.open(path) as img:
                 gray = img.convert("L")
@@ -894,49 +737,42 @@ def analyze_screenshot(path, prev_frame_array=None):
                 "pixel_stddev": round(stddev, 2),
                 "likely_blank": stddev < BLANK_FRAME_STDDEV_THRESHOLD,
                 "phash": phash,
+                "analysis_backend": "pillow",
             })
         except Exception:
             pass
-    
+
     if CV2_AVAILABLE:
         try:
             img_bgr = cv2.imread(str(path))
             if img_bgr is not None:
-                phash_cv2 = _perceptual_hash_cv2(img_bgr)
-                result["phash_cv2"] = phash_cv2
-                
+                result.setdefault("phash_wide", _perceptual_hash_cv2(img_bgr))
                 ui_state = _detect_ui_changes(img_bgr)
                 if ui_state:
                     result["ui_state"] = ui_state
-                
-                gray_float = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY).astype(np.float32) / 255.0
-                result["ssim_ready"] = True
-                
-                edges = cv2.Canny(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY), 50, 150)
-                edge_density = np.count_nonzero(edges) / edges.size
-                result["edge_density"] = round(edge_density, 4)
-                
-                # Enhanced brightness stats with anomaly detection
-                brightness_result = _detect_brightness_anomalies(img_bgr, prev_frame_array)
-                result["brightness_stats"] = {
-                    "mean": brightness_result.get("brightness_mean", 0),
-                    "std": brightness_result.get("brightness_std", 0),
-                }
-                if brightness_result.get("anomaly"):
-                    result["brightness_anomaly"] = {
-                        "delta": brightness_result.get("brightness_delta"),
-                        "type": brightness_result.get("anomaly_type"),
-                    }
-                
-                # Motion detection via optical flow (if previous frame provided)
-                if prev_frame_array is not None:
+                if "edge_density" not in result:
+                    edges = cv2.Canny(cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY), 50, 150)
+                    result["edge_density"] = round(np.count_nonzero(edges) / edges.size, 4)
+                if "brightness_stats" not in result:
+                    b = _detect_brightness_anomalies(img_bgr)
+                    result["brightness_stats"] = {"mean": b.get("brightness_mean", 0), "std": b.get("brightness_std", 0)}
+                if prev_frame_array is not None and "motion_stats" not in result:
                     motion_stats = _compute_optical_flow(prev_frame_array, img_bgr)
                     if motion_stats:
                         result["motion_stats"] = motion_stats
-                        
         except Exception:
             pass
-    
+
+    # Flash/fade: сравнение со статистикой ПРЕДЫДУЩЕГО кадра (раньше сюда
+    # передавался сам кадр-массив вместо его статистики - проверка не работала)
+    cur = result.get("brightness_stats")
+    if cur and prev_brightness:
+        delta = abs(cur["mean"] - prev_brightness["mean"])
+        if delta > BRIGHTNESS_ANOMALY_THRESHOLD:
+            result["brightness_anomaly"] = {
+                "anomaly": True, "delta": round(delta, 2),
+                "type": "flash" if cur["mean"] > prev_brightness["mean"] else "fade",
+            }
     return result
 
 
@@ -1034,10 +870,17 @@ class WarningCollector(logging.Handler):
             self.errors.append(line)
 
 
+TIMELINE_LINES_IN_SUMMARY = 80
+
+
 def main():
+    if (sys.stdout.encoding or "").lower().replace("-", "") != "utf8":
+        # Windows + перенаправленный вывод (так его читает агент) = cp1252:
+        # спарклайны и кириллица иначе роняют print()
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     args = parse_args()
     if args.out:
-        out_dir = Path(args.out)
+        out_dir = Path(args.out).resolve()
         out_dir.mkdir(parents=True, exist_ok=True)
     else:
         # tempfile.mkdtemp atomically creates a guaranteed-new directory - a
@@ -1047,13 +890,6 @@ def main():
         base_dir = ROOT / "dev_probe_output"
         base_dir.mkdir(parents=True, exist_ok=True)
         out_dir = Path(tempfile.mkdtemp(prefix=f"{time.strftime('%Y%m%d_%H%M%S')}_", dir=str(base_dir)))
-
-    # Panda3D's own startup chatter ("Known pipe types", "all display modules
-    # loaded") goes through its internal Notify system, not Python's logging -
-    # WarningCollector/file_handler below never see it, so it's paid as fixed
-    # stdout noise on every single run regardless of --duration. Must be set
-    # before the entry module (which constructs ShowBase) is even imported.
-    loadPrcFileData("", f"notify-output {(out_dir / 'panda3d.log').as_posix()}")
 
     log_format = logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s", datefmt="%H:%M:%S")
     warning_collector = WarningCollector()
@@ -1069,14 +905,6 @@ def main():
     # WARNING+ despite looking like it captures everything.
     logging.getLogger().setLevel(logging.INFO)
 
-    if args.seed is not None:
-        random.seed(args.seed)
-        try:
-            from src.core.rng_manager import RNGConfig, RNGManager, set_default_rng
-            set_default_rng(RNGManager(RNGConfig(seed=args.seed, use_deterministic=True)))
-        except ImportError:
-            print("(!) src.core.rng_manager not importable - only Python's random module was seeded")
-
     scheduled_actions = sorted(args.action_at)  # already (float, key) tuples - validated by _parse_action_at
     fired_actions = set()
 
@@ -1087,9 +915,16 @@ def main():
     else:
         game_kwargs = {}
 
-    entry_module = importlib.import_module(args.entry_module)
-    game_cls = getattr(entry_module, args.game_class)
-    game = game_cls(**game_kwargs)
+    # Движок (звук выключен - иначе ALSA/OpenAL сыплют ~40 строк в каждый
+    # прогон; болтовня Panda3D -> panda3d.log), режим рендера, fast-часы и
+    # seed - всё в tools/probe_runtime.py, общем с agent_play.py.
+    rt = runtime.boot_game(render=args.render, fast=args.fast, fps=args.fps, seed=args.seed,
+                           notify_log=out_dir / "panda3d.log", entry_module=args.entry_module,
+                           game_class=args.game_class, game_kwargs=game_kwargs)
+    game = rt.game
+    game_cls = type(game)
+    clock = rt.now  # секунды игры: виртуальные при --fast, настенные иначе
+    can_screenshot = rt.can_screenshot()
 
     def simulate_key(key, pressed):
         set_key = getattr(game, "_set_key", None)
@@ -1098,23 +933,22 @@ def main():
             return
         set_key(key, pressed)
 
-    start_time = time.perf_counter()
-
     combat_events = []
-    combat_system = get_combat_system(game)
-    if combat_system is not None:
-        combat_system.register_event_handler(lambda info: combat_events.append({
-            "t": round(time.perf_counter() - start_time, 2),
-            "source": info.source, "target": info.target,
-            "damage": round(info.damage, 1), "critical": info.is_critical, "dodged": info.is_dodged,
-        }))
+    runtime.combat_recorder(game, clock, combat_events)
+    kill_tracker = runtime.KillTracker()
+    reported_kills = {"kills": 0, "despawns": 0}
+
+    def track_kills(task):
+        kill_tracker.update(game, clock())
+        return task.cont
+
+    game.taskMgr.add(track_kills, "dev_probe_kill_tracker", sort=100)
 
     state_log = (out_dir / "state.jsonl").open("w", encoding="utf-8")
+    samples = []
     timeline = []
     labels = {}
-    known_enemy_ids = set()
     screenshots = []
-    kill_count = 0
     low_hp_since = None
     pinned_reported = False
     min_hp_seen = {"value": None, "t": None}
@@ -1128,6 +962,7 @@ def main():
     blank_frame_count = 0
     live_repeat = {"kind": None, "count": 0}
     last_phash = {"value": None}
+    last_brightness = {"value": None}
 
     def log_event(elapsed, text, level=2, kind=None):
         # level 0 = always printed (fatal), 1 = anomalies, 2 = routine/frequent.
@@ -1139,9 +974,7 @@ def main():
         # every per-tick screenshot during a pinned/dead stretch): the first 2
         # print live, the 3rd prints one "suppressing further..." note, and the
         # rest are silent live (still fully in the timeline) until a different
-        # kind interrupts the streak. There's no live terminal here to overwrite
-        # a line on (this output is read back later from a buffered tool-call
-        # result), so collapsing-after-N is the workable equivalent.
+        # kind interrupts the streak.
         line = f"[{elapsed:6.1f}s] {text}"
         timeline.append(line)
         if level > args.verbosity:
@@ -1158,6 +991,9 @@ def main():
         print(line)
 
     def ensure_labels():
+        # Подписи над юнитами нужны только на скриншотах
+        if not can_screenshot:
+            return
         for entity, is_player in get_entities(game):
             node = getattr(entity, "node", None)
             if not node:
@@ -1172,34 +1008,34 @@ def main():
     prev_frame_array = None
     prev_entities_data = []
     entity_trajectories = []  # Accumulated entity lifecycle data
-    
+
     def take_screenshot(elapsed, reason, kind=None):
-        nonlocal blank_frame_count, prev_frame_array, prev_entities_data, entity_trajectories
+        nonlocal blank_frame_count, prev_frame_array, prev_entities_data
+        if not can_screenshot:
+            return  # render=none: картинки нет, всё остальное (state/гипотезы) работает
         idx = len(screenshots) + 1
         shot_path = out_dir / f"frame_{idx:03d}.jpg"
         game.screenshot(namePrefix=Filename.from_os_specific(str(shot_path)), defaultFilename=False)
 
-        # Pass previous frame array for motion detection
-        visual = analyze_screenshot(shot_path, prev_frame_array=prev_frame_array)
-        
-        # Store current frame array for next iteration's motion detection
+        visual = analyze_screenshot(shot_path, prev_frame_array=prev_frame_array,
+                                    prev_brightness=last_brightness["value"])
+        last_brightness["value"] = visual.get("brightness_stats")
         if CV2_AVAILABLE:
             try:
                 prev_frame_array = cv2.imread(str(shot_path))
             except Exception:
                 prev_frame_array = None
-        
-        if visual.get("phash") is not None:
-            # kind-based grouping (below/_group_consecutive_by_kind) is the
-            # main redundancy signal and works without Pillow, but where a
-            # phash IS available this gives a real pixel-level second opinion
-            # per frame instead of leaving the computed hash unused - a small
-            # Hamming distance means the frame barely changed even if its
-            # `kind` differs (e.g. the tail end of a fight settling down).
+
+        cur_hash = visual.get("phash_wide", visual.get("phash"))
+        if cur_hash is not None:
+            # kind-based grouping is the main redundancy signal; the perceptual
+            # hash is a pixel-level second opinion: a small Hamming distance
+            # means the frame barely changed even if its `kind` differs.
+            limit = VISUAL_SIMILARITY_HAMMING_THRESHOLD if "phash_wide" in visual else 4
             visual["visually_similar_to_previous"] = (
-                last_phash["value"] is not None and _hamming(visual["phash"], last_phash["value"]) <= 4
+                last_phash["value"] is not None and _hamming(cur_hash, last_phash["value"]) <= limit
             )
-            last_phash["value"] = visual["phash"]
+            last_phash["value"] = cur_hash
         if visual.get("likely_blank"):
             blank_frame_count += 1
             log_event(
@@ -1214,13 +1050,9 @@ def main():
             {**entity_state(e, is_player), "screen_xy": world_to_screen(game, e.node)}
             for e, is_player in entities if getattr(e, "node", None)
         ]
-        
-        # Entity tracking across frames
         entity_tracking_result = None
         if prev_entities_data and curr_entities_data:
-            entity_tracking_result = _track_entities_across_frames(
-                prev_entities_data, curr_entities_data, None, None
-            )
+            entity_tracking_result = _track_entities_across_frames(prev_entities_data, curr_entities_data, None, None)
             if entity_tracking_result and entity_tracking_result.get("tracked"):
                 entity_trajectories.append({
                     "t": round(elapsed, 2),
@@ -1228,31 +1060,29 @@ def main():
                     "spawned": entity_tracking_result.get("spawned", 0),
                     "despawned": entity_tracking_result.get("despawned", 0),
                 })
-        
         prev_entities_data = curr_entities_data
-        
+
         sidecar = {
             "t": round(elapsed, 2),
             "reason": reason,
             "screen_size": [game.win.getXSize(), game.win.getYSize()],
-            **visual,
+            **{k: v for k, v in visual.items() if k not in ("phash", "phash_wide")},
             "entities": curr_entities_data,
         }
         if entity_tracking_result:
             sidecar["entity_tracking"] = entity_tracking_result
-            
         (out_dir / f"frame_{idx:03d}.json").write_text(
             json.dumps(sidecar, ensure_ascii=False, indent=1), encoding="utf-8"
         )
-        screenshots.append({"name": shot_path.name, "reason": reason, "kind": kind, "t": elapsed})
-        # kind groups repeats of the SAME situation (e.g. "player dead" fires
-        # every tick by design - see the no-dedup comment below) even though
-        # `reason` itself carries a different HP number each time and would
-        # never look like a "repeat" to a naive text comparison.
+        # Визуальные метрики кладутся и в сам список скриншотов: раньше они
+        # жили только в sidecar-файлах, и все агрегаты в finish() (кластеры,
+        # keyframes, motion, damage numbers) всегда были нулями.
+        screenshots.append({"name": shot_path.name, "reason": reason, "kind": kind, "t": elapsed,
+                            **visual, "entity_tracking": entity_tracking_result or {}})
         log_event(elapsed, f"SCREENSHOT {shot_path.name} — {reason}", kind=kind)
 
     def sample(task):
-        elapsed = time.perf_counter() - start_time
+        elapsed = clock()
         run_state["last_elapsed"] = elapsed
         try:
             return _sample_body(elapsed, task)
@@ -1260,18 +1090,16 @@ def main():
             raise
         except Exception as exc:
             # Panda3D's task manager swallows plain Exceptions raised from a task
-            # callback (logs ":task(error)" and just stops rescheduling that one
-            # task) instead of letting them propagate - without this, a bug in
+            # callback instead of letting them propagate - without this, a bug in
             # here would silently hang the game forever with no summary.md ever
-            # written, instead of failing loudly. sys.exit (unlike Exception) is
-            # NOT swallowed, so it reliably reaches the try/finally around
-            # game.run() below.
+            # written. sys.exit (unlike Exception) is NOT swallowed, so it reliably
+            # reaches the try/finally around game.run() below.
             run_state["error"] = traceback.format_exc()
             log_event(elapsed, f"FATAL: sample() crashed: {exc!r}", level=0)
             sys.exit(1)
 
     def _sample_body(elapsed, task):
-        nonlocal low_hp_since, pinned_reported, sample_count, kill_count, last_periodic_shot, death_reported, death_event_count
+        nonlocal low_hp_since, pinned_reported, sample_count, last_periodic_shot, death_reported, death_event_count
         sample_count += 1
 
         for idx, (sec, key) in enumerate(scheduled_actions):
@@ -1289,21 +1117,17 @@ def main():
         entities = get_entities(game)
         entities_max["value"] = max(entities_max["value"], len(entities))
         player = next((e for e, is_player in entities if is_player), None)
-        enemies = [e for e, is_player in entities if not is_player]
 
-        current_enemy_ids = {entity_id_of(e) for e in enemies}
-        killed_ids = known_enemy_ids - current_enemy_ids
-        for enemy_id in killed_ids:
-            kill_count += 1
-            log_event(elapsed, f"enemy killed: ...{enemy_id[-8:]}")
-        known_enemy_ids.clear()
-        known_enemy_ids.update(current_enemy_ids)
+        # KillTracker (покадровый): враг, исчезнувший ЖИВЫМ (зачистка уровня),
+        # - despawn, а не убийство, как раньше считалось
+        for t, eid, etype in kill_tracker.kills[reported_kills["kills"]:]:
+            log_event(elapsed, f"enemy killed: {etype} ...{eid[-8:]}")
+        for t, eid, etype in kill_tracker.despawns[reported_kills["despawns"]:]:
+            log_event(elapsed, f"enemy despawned alive: {etype} ...{eid[-8:]}")
+        reported_kills["kills"], reported_kills["despawns"] = len(kill_tracker.kills), len(kill_tracker.despawns)
 
-        state = {
-            "t": round(elapsed, 2),
-            "player": entity_state(player, True) if player else None,
-            "enemies": [entity_state(e, False) for e in enemies],
-        }
+        state = runtime.sample_state(game, elapsed)
+        samples.append(state)
         state_log.write(json.dumps(state, ensure_ascii=False) + "\n")
         state_log.flush()
 
@@ -1320,20 +1144,16 @@ def main():
             # тик, без дедупа - если задедупить, можно пропустить именно то,
             # что интересно: например HP, скачущее вокруг 0 туда-сюда между
             # "мёртв"/"жив" из-за какого-нибудь бага (см. историю проекта).
-            # Частота и так ограничена --sample-interval, это не спам.
             if is_dead:
                 if not death_reported:
                     death_reported = True
                     death_event_count += 1
                     log_event(elapsed, "ANOMALY: player died", level=1)
                 take_screenshot(elapsed, "player dead", kind="dead_screenshot")
-                # Смерть залипающая (Character.is_defeated) - обнуляем pinned-таймер,
-                # чтобы старый low_hp_since не триггернул "pinned... without dying"
-                # уже ПОСЛЕ того, как смерть уже была зафиксирована выше.
+                # Смерть залипающая (Character.is_defeated) - обнуляем pinned-таймер
                 low_hp_since = None
             else:
                 death_reported = False
-
                 if hp_fraction < LOW_HP_FRACTION:
                     if low_hp_since is None:
                         low_hp_since = elapsed
@@ -1362,33 +1182,30 @@ def main():
         if elapsed >= args.duration:
             take_screenshot(elapsed, "run end")
             run_state["completed"] = True
-            # Call finish() explicitly before exiting since game.run() won't return
             finish()
             sys.exit(run_state["exit_code"])
         return task.again
 
     def finish():
-        # Called exactly once, from the try/finally around game.run() below - not
-        # from _sample_body - so it fires on every exit path: normal completion,
-        # an exception caught above, Escape (main.py binds it to sys.exit), or the
-        # window's own close button (Panda3D's default handler also exits).
+        # Called from _sample_body at the end AND from the try/finally around
+        # game.run() - guarded, so it runs exactly once on every exit path:
+        # normal completion, a crash, Escape or the window's close button.
         if finished["done"]:
             return
         finished["done"] = True
         state_log.close()
-        
+
         final_player = next((e for e, is_player in get_entities(game) if is_player), None)
-        hits = [e for e in combat_events if not e["dodged"]]
-        dodges = [e for e in combat_events if e["dodged"]]
-        crits = [e for e in combat_events if e["critical"]]
-        player_id = entity_id_of(final_player) if final_player else None
-        dmg_dealt = sum(e["damage"] for e in hits if e["source"] == player_id)
-        dmg_taken = sum(e["damage"] for e in hits if e["target"] == player_id)
+        player_id = entity_id_of(final_player) if final_player else analysis.player_id_of(samples)
+        stats = analysis.combat_stats(combat_events, player_id)
+        dmg_dealt, dmg_taken = stats["dealt"], stats["taken"]
+        kill_count = len(kill_tracker.kills)
+        with (out_dir / "combat.jsonl").open("w", encoding="utf-8") as f:
+            for e in combat_events:
+                f.write(json.dumps(e) + "\n")
 
         # "Completed" only means the timer ran out - the world can still be
-        # empty or broken (e.g. a scene that never loaded renders nothing, yet
-        # the sampler happily ticks to the end). Those runs must not read as OK,
-        # otherwise an agent trusts a green result from a game that isn't there.
+        # empty or broken. Those runs must not read as OK.
         fail_reasons = []
         if entities_max["value"] == 0:
             fail_reasons.append("no entities seen (scene not loaded?)")
@@ -1410,111 +1227,80 @@ def main():
         end_hp = final_player.health if final_player else None
 
         # Categorized counts, not raw timestamped lines - a before/after diff
-        # comparing these survives run-to-run timing jitter that would make a
-        # line-by-line timeline diff flag nearly everything as "changed" just
-        # because elapsed timestamps shifted a few tenths of a second.
+        # comparing these survives run-to-run timing jitter.
         event_counts = {
             "enemy_killed": kill_count,
+            "enemy_despawned": len(kill_tracker.despawns),
             "anomaly_died": death_event_count,
             "anomaly_pinned": 1 if pinned_reported else 0,
             "anomaly_blank_frame": blank_frame_count,
             "warning": len(warning_collector.records),
         }
         screenshot_reason_counts = dict(Counter(s["kind"] or s["reason"] for s in screenshots))
-        
-        # OpenCV-based visual analysis summary (when available)
+
         visual_analysis_summary = {}
-        if CV2_AVAILABLE and screenshots:
-            ui_events = sum(1 for s in screenshots if s.get("ui_state", {}).get("damage_numbers_detected"))
-            hp_changes = [s.get("ui_state", {}).get("hp_bar_percent") for s in screenshots if s.get("ui_state", {}).get("hp_bar_percent") is not None]
-            avg_edge_density = np.mean([s.get("edge_density", 0) for s in screenshots if s.get("edge_density")]) if screenshots else 0
-            
-            # Motion analysis across frames
+        if screenshots:
+            ui_events = sum(1 for s in screenshots if (s.get("ui_state") or {}).get("damage_numbers_detected"))
+            hp_readings = sum(1 for s in screenshots if (s.get("ui_state") or {}).get("hp_bar_percent") is not None)
+            edges = [s["edge_density"] for s in screenshots if s.get("edge_density") is not None]
             motion_frames = [s for s in screenshots if s.get("motion_stats")]
-            avg_motion_ratio = np.mean([s["motion_stats"]["motion_ratio"] for s in motion_frames]) if motion_frames else 0
-            high_motion_count = sum(1 for s in motion_frames if s["motion_stats"]["motion_ratio"] > 0.1)
-            
-            # Brightness anomaly detection
-            brightness_anomalies = sum(1 for s in screenshots if s.get("brightness_anomaly", {}).get("anomaly"))
-            
-            # Entity tracking summary
-            total_tracked = sum(t.get("tracked_count", 0) for t in entity_trajectories)
-            total_spawned = sum(t.get("spawned", 0) for t in entity_trajectories)
-            total_despawned = sum(t.get("despawned", 0) for t in entity_trajectories)
-            
+            ratios = [s["motion_stats"].get("motion_ratio", 0) for s in motion_frames]
+            avg_motion_ratio = sum(ratios) / len(ratios) if ratios else 0.0
             visual_analysis_summary = {
+                "backend": screenshots[0].get("analysis_backend"),
                 "frames_with_damage_numbers": ui_events,
-                "hp_bar_readings_count": len(hp_changes),
-                "avg_edge_density": round(float(avg_edge_density), 4),
-                "cv2_available": True,
+                "hp_bar_readings_count": hp_readings,
+                "avg_edge_density": round(sum(edges) / len(edges), 4) if edges else None,
                 "motion_analysis": {
                     "frames_with_motion_data": len(motion_frames),
-                    "avg_motion_ratio": round(float(avg_motion_ratio), 4),
-                    "high_motion_frames": high_motion_count,
+                    "avg_motion_ratio": round(avg_motion_ratio, 4),
+                    "high_motion_frames": sum(1 for r in ratios if r > 0.1),
                     "action_intensity": "high" if avg_motion_ratio > 0.15 else ("medium" if avg_motion_ratio > 0.05 else "low"),
-                },
-                "brightness_anomalies": brightness_anomalies,
+                } if motion_frames else None,
+                "brightness_anomalies": sum(1 for s in screenshots if s.get("brightness_anomaly")),
                 "entity_tracking": {
-                    "total_tracked_events": total_tracked,
-                    "total_spawned": total_spawned,
-                    "total_despawned": total_despawned,
+                    "total_tracked_events": sum(t.get("tracked_count", 0) for t in entity_trajectories),
+                    "total_spawned": sum(t.get("spawned", 0) for t in entity_trajectories),
+                    "total_despawned": sum(t.get("despawned", 0) for t in entity_trajectories),
                     "tracking_samples": len(entity_trajectories),
                 },
             }
-            
             clustering_result = _cluster_similar_frames(screenshots)
             if clustering_result:
                 visual_analysis_summary["frame_clustering"] = clustering_result
-            
-            # Smart keyframe extraction based on multiple signals
-            keyframe_indices = []
-            for i, s in enumerate(screenshots):
-                score = 0
-                # High motion = important
-                if s.get("motion_stats", {}).get("motion_ratio", 0) > 0.1:
-                    score += 2
-                # UI changes = important
-                if s.get("ui_state", {}).get("damage_numbers_detected"):
-                    score += 1
-                if s.get("ui_state", {}).get("hp_bar_percent") is not None:
-                    score += 1
-                # Entity events = important
-                if s.get("entity_tracking", {}).get("spawned", 0) > 0:
-                    score += 2
-                if s.get("entity_tracking", {}).get("despawned", 0) > 0:
-                    score += 2
-                # Brightness anomaly = important (flash/fade effects)
-                if s.get("brightness_anomaly", {}).get("anomaly"):
-                    score += 3
-                # First/last frame always important
-                if i == 0 or i == len(screenshots) - 1:
-                    score += 1
-                    
-                if score >= 2:
-                    keyframe_indices.append(i)
-            
-            if keyframe_indices:
-                visual_analysis_summary["smart_keyframes"] = {
-                    "indices": keyframe_indices,
-                    "count": len(keyframe_indices),
-                    "reduction_ratio": round(len(screenshots) / len(keyframe_indices), 2),
-                }
+
+        analysis_ctx = {
+            "kills": list(kill_tracker.kills), "duration": run_state["last_elapsed"],
+            "errors": list(warning_collector.errors), "error_text": run_state["error"] or "\n".join(warning_collector.errors),
+            "blank_frames": blank_frame_count, "screenshots": len(screenshots),
+            "player_crit_chance": getattr(final_player, "critical_chance", None),
+        }
+        hyps = analysis.hypotheses(samples, combat_events, analysis_ctx)
+        fc = analysis.forecast(samples, combat_events, analysis_ctx)
+
+        repro = "python tools/dev_probe.py " + " ".join(shlex.quote(a) for a in sys.argv[1:])
+        exact = args.fast and args.seed is not None
 
         summary_data = {
+            "kind": "dev_probe",
             "status": status,
             "fail_reasons": fail_reasons,
             "entities_max": entities_max["value"],
             "error_count": len(warning_collector.errors),
             "seed": args.seed,
+            "fast": args.fast,
+            "render": args.render,
             "dev_map": not args.full,
             "duration_configured": args.duration,
             "elapsed": round(run_state["last_elapsed"], 2),
+            "wall_s": round(rt.wall(), 2),
             "dmg_dealt": round(dmg_dealt, 2),
             "dmg_taken": round(dmg_taken, 2),
             "kill_count": kill_count,
-            "hits": len(hits),
-            "dodges": len(dodges),
-            "crits": len(crits),
+            "despawn_count": len(kill_tracker.despawns),
+            "hits": stats["hits"],
+            "dodges": stats["dodges"],
+            "crits": stats["crits"],
             "min_hp": round(min_hp, 2) if min_hp is not None else None,
             "min_hp_t": min_hp_t,
             "end_hp": round(end_hp, 2) if end_hp is not None else None,
@@ -1525,10 +1311,17 @@ def main():
             "event_counts": event_counts,
             "screenshot_reason_counts": screenshot_reason_counts,
             "visual_analysis": visual_analysis_summary,
-            # Auto-generated hypothesis for agents
-            "auto_hypothesis": generate_auto_hypothesis(summary_data, visual_analysis_summary, combat_events, kill_count, pinned_reported, blank_frame_count) if CV2_AVAILABLE else None,
+            "hypotheses": hyps,
+            "forecast": fc,
+            "kills_list": kill_tracker.kills,
+            "analysis_backend": analysis.kernels.BACKEND,
+            "repro": repro,
+            "repro_exact": exact,
         }
-        (out_dir / "summary.json").write_text(json.dumps(summary_data, indent=1), encoding="utf-8")
+        (out_dir / "summary.json").write_text(json.dumps(summary_data, indent=1, default=str), encoding="utf-8")
+        (out_dir / "repro.sh").write_text(
+            f"#!/bin/sh\n# {status}; {'exact replay (--fast + --seed)' if exact else 'approximate: add --fast --seed N for an exact replay'}\n{repro}\n",
+            encoding="utf-8")
 
         baseline_path = ROOT / "tools" / "dev_probe_baseline.json"
         baseline_diff_text = None
@@ -1542,7 +1335,21 @@ def main():
             except Exception as exc:
                 baseline_diff_text = f"(could not compare against {baseline_path.name}: {exc!r})"
         if args.save_baseline:
-            baseline_path.write_text(json.dumps(summary_data, indent=1), encoding="utf-8")
+            baseline_path.write_text(json.dumps(summary_data, indent=1, default=str), encoding="utf-8")
+
+        from probe_db import ingest_quietly
+        db_err = ingest_quietly(out_dir.name, {
+            "kind": "dev_probe", "dir": str(out_dir), "status": status, "seed": args.seed,
+            "duration": round(run_state["last_elapsed"], 2), "fast": args.fast, "render": args.render,
+            "errors": len(warning_collector.errors), "warnings": len(warning_collector.records),
+            "crit_chance": getattr(final_player, "critical_chance", None),
+        }, samples, combat_events, kill_tracker.kills, kill_tracker.despawns)
+
+        hp_curve = analysis.sparkline([s["player"]["hp"] for s in samples if s.get("player")])
+        shown_timeline = timeline[:TIMELINE_LINES_IN_SUMMARY]
+        if len(timeline) > len(shown_timeline):
+            (out_dir / "timeline.txt").write_text("\n".join(timeline), encoding="utf-8")
+            shown_timeline.append(f"... {len(timeline) - len(shown_timeline)} more line(s) in timeline.txt")
 
         lines = [
             f"# Dev Probe Summary — {time.strftime('%Y-%m-%d %H:%M:%S')}",
@@ -1554,210 +1361,110 @@ def main():
                 f"{' - see Crash traceback below' if status == 'CRASHED' else ' - Escape or window closed?'})"
             ),
             "",
-            *(["## Errors (first 10)", *warning_collector.errors[:10], ""] if warning_collector.errors else []),
-            f"Config: duration={args.duration}s dev_map={not args.full} seed={args.seed} "
-            f"actions={[f'{s}s:{k}' for s, k in scheduled_actions]}",
+            *(["## Errors (deduplicated)", *analysis.digest_log(warning_collector.errors, 10), ""]
+              if warning_collector.errors else []),
+            f"Config: duration={args.duration}s dev_map={not args.full} seed={args.seed} render={args.render} "
+            f"fast={args.fast} actions={[f'{s}s:{k}' for s, k in scheduled_actions]} (wall {rt.wall():.1f}s)",
+            "",
+            "## Hypotheses (auto, rule-based - verify before fixing)",
+            *analysis.format_hypotheses(hyps),
+            "",
+            "## Forecast",
+            *analysis.format_forecast(fc),
             "",
             "## Timeline",
-            *timeline,
+            *shown_timeline,
             "",
             "## Combat totals",
-            f"attacks: {len(combat_events)} ({len(hits)} hit, {len(dodges)} dodged, {len(crits)} critical)",
-            f"damage dealt by player: {dmg_dealt:.1f}",
-            f"damage taken by player: {dmg_taken:.1f}",
-            f"enemies killed: {kill_count}",
+            f"attacks: {stats['attacks']} ({stats['hits']} hit, {stats['dodges']} dodged, {stats['crits']} critical)",
+            f"damage dealt by player: {dmg_dealt:.1f}" + (f"  by type: {stats['dealt_to_type']}" if stats["dealt_to_type"] else ""),
+            f"damage taken by player: {dmg_taken:.1f}" + (f"  by type: {stats['taken_by_type']}" if stats["taken_by_type"] else ""),
+            f"enemies killed: {kill_count} (+{len(kill_tracker.despawns)} despawned alive)",
             "",
         ]
         if final_player:
             p = final_player
             lines += [
                 "## Player HP",
+                f"curve: {hp_curve}",
                 f"start: {p.max_health}/{p.max_health}  min: {min_hp:.1f} (at t={min_hp_t or 0.0:.1f}s)  "
                 f"end: {p.health:.1f}/{p.max_health}",
                 "",
             ]
         if baseline_diff_text is not None:
             lines += ["## vs baseline (tools/dev_probe_baseline.json)", baseline_diff_text, ""]
-        lines.append("## Issues detected")
-        if pinned_reported:
-            lines.append("- Player was pinned under low HP for an extended period without dying (see ANOMALY in timeline).")
         if warning_collector.records:
-            lines.append(f"- {len(warning_collector.records)} WARNING/ERROR log line(s) captured (see below).")
-        if blank_frame_count:
-            lines.append(f"- {blank_frame_count} screenshot(s) looked blank/solid-color - rendering may be broken "
-                          "despite game state looking healthy (needs Pillow to detect; see per-frame pixel_stddev "
-                          "in frame_NNN.json).")
-        elif not PIL_AVAILABLE:
-            lines.append("- Blank-frame visual check skipped (Pillow not installed: pip install pillow).")
-        
-        # OpenCV-based visual analysis issues
-        if CV2_AVAILABLE and visual_analysis_summary:
-            if visual_analysis_summary.get("frames_with_damage_numbers", 0) == 0 and kill_count > 0:
-                lines.append("- VISUAL: No damage numbers detected on screenshots despite kills recorded - UI may be broken or occluded.")
-            
-            clustering = visual_analysis_summary.get("frame_clustering", {})
-            if clustering and clustering.get("compression_ratio", 1) > 3:
-                lines.append(f"- VISUAL: Frame clustering detected {clustering['compression_ratio']}x redundancy - "
-                            f"only {len(clustering.get('representatives', []))} of {len(screenshots)} frames are visually distinct.")
-        
-        if not pinned_reported and not warning_collector.records and not blank_frame_count and PIL_AVAILABLE:
-            lines.append("- None.")
-        lines.append("")
-        if warning_collector.records:
-            shown = warning_collector.records[:30]
-            lines += ["## Warnings / errors", *shown]
-            if len(warning_collector.records) > len(shown):
-                lines.append(f"... {len(warning_collector.records) - len(shown)} more, truncated - see game.log")
-            lines.append("")
+            lines += ["## Warnings / errors (deduplicated, full text in game.log)",
+                      *analysis.digest_log(warning_collector.records, 15), ""]
         if run_state["error"]:
             lines += ["## Crash traceback", "```", run_state["error"].rstrip(), "```", ""]
 
-        # Consecutive same-`kind` screenshots (e.g. a 20-tick "player dead"
-        # stretch) collapse to their first+last representative here - opening
-        # every one of those is rarely useful, and doing so anyway is still
-        # possible: every raw frame_NNN.jpg/.json stays on disk untouched.
-        groups = _group_consecutive_by_kind(screenshots)
+        # Consecutive same-`kind` screenshots collapse to first+last; frames the
+        # perceptual-hash clustering marks as near-duplicates are skipped too.
+        # Every raw frame_NNN.jpg/.json stays on disk untouched.
         representative_shots = []
-        
-        # OpenCV-based visual clustering: further reduce screenshots by grouping
-        # visually similar frames even if they have different `kind` tags. This
-        # catches cases where the game state logic fires different events but
-        # the actual frames look nearly identical (e.g., idle animations).
-        cv2_representatives = None
-        if CV2_AVAILABLE and len(screenshots) > 3:
-            clustering = _cluster_similar_frames(screenshots, max_clusters=15)
+        if screenshots:
+            clustering = visual_analysis_summary.get("frame_clustering")
+            keep = set(clustering["representatives"]) if clustering and len(screenshots) > 3 else None
+            index_of = {id(s): i for i, s in enumerate(screenshots)}
+            lines.append("## Screenshots (each has a matching frame_NNN.json with per-entity screen_xy pixels)")
+            for group in _group_consecutive_by_kind(screenshots):
+                if keep is not None:
+                    group = [g for g in group if index_of[id(g)] in keep] or group[:1]
+                if len(group) <= 2:
+                    for s in group:
+                        lines.append(f"- {s['name']} — {s['reason']}")
+                    representative_shots.extend(group)
+                else:
+                    first, last = group[0], group[-1]
+                    lines.append(f"- {first['name']} — {first['reason']}")
+                    lines.append(f"  ... {len(group) - 2} more '{first['kind']}' frame(s) omitted (same situation) ...")
+                    lines.append(f"- {last['name']} — {last['reason']}")
+                    representative_shots.extend([first, last])
             if clustering:
-                cv2_representatives = set(clustering.get("representatives", []))
-        
-        lines.append("## Screenshots (each has a matching frame_NNN.json with per-entity screen_xy pixels)")
-        for i, group in enumerate(groups):
-            # Skip frames that are visually redundant according to OpenCV clustering
-            if cv2_representatives is not None:
-                group_representatives = [g for idx, g in enumerate(group) if (len(screenshots) <= 3) or (sum(1 for prev_group in groups[:i] for _ in prev_group) + idx) in cv2_representatives]
-                if not group_representatives:
-                    continue
-                group = group_representatives
-            
-            if len(group) <= 2:
-                for s in group:
-                    ui_info = ""
-                    if s.get("ui_state"):
-                        ui_parts = []
-                        if s["ui_state"].get("hp_bar_percent") is not None:
-                            ui_parts.append(f"HP={s['ui_state']['hp_bar_percent']}%")
-                        if s["ui_state"].get("damage_numbers_detected"):
-                            ui_parts.append("damage!")
-                        if s["ui_state"].get("status_effects_count", 0) > 0:
-                            ui_parts.append(f"{s['ui_state']['status_effects_count']} effects")
-                        if ui_parts:
-                            ui_info = f" [{', '.join(ui_parts)}]"
-                    lines.append(f"- {s['name']} — {s['reason']}{ui_info}")
-                representative_shots.extend(group)
-            else:
-                first, last = group[0], group[-1]
-                lines.append(f"- {first['name']} — {first['reason']}")
-                lines.append(f"  ... {len(group) - 2} more '{first['kind']}' frame(s) omitted (same situation, "
-                              f"still in state.jsonl/frame_NNN.jpg on disk if needed) ...")
-                lines.append(f"- {last['name']} — {last['reason']}")
-                representative_shots.extend([first, last])
+                lines.append(f"- visual clustering: {clustering['clusters']} distinct looks among {len(screenshots)} "
+                             f"frames ({clustering['compression_ratio']}x redundancy)")
+        elif not can_screenshot:
+            lines.append("## Screenshots: none (render=none - logic-only run; use --render offscreen for images)")
 
-        # For an agent's routine "does this look sane" pass: contact_sheet.jpg
-        # is the one image worth Read-ing - it's built from representative_shots
-        # (redundant runs already collapsed above), captioned per cell, so it
-        # answers that question in one vision call instead of one per frame.
-        # timelapse.gif is a human-scrubbing convenience (open in an image
-        # viewer that plays GIFs) - it is NOT a substitute for contact_sheet.jpg
-        # for an agent reading it back through a single-frame image Read.
+        # contact_sheet.jpg is the one image worth Read-ing for a routine "does
+        # this look sane" pass; timelapse.gif is a human scrubbing convenience.
         contact_sheet_name = _build_contact_sheet(out_dir, representative_shots)
         timelapse_name = _build_timelapse_gif(out_dir, [s["name"] for s in screenshots])
-        
-        # Add visual analysis section when OpenCV is available
-        if CV2_AVAILABLE and visual_analysis_summary:
-            lines += [
-                "",
-                "## Visual Analysis (OpenCV)",
-                f"- Frames with damage numbers visible: {visual_analysis_summary.get('frames_with_damage_numbers', 0)}",
-                f"- HP bar readings captured: {visual_analysis_summary.get('hp_bar_readings_count', 0)}",
-                f"- Average edge density (scene complexity): {visual_analysis_summary.get('avg_edge_density', 0)}",
-            ]
-            
-            motion = visual_analysis_summary.get("motion_analysis", {})
-            if motion:
-                lines.append(f"- Motion analysis: {motion.get('action_intensity', 'unknown')} intensity, "
-                            f"{motion.get('avg_motion_ratio', 0):.2%} avg motion ratio")
-                if motion.get("high_motion_frames", 0) > 0:
-                    lines.append(f"  High-motion frames: {motion['high_motion_frames']}")
-            
-            entity_track = visual_analysis_summary.get("entity_tracking", {})
-            if entity_track and entity_track.get("tracking_samples", 0) > 0:
-                lines.append(f"- Entity tracking: {entity_track.get('total_tracked_events', 0)} tracked events, "
-                            f"{entity_track.get('total_spawned', 0)} spawned, {entity_track.get('total_despawned', 0)} despawned")
-            
-            brightness_anomalies = visual_analysis_summary.get("brightness_anomalies", 0)
-            if brightness_anomalies > 0:
-                lines.append(f"- Brightness anomalies detected: {brightness_anomalies} (flash/fade effects)")
-            
-            smart_keyframes = visual_analysis_summary.get("smart_keyframes", {})
-            if smart_keyframes:
-                lines.append(f"- Smart keyframes: {smart_keyframes['count']} of {len(screenshots)} frames selected "
-                            f"({smart_keyframes.get('reduction_ratio', 1)}x reduction) - review these first")
-            
-            clustering = visual_analysis_summary.get("frame_clustering", {})
-            if clustering:
-                lines.append(f"- Frame clustering: {clustering.get('clusters', 0)} visual groups from {len(screenshots)} frames "
-                            f"({clustering.get('compression_ratio', 1)}x reduction)")
-                lines.append(f"- Representative frames to review: {clustering.get('representatives', [])}")
-        
-        # Auto-hypothesis section for agents
-        auto_hyp = summary_data.get("auto_hypothesis")
-        if auto_hyp:
-            lines += [
-                "",
-                "## Auto-Diagnosis (AI-generated hypothesis)",
-                f"**Primary Issue**: {auto_hyp['primary_hypothesis']['issue_type']}",
-                f"- Description: {auto_hyp['primary_hypothesis']['description']}",
-                f"- Confidence: {auto_hyp['primary_hypothesis']['confidence']}",
-                "- Suggested checks:",
-            ]
-            for check in auto_hyp["primary_hypothesis"]["suggested_checks"]:
-                lines.append(f"  • {check}")
-            
-            if auto_hyp.get("additional_hypotheses"):
-                lines.append("- Other possible issues:")
-                for hyp in auto_hyp["additional_hypotheses"]:
-                    lines.append(f"  • {hyp['issue_type']}: {hyp['description']} ({hyp['confidence']})")
-        
         lines += [
             "",
             f"Contact sheet (open this first for a whole-run visual check): {contact_sheet_name}" if contact_sheet_name
-            else "Contact sheet: skipped (needs Pillow)",
-            f"Timelapse GIF (human scrubbing convenience, not a whole-run overview image): {timelapse_name}"
-            if timelapse_name else "Timelapse GIF: skipped (needs Pillow and 2+ screenshots)",
+            else "Contact sheet: skipped (no screenshots or Pillow missing)",
+            f"Timelapse GIF (human scrubbing convenience): {timelapse_name}" if timelapse_name
+            else "Timelapse GIF: skipped",
             "",
-            f"Raw per-tick state: state.jsonl ({sample_count} samples)",
-            "Full game log: game.log",
-            "Panda3D's own engine output: panda3d.log",
-            "Machine-readable numbers (for tools/dev_probe_diff.py or your own scripting): summary.json",
+            f"Raw per-tick state: state.jsonl ({sample_count} samples); combat events: combat.jsonl",
+            "Full game log: game.log; Panda3D's own engine output: panda3d.log",
+            f"Repro ({'exact' if exact else 'approximate - add --fast --seed N for exact'}): {repro}",
+            f"DB analytics: python tools/probe_db.py stats {out_dir.name}  (why / predict / compare / trend)"
+            + (f"  (!) {db_err}" if db_err else ""),
         ]
-
         (out_dir / "summary.md").write_text("\n".join(lines), encoding="utf-8")
-        # Always printed regardless of --verbosity: one grep-able line with the
-        # handful of numbers that answer "did this run look fine" without
-        # opening summary.md at all - useful for a quick before/after smoke
-        # check where the agent only needs to know pass/fail, not the story.
+
+        # Always printed regardless of --verbosity: one grep-able line.
         print(
             f"RESULT status={status} kills={kill_count} dmg_dealt={dmg_dealt:.1f} "
             f"dmg_taken={dmg_taken:.1f} warnings={len(warning_collector.records)} "
             f"blank_frames={blank_frame_count} pinned={pinned_reported} "
             f"entities_max={entities_max['value']} errors={len(warning_collector.errors)} "
-            f"elapsed={run_state['last_elapsed']:.1f}s"
+            f"elapsed={run_state['last_elapsed']:.1f}s wall={rt.wall():.1f}s"
             + (f" reasons=\"{'; '.join(fail_reasons)}\"" if fail_reasons else "")
         )
+        top = [h for h in hyps if h["severity"] in ("high", "medium")][:2]
+        for h in top:
+            print(f"  hypothesis [{h['severity']}] {h['id']}: {h['claim']}")
         if baseline_diff_text is not None:
             tag = "CHANGED" if baseline_changed else "no change"
             print(f"vs baseline: {tag} (see '## vs baseline' in summary.md for details)")
         if args.save_baseline:
             print(f"Saved this run as the new baseline: {baseline_path}")
+        if status != "OK":
+            print(f"repro: {repro}")
         print(f"Read {out_dir / 'summary.md'} for the full story.")
 
     try:

@@ -33,8 +33,9 @@ from pathlib import Path
 
 # Импорт систем проекта
 import sys
-sys.path.insert(0, '/workspace/src')
-sys.path.insert(0, '/workspace')
+_ROOT = Path(__file__).resolve().parent.parent  # раньше: захардкоженный '/workspace' чужой песочницы
+sys.path.insert(0, str(_ROOT / 'src'))
+sys.path.insert(0, str(_ROOT))
 
 from features.advanced_items import (
     ItemDefinition, EffectEngine, ResourcePool, StatusManager,
@@ -458,7 +459,7 @@ class TrainingRoom:
     def _load_lua_configs(self) -> Dict[str, Any]:
         """Загрузка конфигураций из Lua файлов"""
         configs = {}
-        lua_path = Path('/workspace/lua_content/training_room')
+        lua_path = (_ROOT / 'lua_content' / 'training_room')
         
         if lua_path.exists():
             # Парсинг Lua файлов (упрощённо, в продакшене использовать lupa)

@@ -5,6 +5,18 @@ Purpose: Allow AI agents to send commands to the game during runtime sessions.
 
 This plugin creates a bidirectional communication channel between AI agents
 and the running game, enabling real-time intervention and testing.
+
+NOTE: for an agent that just wants to PLAY the game (the player's own
+controls, fast-forward, assertions, reproducible runs) use tools/agent_play.py
+- it drives the real game directly. This plugin is the low-level queue for
+tools that embed a probe with hooks.
+
+Commands execute on the GAME thread (drained from the 'frame_update' hook, or
+by calling process_pending() from a Panda3D task): Panda3D's scene graph is
+not thread-safe, so the old background-thread executor could corrupt it.
+Pass threaded=True only for handlers that never touch the scene graph.
+A handler that finds no matching game API returns success=False (it used to
+report success with a "..._not_found" payload, i.e. lie to the agent).
 """
 
 import json
@@ -94,8 +106,10 @@ class AgentCommandPlugin:
     - Thread-safe command processing
     """
     
-    def __init__(self, probe_instance):
+    def __init__(self, probe_instance, threaded: bool = False):
         self.probe = probe_instance
+        self.threaded = threaded
+        self._stop = threading.Event()
         self.command_queue: queue.PriorityQueue = queue.PriorityQueue()
         self.pending_commands: Dict[str, Command] = {}
         self.results: Dict[str, CommandResult] = {}
@@ -109,7 +123,8 @@ class AgentCommandPlugin:
         self._command_id_counter = 0
         
         self._register_hooks()
-        self._start_processor_thread()
+        if threaded:
+            self._start_processor_thread()
         
         print("🎮 AgentCommandPlugin initialized")
     
@@ -129,11 +144,15 @@ class AgentCommandPlugin:
     def _on_session_end(self, data: Dict[str, Any]):
         """Cleanup when session ends."""
         self._running = False
+        self.process_pending()
+        self._stop.set()
         self._flush_results()
         print("✅ AgentCommandPlugin: Session ended")
     
     def _on_frame_update(self, data: Dict[str, Any]):
-        """Update state cache on each frame."""
+        """Update state cache on each frame and run queued commands (game thread)."""
+        if not self.threaded:
+            self.process_pending()
         with self._lock:
             self.state_cache.update({
                 'timestamp': time.time(),
@@ -149,40 +168,45 @@ class AgentCommandPlugin:
         self._thread.start()
     
     def _process_commands_loop(self):
-        """Main loop for processing commands from queue."""
-        while self._running or not self.command_queue.empty():
+        """Worker loop (threaded=True only). The old loop ran `while self._running`
+        but _running is False until session_start - the thread exited right after
+        construction and no command was ever executed."""
+        while not self._stop.is_set():
             try:
-                # Get command with timeout to allow checking _running flag
-                try:
-                    priority, cmd_id, command = self.command_queue.get(timeout=0.1)
-                except queue.Empty:
-                    continue
-                
-                # Execute command
-                result = self._execute_command(command)
-                
-                # Store result
-                with self._lock:
-                    self.results[cmd_id] = result
-                    self.command_history.append({
-                        'id': cmd_id,
-                        'command': command.to_dict(),
-                        'result': result.to_dict(),
-                        'timestamp': time.time()
-                    })
-                
-                # Call callback if present
-                if command.callback:
-                    try:
-                        command.callback(result.to_dict())
-                    except Exception as e:
-                        print(f"⚠️ Callback error: {e}")
-                
-                self.command_queue.task_done()
-                
+                priority, cmd_id, command = self.command_queue.get(timeout=0.1)
+            except queue.Empty:
+                continue
+            self._run_one(cmd_id, command)
+
+    def process_pending(self, max_commands: int = 50) -> int:
+        """Execute queued commands on the calling (game) thread. Returns count."""
+        done = 0
+        while done < max_commands:
+            try:
+                priority, cmd_id, command = self.command_queue.get_nowait()
+            except queue.Empty:
+                break
+            self._run_one(cmd_id, command)
+            done += 1
+        return done
+
+    def _run_one(self, cmd_id: str, command: Command):
+        result = self._execute_command(command)
+        with self._lock:
+            self.results[cmd_id] = result
+            self.pending_commands.pop(cmd_id, None)
+            self.command_history.append({
+                'id': cmd_id,
+                'command': command.to_dict(),
+                'result': result.to_dict(),
+                'timestamp': time.time()
+            })
+        if command.callback:
+            try:
+                command.callback(result.to_dict())
             except Exception as e:
-                print(f"❌ Command processor error: {e}")
-                time.sleep(0.1)
+                print(f"⚠️ Callback error: {e}")
+        self.command_queue.task_done()
     
     def _generate_command_id(self) -> str:
         """Generate unique command ID."""
@@ -222,7 +246,8 @@ class AgentCommandPlugin:
         return cmd_id
     
     def wait_for_result(self, cmd_id: str, timeout: float = 30.0) -> Optional[CommandResult]:
-        """Wait for command result."""
+        """Wait for command result. Never call this from the game thread when
+        threaded=False: the commands run there, so it would only time out."""
         start_time = time.time()
         while time.time() - start_time < timeout:
             with self._lock:
@@ -265,7 +290,17 @@ class AgentCommandPlugin:
             
             result_data = handler(command.params)
             execution_time = time.time() - start_time
-            
+
+            status = str(result_data.get('status', '')) if isinstance(result_data, dict) else ''
+            if status.endswith(('not_found', 'not_supported')) or 'error' in (result_data or {}):
+                return CommandResult(
+                    success=False,
+                    message=f"Command {command.cmd_type.value} had no effect: {status or result_data.get('error')}",
+                    data=result_data,
+                    error=status or str(result_data.get('error')),
+                    execution_time=execution_time
+                )
+
             return CommandResult(
                 success=True,
                 message=f"Command {command.cmd_type.value} executed successfully",
@@ -290,19 +325,18 @@ class AgentCommandPlugin:
         y = params.get('y', 0)
         stats = params.get('stats', {})
         
-        if hasattr(self._game_ref, 'scene'):
-            if entity_type == 'enemy':
-                # Use game's spawn mechanism
-                if hasattr(self._game_ref.scene, 'spawn_enemy'):
-                    entity = self._game_ref.scene.spawn_enemy(x=x, y=y, **stats)
-                    return {'entity_id': getattr(entity, 'entity_id', 'unknown')}
-            
-            elif entity_type == 'item':
-                if hasattr(self._game_ref.scene, 'spawn_item'):
-                    item = self._game_ref.scene.spawn_item(x=x, y=y, **stats)
-                    return {'item_id': getattr(item, 'item_id', 'unknown')}
-        
-        return {'status': 'spawned', 'type': entity_type, 'pos': [x, y]}
+        scene = getattr(self._game_ref, 'scene', None)
+        # AI-EVOLVE world API (src/scenes/main_game_scene.py): the same
+        # _create_*_at the player's 1/2/3 keys use
+        creator = getattr(scene, f'_create_{entity_type}_at', None) if scene else None
+        if creator is not None:
+            before = len(getattr(scene, 'enemies', []))
+            creator(x, y, params.get('z', 0.5))
+            result = {'spawned': entity_type, 'pos': [x, y]}
+            if entity_type == 'enemy' and len(scene.enemies) > before:
+                result['entity_id'] = getattr(scene.enemies[-1], 'entity_id', None)
+            return result
+        return {'status': 'spawn_not_supported', 'type': entity_type}
     
     def _handle_despawn_entity(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Remove an entity from the game."""
@@ -407,15 +441,17 @@ class AgentCommandPlugin:
     
     def _handle_pause_game(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Pause the game."""
-        if hasattr(self._game_ref, 'pause'):
-            self._game_ref.pause()
+        target = self._game_ref if hasattr(self._game_ref, 'pause') else getattr(self._game_ref, 'scene', None)
+        if hasattr(target, 'pause'):
+            target.pause()
             return {'paused': True}
         return {'status': 'pause_not_supported'}
     
     def _handle_resume_game(self, params: Dict[str, Any]) -> Dict[str, Any]:
         """Resume the game."""
-        if hasattr(self._game_ref, 'resume'):
-            self._game_ref.resume()
+        target = self._game_ref if hasattr(self._game_ref, 'resume') else getattr(self._game_ref, 'scene', None)
+        if hasattr(target, 'resume'):
+            target.resume()
             return {'resumed': True}
         return {'status': 'resume_not_supported'}
     

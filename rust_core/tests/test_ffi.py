@@ -68,3 +68,54 @@ def test_deterministic_generation():
     # Both should succeed (determinism verified at Rust level)
     assert world1 is not None
     assert world2 is not None
+
+
+# ---------------------------------------------------------------- RunAnalytics
+# Kernels for tools/probe_analysis.py. Columns cross the FFI as binary buffers
+# (array.array / numpy / memoryview), tables as struct-of-arrays objects.
+
+from array import array
+
+
+def test_run_analytics_alias():
+    assert rust_core.RunAnalytics is rust_core.PyRunAnalytics
+
+
+def test_run_analytics_linear_fit_and_sparkline():
+    ra = rust_core.RunAnalytics
+    assert ra.linear_fit(array("d", [0, 1, 2]), array("d", [1, 3, 5])) == (2.0, 1.0)
+    assert ra.linear_fit(array("d", [1, 1]), array("d", [0, 5])) is None
+    assert ra.sparkline(array("d", [0.0, 7.0])) == "▁█"
+    assert ra.sparkline(array("d")) == ""  # empty buffers (unaligned pointer in CPython) are fine
+
+
+def test_run_analytics_rejects_non_buffers_and_bad_lengths():
+    ra = rust_core.RunAnalytics
+    with pytest.raises(TypeError):
+        ra.sparkline([1.0, 2.0])  # plain lists have no buffer protocol
+    with pytest.raises(ValueError):
+        ra.pinned_interval(array("d", [0, 1]), array("d", [1]), array("d", [1]), array("B", [1]), 0.2, 1.0)
+
+
+def test_run_analytics_scan_hero_table():
+    class Table:
+        ts = array("d", [0, 1, 2])
+        hp = array("d", [100, 50, 0])
+        max_hp = array("d", [100, 100, 100])
+        x = array("d", [0, 0, 0])
+        y = array("d", [0, 0, 0])
+        alive = array("B", [1, 1, 0])
+        offsets = array("Q", [0, 1, 1, 2])
+        ex = array("d", [3, 1])
+        ey = array("d", [4, 0])
+
+    scan = rust_core.RunAnalytics.scan_hero(Table, {"spark_width": 24}, array("d"))
+    assert scan["death_t"] == 2.0
+    assert scan["min_nearest"] == 1.0
+    assert scan["invalid_count"] == 0
+    assert scan["hp_sparkline"] == "█▅▁"
+
+
+def test_run_analytics_log_digest():
+    digest, distinct = rust_core.RunAnalytics.log_digest(["12:00:00 a 5", "12:00:01 a 7", "b"], 5)
+    assert digest == [(2, "a 5"), (1, "b")] and distinct == 2

@@ -9,7 +9,9 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 
 try:
-    import lupa.lua_runtime
+    # lupa 2.x: модуля lupa.lua_runtime нет (импорт всегда падал, и Lua-конфиг
+    # молча не грузился). Стандарт проекта - Lua 5.5.
+    import lupa.lua55 as lupa_lua
     LUPA_AVAILABLE = True
 except ImportError:
     LUPA_AVAILABLE = False
@@ -35,7 +37,7 @@ class LuaConfigLoader:
         
         if LUPA_AVAILABLE:
             try:
-                self._lua_runtime = lupa.lua_runtime.LuaRuntime()
+                self._lua_runtime = lupa_lua.LuaRuntime()
                 logger.debug("Lua runtime initialized")
             except Exception as e:
                 logger.warning(f"Failed to initialize Lua runtime: {e}")
