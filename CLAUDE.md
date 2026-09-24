@@ -45,6 +45,7 @@ Drill down only when a line fails — first tool that answers the question:
 | Why did the hero AI do that / bosses | `agent_play "...; story"` · `qa.py gauntlet [--campaign --lives 5 --trace]` |
 | Visual regression between runs | `python tools/dev_probe_diff.py --before A --after B --frames` |
 | Pathfinding (A*/JPS/flow field) | `python tools/bench_pathfinding.py` · `pytest tests/test_pathfinding.py` (`AI_EVOLVE_PATHFINDING=python` = twin) |
+| Damage (types, resist, armor + pen, block, accuracy) | `docs/DAMAGE_PIPELINE.md` (stage table) · `pytest tests/test_damage_pipeline.py` · `python tools/bench_damage.py` (`AI_EVOLVE_DAMAGE=python` = twin; numbers in `lua_content/damage.lua`) |
 | Code quality: SOLID/DRY/SRP/SSOT | `qa.py quality --worst 10` (top offenders + SRP hint) · `--explain BLE001` (what/fix) · `--update-baseline` (1 s; part of `qa.py check`) |
 | Lua / items without reading Lua | `qa.py lua show FILE --keys\|--key a.b` · `qa.py item diff FILE\|digest FILE\|all` · `python -m tools.effect_schema.itemcheck FILE` |
 | Build an item like a designer | `tools/web_builder/headless.py` (`UI().pick("Шаблон из каталога", "venom_bite")…click("Проверить предмет (itemcheck)")`) |
@@ -76,7 +77,7 @@ today's violations are the baseline (`tests/quality_baseline.json`: per metric, 
 
 - Read only the `RESULT`/verdict line first; open `summary.md` / `session.json` only if pointed there. Never read `state.jsonl`/`game.log` raw — use `probe_db.py`.
 - `--fast` + a seed (agent_play defaults to seed 1) = byte-for-byte reproducible; every failing run prints `repro:` (also `repro.sh` in the run dir).
-- The player's levers in agent_play: `spawn enemy|trap|chest|boss` (keys 1-4), `attack`, `interact`, `emotion calm|rage|fear|curiosity|greed|resolve`,
+- The player's levers in agent_play: `spawn enemy|trap|chest|boss` (`spawn enemy golem_shard x3` = a bestiary kind) (keys 1-4), `attack`, `interact`, `emotion calm|rage|fear|curiosity|greed|resolve`,
   `direct north|south|east|west|chest|exit|npc|none`. They shift the hero's interest (`src/gameplay/hero_drive.py`), never command him; `observe` shows
   `mood/directive/goal/stance`. Keys: `lua_content/dev_tools.lua` → `agent.player_keys`, `lua_content/hero_mind.lua`. Templates: `--list-scenarios`, `--scenario swarm`.
   Turn-based: `agent_play.py --serve --port 8765` in the background, `curl -s localhost:8765/do -d 'wait 5; observe'`, `curl -s -X POST localhost:8765/quit`.

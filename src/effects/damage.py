@@ -256,13 +256,22 @@ def resolve_hit(params: Sequence[float], rolls: Sequence[float], consts: Sequenc
     return resolve_hit_py(params, rolls, consts)
 
 
+def _buffer(col: Any) -> Any:
+    """The Rust batch reads buffers (array('d'), numpy); a plain list becomes an array('d')."""
+    try:
+        memoryview(col)
+    except TypeError:
+        return array("d", col)
+    return col
+
+
 def resolve_hits(params_cols: Sequence[Any], rolls_cols: Sequence[Any], consts: Sequence[float],
                  backend: Optional[str] = None) -> tuple:
-    """Many hits from column buffers (array('d') / numpy / lists), one column per PARAMS and per roll. Rolls must be
+    """Many hits from columns (array('d') / numpy / plain lists), one column per PARAMS and per roll. Rolls must be
     complete for every hit that needs them; a row with `need` != 0 lacks one. Returns one array('d') per OUT_FIELDS."""
     if _use_rust(backend):
         cols = []
-        for raw in _rc.resolve_hits(list(params_cols), list(rolls_cols), list(consts)):
+        for raw in _rc.resolve_hits([_buffer(c) for c in params_cols], [_buffer(c) for c in rolls_cols], list(consts)):
             col = array("d")
             col.frombytes(raw)
             cols.append(col)

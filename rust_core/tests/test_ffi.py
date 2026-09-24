@@ -1,4 +1,6 @@
 """Tests for Rust FFI module"""
+from array import array
+
 import pytest
 import rust_core
 
@@ -157,3 +159,21 @@ def test_lua_content_errors_are_value_errors():
         lc.load_json("while true do end", max_instructions=100_000)
     with pytest.raises(ValueError, match="not enough memory|memory"):
         lc.load_json("local t = {} for i = 1, 1e8 do t[i] = i end", memory_mb=8)
+
+
+def test_damage_kernel_resolve_hit_and_batch():
+    """rust_core.resolve_hit / resolve_hits (src/effects/damage.py: PARAMS, CONSTS, OUT_FIELDS order)."""
+    nan = float("nan")
+    consts = [100.0, 5.0, 100.0, 50.0, 0.0, -100.0, 90.0, 100.0, 1.15, 1.0, 0.0]
+    params = [20.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.5, 0.0, 0.0, 0.0, 3.0, 0.0, 0.0, 0.0]   # 20 damage, armor 3
+    need, *_ = rust_core.resolve_hit(params, [nan] * 5, consts)
+    assert need == 2                                            # the dodge roll (index 1) is wanted first
+    out = rust_core.resolve_hit(params, [nan, 0.9, nan, 0.9, nan], consts)
+    assert out[0] == 0 and out[1] == 1 and out[5] == 20.0 and out[7] == 3.0 and out[10] == 17.0
+    col = lambda *v: array("d", v)  # noqa: E731 - columns are buffers (array('d'), numpy)
+    cols = rust_core.resolve_hits([col(v, v) for v in params],
+                                  [col(nan, nan), col(0.9, 0.9), col(nan, nan), col(0.9, 0.9), col(nan, nan)], consts)
+    assert len(cols) == 11 and all(len(c) == 16 for c in cols)   # 2 hits x 8 bytes
+    with pytest.raises(ValueError):
+        rust_core.resolve_hit(params[:3], [nan] * 5, consts)
+
