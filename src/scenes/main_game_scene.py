@@ -9,6 +9,13 @@ from panda3d.core import CardMaker, TransparencyAttrib
 
 logger = logging.getLogger(__name__)
 
+class LootBagTarget:
+    """Мешок добычи как цель ИИ героя (x, y как у сундука)."""
+
+    def __init__(self, bag):
+        self.x, self.y = bag["x"], bag["y"]
+
+
 class EnhancedGameScene:
     """Улучшенная игровая сцена с правильным рендерингом"""
     
@@ -39,10 +46,12 @@ class EnhancedGameScene:
         # и никогда не менялся: враг, заспавненный на 10-й минуте партии,
         # ничем не отличался от заспавненного в первую секунду.
         self.world_start_time = time.time()
-        self.enemy_level_up_interval = 10.0 if dev_mode else 30.0  # секунд на +1 уровень врагам
+        # +1 уровень врагам за каждые N минут сессии (lua_content/world.lua -> progression)
+        self.enemy_level_up_interval = 60.0 * self._minutes_per_enemy_level()
         
         # Система создания объектов игроком
         self.player_created_objects = []
+        self.player_spawns = 0          # сколько врагов создал игрок (клавиша 1) за сессию
         self.creation_mode = None  # None, "enemy", "trap", "chest"
         
         # Маяк смерти
@@ -66,11 +75,52 @@ class EnhancedGameScene:
         self.last_echo_refresh_time = 0.0
         self._runtime_task_names = set()
         self._opened_chest_ids = set()
+
+        # Единый менеджер эффектов (удары, навыки, зелья, предметы) и инвентари
+        self.effects = None
+        self.hero_inventory = None
+        self.hero_inventory_brain = None
+        self.enemy_brains = {}          # id(enemy) -> InventoryBrain (элиты, боссы)
+        self.enemy_inventories = {}     # id(enemy) -> Inventory
+        self.allies = []                # призванные союзники героя
+        self.loot_bags = []             # {"x", "y", "gold", "items", "node"}
+        self.messages = []              # (время, текст) - лента событий для HUD
+        self.game_time = 0.0
+        self.rng = random
+
+        # Мир из 80 уровней, боссы, циклы (новая игра+), прогрессия героя
+        self.plan = None
+        self.level_info = None
+        self.cycle = 0                  # сколько раз мир пройден целиком
+        self.boss_queue = []            # боссы уровня по очереди (финал: Люцифер, затем Орден Узла)
+        self.active_bosses = []
+        self.victories = 0
+        self.hero_growth = None
+        self._kill_times = []
+        self._close_call = False
+        self._telegraph_watch = {}
+        self._exit_block_logged = False
+
+        # Враги учатся против героя: общая память тактик (бандит rust_core) и мозги врагов
+        self.tactics = None
+        self.combat_brains = {}         # entity_id врага -> EnemyBrain
+        self.attack_slots = None        # очередь на удар по герою (3 ближних + 2 дальних)
         
     def enter(self):
         """Вход в игровую сцену"""
         logger.info("Entering enhanced game scene...")
-        
+
+        from src.effects.abilities import load_abilities
+        from src.effects.manager import EffectManager
+        self.effects = EffectManager(world=self, abilities=load_abilities())
+        self.game.effect_manager = self.effects
+        self.effects.register_event_handler(self._on_hit)
+        from src.gameplay.tactics import TacticsMemory, memory_path
+        self.tactics = TacticsMemory(memory_path())
+        from src.gameplay.enemy_ai import AttackSlots
+        from src.gameplay.progression import progression
+        self.attack_slots = AttackSlots(**(progression().get("attack_slots") or {}))
+
         # Создаем игровой мир
         self._create_world()
         
@@ -87,6 +137,7 @@ class EnhancedGameScene:
         self._create_exit_beacon()
         self._spawn_exit_hint_maps()
         self._spawn_exit_hint_npcs()
+        self._start_level()
         
         # Настраиваем камеру
         self._setup_camera()
@@ -359,6 +410,116 @@ class EnhancedGameScene:
         # Создаем игрока немного выше земли
         self.player = Character("player_1", self.game, 0, 0, 0.5, "warrior", (0, 0, 1, 1), is_player=True)  # Синий цвет
         self.player.create_character()
+        self._equip_hero()
+
+    def _equip_hero(self):
+        """Регистрация героя в менеджере эффектов, инвентарь и стартовый набор."""
+        from src.gameplay.inventory import Inventory, InventoryBrain
+        from src.gameplay.items import catalog
+        if self.effects is None or self.player is None:
+            return
+        self.effects.register(self.player, "hero")
+        player = self.player
+        self.hero_inventory = Inventory(
+            player, capacity=20, gold=20,
+            on_change=lambda inv: self.effects.equip(player, inv.equipped.values()))
+        self.hero_inventory_brain = InventoryBrain(self.hero_inventory, role=player.character_class)
+        player.inventory = self.hero_inventory
+        from src.gameplay.progression import HeroGrowth
+        self.hero_growth = HeroGrowth(player.character_class)
+        from src.gameplay.hero_drive import HeroDrive
+        from src.gameplay.hero_mind import HeroMind, mind_path
+        player.drive = HeroDrive()
+        player.mind = HeroMind(player, mind_path(), inventory_brain=self.hero_inventory_brain)
+        cat = catalog()
+        weapon = {"mage": "apprentice_staff", "rogue": "worn_dagger"}.get(player.character_class, "rusty_sword")
+        for item_id in (weapon, "leather_armor", "health_potion", "health_potion"):
+            item = cat.get(item_id)
+            if item is not None:
+                self.hero_inventory.add(item)
+                if item.equippable:
+                    self.hero_inventory.equip(item)
+
+    # ---------------------------------------------------------------- мир для менеджера эффектов
+    def clamp_position(self, x, y):
+        """Не выходить за стены карты (рывки, отбрасывания)."""
+        half = self.world_size / 2 - 1.0
+        return max(-half, min(half, x)), max(-half, min(half, y))
+
+    def entities(self):
+        """Все сущности мира (для способностей по площади)."""
+        out = [self.player] if self.player is not None else []
+        return out + list(self.enemies) + list(self.allies)
+
+    def visible_enemies(self, observer):
+        """Враги, которых observer замечает (обзор и стелс - менеджер эффектов)."""
+        if self.effects is None or self.effects.state(observer) is None:
+            return list(self.enemies)
+        return [e for e in self.enemies if self.effects.can_see(observer, e)]
+
+    def spawn_summon(self, kind, x, y, faction, level, owner):
+        """Призыв (операция summon): враг на стороне призвавшего."""
+        from src.gameplay.world import make_enemy
+        creature = make_enemy(self.game, kind, max(1, int(level)), x, y, self._plan())
+        if getattr(self.game, "render", None) is not None:
+            creature.create_enemy()
+        creature.summoned_by = owner
+        if faction == "hero":
+            self.allies.append(creature)
+            if self.effects is not None:
+                self.effects.register(creature, "hero")
+        else:
+            self._register_enemy(creature)
+            self.enemies.append(creature)
+        self.log_message(f"призван {kind}")
+        return creature
+
+    def _register_enemy(self, enemy):
+        """Враг в менеджере эффектов + снаряжение по таблице добычи (элиты и боссы пьют зелья)."""
+        if self.effects is None:
+            return
+        from src.gameplay.inventory import Inventory, InventoryBrain
+        from src.gameplay.loot import outfit
+        from src.gameplay.progression import perk_effects
+        self.effects.register(enemy, "monsters")
+        from src.gameplay.enemy_ai import EnemyBrain
+        enemy.brain = EnemyBrain(enemy, self.effects, self.tactics, self.rng, others=lambda: self.enemies,
+                                 slots=self.attack_slots)
+        self.combat_brains[str(enemy.entity_id)] = enemy.brain
+        inv = Inventory(enemy, capacity=8,
+                        on_change=lambda inv, e=enemy: self.effects.equip(e, inv.equipped.values()))
+        outfit(inv, getattr(enemy, "loot_class", enemy.enemy_type), self.rng)
+        if getattr(enemy, "attributes", None):
+            self.effects.set_perks(enemy, perk_effects(enemy.attributes))
+        enemy.inventory = inv
+        self.enemy_inventories[id(enemy)] = inv
+        if inv.bag or inv.equipped:
+            self.enemy_brains[id(enemy)] = InventoryBrain(inv, role="monster", heal_at=0.3)
+
+    def _on_hit(self, info):
+        """Каждое попадание менеджера -> счёт схватки у мозга врага (для памяти тактик)."""
+        if self.player is None:
+            return
+        hero_id = str(self.player.entity_id)
+        mind = getattr(self.player, "mind", None)
+        if mind is not None:
+            mind.note_hit(info, hero_id)
+        for key in (info.source, info.target):
+            brain = self.combat_brains.get(key)
+            if brain is not None:
+                brain.note_hit(info, hero_id)
+
+    def _forget_enemy(self, enemy, hero_died=False):
+        """Враг покидает мир: итог его схватки - в память тактик, снять с менеджера."""
+        brain = self.combat_brains.pop(str(getattr(enemy, "entity_id", "")), None)
+        if brain is not None:
+            brain.finish(hero_died=hero_died)
+        if self.effects is not None:
+            self.effects.unregister(enemy)
+
+    def log_message(self, text):
+        self.messages.append((self.game_time, text))
+        del self.messages[:-50]
         
     def _create_hud(self):
         """Создание HUD"""
@@ -367,6 +528,148 @@ class EnhancedGameScene:
         self.hud = EnhancedHUD(self.game)
         self.hud.create_hud()
         
+    @staticmethod
+    def _minutes_per_enemy_level() -> float:
+        try:
+            from src.gameplay.progression import progression
+            return float(progression()["minutes_per_enemy_level"])
+        except Exception:
+            return 5.0
+
+    def _plan(self):
+        if self.plan is None:
+            from src.gameplay.world import world_plan
+            self.plan = world_plan()
+        return self.plan
+
+    def enemy_level(self) -> int:
+        """Уровень мира + бонус за пройденные циклы + 1 за каждые N минут сессии."""
+        from src.gameplay.progression import progression
+        return (self.current_level + int(progression()["cycle_level_bonus"]) * self.cycle
+                + self._current_enemy_level_bonus())
+
+    def _spawn_enemy(self, enemy_type, x, y, player_created=False):
+        """Враг из бестиария (или босс) с уровнем по правилам прогрессии."""
+        from src.gameplay.world import make_enemy
+        enemy = make_enemy(self.game, enemy_type, self.enemy_level(), x, y, self._plan())
+        if getattr(self.game, "render", None) is not None:
+            enemy.create_enemy()
+        self._register_enemy(enemy)
+        self.enemies.append(enemy)
+        if player_created:
+            self.player_created_objects.append(enemy)
+            self.player_spawns += 1
+        return enemy
+
+    # ---------------------------------------------------------------- уровни и боссы
+    def _start_level(self):
+        plan = self._plan()
+        self.level_info = info = plan.info(self.current_level)
+        self.boss_queue = plan.final_sequence(self.current_level) if info.boss else []
+        self.active_bosses = []
+        self._exit_block_logged = False
+        cycle = f" (цикл {self.cycle + 1})" if self.cycle else ""
+        self.log_message(f"Уровень {self.current_level}: {info.name}{cycle}")
+        if self.boss_queue:
+            self._spawn_next_boss()
+
+    def _spawn_next_boss(self):
+        if not self.boss_queue:
+            return None
+        boss_type = self.boss_queue.pop(0)
+        ex, ey, _ez = self.exit_beacon_position or (0.0, 0.0, 0.0)
+        # страж выхода; Люцифер вмёрз прямо в озеро у выхода
+        offset = 0.0 if boss_type == "lucifer" else 4.0
+        boss = self._spawn_enemy(boss_type, ex + offset, ey + offset)
+        boss.is_boss = True
+        self.active_bosses.append(boss)
+        line = (getattr(boss, "dialog", {}) or {}).get("spawn")
+        self.log_message(f"{getattr(boss, 'display_name', boss_type)}" + (f": «{line}»" if line else " появляется"))
+        return boss
+
+    def _on_boss_death(self, boss):
+        from src.gameplay.progression import xp_for
+        line = (getattr(boss, "dialog", {}) or {}).get("death")
+        if line:
+            self.log_message(f"{getattr(boss, 'display_name', boss.enemy_type)}: «{line}»")
+        self._award("boss_kill", "Босс повержен")
+        if boss in self.active_bosses:
+            self.active_bosses.remove(boss)
+        if self.boss_queue:
+            self._spawn_next_boss()
+        elif not self.active_bosses:
+            if self.level_info is not None and self.level_info.is_final:
+                self._complete_cycle()
+            else:
+                self.log_message("Путь к выходу открыт")
+
+    def _complete_cycle(self):
+        """Финал пройден: мир собирается заново, враги становятся сильнее (новая игра+)."""
+        self.victories += 1
+        self.cycle += 1
+        self.log_message(f"Цикл {self.cycle} завершён. Мир собран заново - и враги помнят тебя.")
+        if hasattr(self.game, "state_manager") and self.game.state_manager is not None:
+            try:
+                self.game.state_manager.set_state("game_phase", "cycle_complete")
+            except Exception:
+                pass
+        self.current_level = 0
+        self._advance_to_next_level(award=False)
+
+    def _award(self, activity, text=""):
+        """Опыт только за активности (lua_content/world.lua -> progression.xp)."""
+        from src.gameplay.progression import xp_for
+        amount = xp_for(activity)
+        if amount and self.player is not None:
+            self.player.add_experience(amount)
+            if text:
+                self.log_message(f"{text} +{amount} опыта")
+
+    def _update_hero_progress(self):
+        """Очки характеристик героя, перки, «уроки» от ран."""
+        from src.gameplay.progression import perk_effects
+        player = self.player
+        if player is None or self.hero_growth is None:
+            return
+        frac = player.health / max(1.0, player.max_health)
+        if frac < 0.3 and not self._close_call:
+            self._close_call = True
+            self.hero_growth.note_close_call()
+        elif frac > 0.6:
+            self._close_call = False
+        if getattr(player, "attribute_points", 0) > 0:
+            spent = self.hero_growth.spend(player)
+            if self.effects is not None:
+                self.effects.set_perks(player, perk_effects(player.attributes))
+                st = self.effects.state(player)
+                if st is not None:
+                    st.refresh(self.effects.now)
+            names = {"strength": "силы", "agility": "ловкости", "intelligence": "интеллекта", "vitality": "живучести",
+                     "wisdom": "мудрости", "endurance": "выносливости", "luck": "удачи", "charisma": "харизмы"}
+            self.log_message(f"Уровень {player.level}: " + ", ".join(f"+{int(v)} {names.get(a, a)}" for a, v in spent.items()))
+
+    def _track_tricks(self):
+        """Трюки героя: ушёл из круга навыка босса, серия убийств, убийство на грани."""
+        if self.effects is None or self.player is None:
+            return
+        px, py = self.player.x, self.player.y
+        live = {id(tg): tg for tg in self.effects.telegraphs}
+        for key, tg in live.items():
+            if key not in self._telegraph_watch:
+                self._telegraph_watch[key] = (tg, math.hypot(px - tg.x, py - tg.y) <= tg.radius)
+        for key in [k for k in self._telegraph_watch if k not in live]:
+            tg, was_inside = self._telegraph_watch.pop(key)
+            if was_inside and self.player.is_alive() and math.hypot(px - tg.x, py - tg.y) > tg.radius:
+                self._award("trick_dodge", f"Трюк: ушёл из-под «{tg.ability.get('name', tg.ability['id'])}»")
+
+    def _on_hero_kill(self):
+        now = self.game_time
+        self._kill_times = [t for t in self._kill_times if now - t <= 2.0] + [now]
+        if len(self._kill_times) == 2:
+            self._award("trick_multikill", "Трюк: двойное убийство")
+        if self.player is not None and self.player.health < 0.2 * self.player.max_health:
+            self._award("trick_clutch", "Трюк: убийство на грани")
+
     def _current_enemy_level_bonus(self) -> int:
         """Сколько дополнительных уровней получает враг, спавнящийся ПРЯМО
         СЕЙЧАС - растёт автоматически с течением времени партии (см.
@@ -378,7 +681,6 @@ class EnhancedGameScene:
 
     def _spawn_initial_enemies(self):
         """Создание начальных врагов"""
-        from src.entities.enemy import EnhancedEnemy
 
         # Создаем несколько врагов на удалённых позициях по краям арены,
         # чтобы игрок сначала двигался, а не сразу вступал в бой.
@@ -389,13 +691,9 @@ class EnhancedGameScene:
             (-self.world_size * 0.3, -self.world_size * 0.3, 0.5)
         ]
 
-        level_bonus = self._current_enemy_level_bonus()
+        plan = self._plan()
         for i, (x, y, z) in enumerate(enemy_positions):
-            enemy_type = "basic" if i < 2 else "strong"
-            enemy = EnhancedEnemy(self.game, x, y, z, enemy_type)
-            enemy.create_enemy()
-            enemy.apply_level_bonus(level_bonus)
-            self.enemies.append(enemy)
+            self._spawn_enemy(plan.pick_enemy(self.current_level, self.rng, elite_chance=0.0 if i < 2 else 0.3), x, y)
             
     def _setup_camera(self):
         """Настройка камеры"""
@@ -485,6 +783,12 @@ class EnhancedGameScene:
         """Обновление игровой сцены"""
         if self.is_paused:
             return
+        self.game_time += dt
+        if self.effects is not None:
+            self.effects.update(dt)
+        self._update_inventories(dt)
+        self._update_hero_progress()
+        self._track_tricks()
             
         # Обновляем игрока
         if self.player and self.player.is_alive():
@@ -505,21 +809,26 @@ class EnhancedGameScene:
             if self.player.health_bar:
                 self.player.health_bar.update(self.player.health / self.player.max_health)
 
+            # Разум героя: стойка на низком HP (учится, стоит ли давить)
+            mind = getattr(self.player, "mind", None)
+            if mind is not None and self.effects is not None:
+                mind.update(dt, bool(self.visible_enemies(self.player)), self.effects.now)
+
             # Обновляем ИИ персонажа
             self._consume_reached_echo_points()
             ai_known_exits = list(self.known_exit_positions) + list(self.echo_trail_points)
             self.player.update_ai(
-                self.enemies,
+                self.visible_enemies(self.player),
                 self._get_interactive_items(),
                 dt,
                 exit_position=self.exit_beacon_position,
-                vision_range=self.player_vision_range,
+                vision_range=getattr(self.player, "vision_range", self.player_vision_range),
                 known_exit_positions=ai_known_exits,
                 hint_positions=self._get_hint_positions()
             )
 
             # Автоматическое использование скилов
-            self.player.use_skill_automatically(self.enemies, dt)
+            self.player.use_skill_automatically(self.visible_enemies(self.player), dt)
         elif self.player and self.player.health_bar:
             self.player.health_bar.update(0.0)
 
@@ -535,8 +844,15 @@ class EnhancedGameScene:
                 # нигде не читался - убийства не давали опыта вообще.
                 if self.player:
                     self.player.add_experience(getattr(enemy, "experience_reward", 0))
+                    self._on_hero_kill()
+                self._drop_enemy_loot(enemy)
+                if getattr(enemy, "is_boss", False):
+                    self._on_boss_death(enemy)
+                self._forget_enemy(enemy)
                 enemy.destroy()
-                self.enemies.remove(enemy)
+                # смерть последнего босса могла уже пересобрать мир (новый уровень/цикл)
+                if enemy in self.enemies:
+                    self.enemies.remove(enemy)
                 if enemy in self.player_created_objects:
                     self.player_created_objects.remove(enemy)
                 
@@ -561,12 +877,72 @@ class EnhancedGameScene:
             self._handle_player_death()
             
     def _get_interactive_items(self):
-        """Список интерактивных объектов для AI (например, сундуков)."""
+        """Список интерактивных объектов для AI: сундуки и мешки добычи."""
         chests = []
         for obj in self.player_created_objects:
             if hasattr(obj, 'getName') and obj.getName() == 'chest':
                 chests.append(obj)
-        return chests
+        return chests + [LootBagTarget(bag) for bag in self.loot_bags]
+
+    # ---------------------------------------------------------------- инвентари и добыча
+    def _update_inventories(self, dt):
+        """Решения ИИ по инвентарю: зелья, экипировка, карты (герой и враги)."""
+        if self.effects is None:
+            return
+        if self.player is not None and self.player.is_alive() and self.hero_inventory_brain is not None:
+            before = len(self.hero_inventory.log)
+            self.hero_inventory_brain.update(
+                dt, lambda item: self.effects.use_item(self.player, item), self._learn_from_item)
+            for line in self.hero_inventory.log[before:]:
+                self.log_message(f"Герой {line}")
+        for enemy in self.enemies:
+            brain = self.enemy_brains.get(id(enemy))
+            if brain is not None and enemy.is_alive():
+                act = brain.update(dt, lambda item, e=enemy: self.effects.use_item(e, item))
+                if act and act.startswith("potion"):
+                    self.log_message(f"{enemy.enemy_type} выпил зелье")
+        self._pickup_loot_bags()
+
+    def _learn_from_item(self, item):
+        """Карта или артефакт: знание о выходе."""
+        reveals = (item.knowledge or {}).get("reveals")
+        if reveals == "exit":
+            self._register_exit_knowledge(precise=True)
+            self.log_message(f"{item.name}: выход отмечен")
+        elif reveals in ("exit_region", "exit_direction"):
+            self._register_exit_knowledge(precise=False)
+            self.log_message(f"{item.name}: направление к выходу")
+
+    def _drop_enemy_loot(self, enemy):
+        from src.gameplay.loot import enemy_drop
+        inv = self.enemy_inventories.pop(id(enemy), None)
+        self.enemy_brains.pop(id(enemy), None)
+        if inv is None or getattr(enemy, "summoned_by", None) is not None:
+            return
+        gold, items = enemy_drop(inv, getattr(enemy, "loot_class", enemy.enemy_type), self.rng)
+        if gold <= 0 and not items:
+            return
+        bag = {"x": enemy.x, "y": enemy.y, "gold": gold, "items": items, "node": None}
+        if getattr(self.game, "render", None) is not None:
+            node = self.game.render.attachNewNode("loot")
+            self._create_visible_cube(node, "loot_bag", 0, 0, 0.2, 0.5, 0.5, 0.4, (0.9, 0.75, 0.2, 1))
+            node.setPos(enemy.x, enemy.y, 0.1)
+            bag["node"] = node
+        self.loot_bags.append(bag)
+
+    def _pickup_loot_bags(self):
+        if self.player is None or not self.player.is_alive():
+            return
+        for bag in self.loot_bags[:]:
+            if math.hypot(self.player.x - bag["x"], self.player.y - bag["y"]) > 2.0:
+                continue
+            self.hero_inventory.gold += bag["gold"]
+            taken = [it for it in bag["items"] if self.hero_inventory.add(it)]
+            names = ", ".join(it.name for it in taken)
+            self.log_message(f"Добыча: {bag['gold']} золота" + (f", {names}" if names else ""))
+            if bag["node"] is not None:
+                bag["node"].removeNode()
+            self.loot_bags.remove(bag)
 
 
     def _get_hint_positions(self):
@@ -601,32 +977,16 @@ class EnhancedGameScene:
         if (current_time - self.last_enemy_spawn >= self.enemy_spawn_interval and 
             len(self.enemies) < self.max_enemies):
             
-            from src.entities.enemy import EnhancedEnemy
+            # Кольцо 30-50 от героя (за краем его обзора): раньше враги появлялись
+            # у стен карты в ~160 и почти никогда не встречали героя
+            px, py = (self.player.x, self.player.y) if self.player is not None else (0.0, 0.0)
+            ang = random.uniform(0.0, 2 * math.pi)
+            dist = random.uniform(30.0, 50.0)
+            x, y = self.clamp_position(px + dist * math.cos(ang), py + dist * math.sin(ang))
             
-            # Выбираем случайную позицию на краю карты
-            side = random.randint(0, 3)
-            if side == 0:  # Север
-                x = random.uniform(-self.world_size/2 + 2, self.world_size/2 - 2)
-                y = self.world_size/2 - 2
-            elif side == 1:  # Юг
-                x = random.uniform(-self.world_size/2 + 2, self.world_size/2 - 2)
-                y = -self.world_size/2 + 2
-            elif side == 2:  # Запад
-                x = -self.world_size/2 + 2
-                y = random.uniform(-self.world_size/2 + 2, self.world_size/2 - 2)
-            else:  # Восток
-                x = self.world_size/2 - 2
-                y = random.uniform(-self.world_size/2 + 2, self.world_size/2 - 2)
-            
-            # Выбираем тип врага
-            enemy_types = ["basic", "strong", "elite"]
-            enemy_type = random.choices(enemy_types, weights=[70, 25, 5])[0]
-            
-            # Создаем врага
-            enemy = EnhancedEnemy(self.game, x, y, 0, enemy_type)
-            enemy.create_enemy()
-            enemy.apply_level_bonus(self._current_enemy_level_bonus())
-            self.enemies.append(enemy)
+            # Тип врага - из акта текущего уровня (lua_content/world.lua)
+            self._spawn_enemy(self._plan().pick_enemy(self.current_level, self.rng,
+                                                     elite_chance=self._plan().elite_chance(self.enemy_level())), x, y)
 
             self.last_enemy_spawn = current_time
 
@@ -651,6 +1011,7 @@ class EnhancedGameScene:
                 self._register_exit_knowledge(precise=True)
                 node.removeNode()
                 hint["used"] = True
+                self._award("hint", "Карта найдена")
 
         # 2. NPC
         for npc in self.npc_hints:
@@ -663,6 +1024,10 @@ class EnhancedGameScene:
                 # Этот NPC «подсказал» координаты выхода
                 self._register_exit_knowledge(precise=True)
                 npc["used"] = True
+                self._award("hint", "NPC подсказал путь")
+                lore = self._plan().lore_line(self.current_level, self.rng)
+                if lore:
+                    self.log_message(f"NPC: «{lore}»")
             elif dist <= 3.0:
                 # Даже если NPC не знает точные координаты, он может дать «эхо-направление».
                 self._register_exit_knowledge(precise=False)
@@ -775,10 +1140,21 @@ class EnhancedGameScene:
         ex, ey, _ez = self.exit_beacon_position
         distance = math.sqrt((self.player.x - ex) ** 2 + (self.player.y - ey) ** 2)
         if distance <= self.exit_reach_distance:
+            alive = [b for b in self.active_bosses if b.is_alive()]
+            if alive or self.boss_queue:
+                if not self._exit_block_logged:
+                    who = getattr(alive[0], "display_name", "босс") if alive else "страж"
+                    self.log_message(f"Выход охраняет {who}")
+                    self._exit_block_logged = True
+                return
             self._advance_to_next_level()
 
-    def _advance_to_next_level(self):
+    def _advance_to_next_level(self, award=True):
         """Переводит сцену на следующий уровень без пересоздания всего состояния игры."""
+        if award and self.current_level >= 1:
+            self._award("exit", "Уровень пройден")
+        if self.level_info is not None and self.level_info.is_final and award:
+            return  # на финальном уровне выход - это победа над цепочкой боссов
         self.current_level += 1
 
         # Повышаем сложность плавно, но ограничиваем верхней границей.
@@ -807,6 +1183,7 @@ class EnhancedGameScene:
         # Новый уровень стартует с волной врагов (если рендер инициализирован).
         if getattr(self.game, "render", None):
             self._spawn_initial_enemies()
+        self._start_level()
 
         # После очистки runtime-задач возвращаем слежение камеры.
         if getattr(getattr(self.game, "showbase", None), "taskMgr", None) and getattr(self.game, "cam", None) is not None:
@@ -847,9 +1224,13 @@ class EnhancedGameScene:
             if id(enemy) in player_created_enemy_ids:
                 remaining_enemies.append(enemy)
                 continue
+            self._forget_enemy(enemy)
             enemy.destroy()
+        if self.tactics is not None:
+            self.tactics.save()
 
         self.enemies = remaining_enemies
+        self.active_bosses = [b for b in self.active_bosses if b in remaining_enemies]
             
     def handle_input(self, keys):
         """Обработка ввода с гибридной схемой управления.
@@ -872,12 +1253,15 @@ class EnhancedGameScene:
             self.creation_mode = 'trap'
         elif keys.get('3', False):
             self.creation_mode = 'chest'
+        elif keys.get('4', False):
+            self.creation_mode = 'boss'
 
         # Одноразовые действия (по фронту нажатия)
         action_map = {
             '1': self._create_object_at_player,
             '2': self._create_object_at_player,
             '3': self._create_object_at_player,
+            '4': self._create_object_at_player,
             'space': self._attack_nearest_enemy,
             'mouse1': self._attack_nearest_enemy,
         }
@@ -888,6 +1272,33 @@ class EnhancedGameScene:
             if pressed and not was_pressed:
                 action()
             self._action_key_state[action_key] = pressed
+
+        # Эмоция и подсказки: не приказ, а сдвиг интереса героя (src/gameplay/hero_drive.py)
+        drive = getattr(self.player, "drive", None)
+        if drive is not None:
+            from src.gameplay.hero_drive import player_keys
+            for key, (kind, name) in player_keys().items():
+                pressed = bool(keys.get(key, False))
+                if pressed and not self._action_key_state.get(key, False):
+                    self.nudge_hero(kind, name)
+                self._action_key_state[key] = pressed
+
+    def nudge_hero(self, kind, name):
+        """Игрок сменил эмоцию героя или дал подсказку."""
+        drive = getattr(self.player, "drive", None) if self.player is not None else None
+        if drive is None:
+            return False
+        now = self.effects.now if self.effects is not None else self.game_time
+        if kind == "emotion" and drive.set_emotion(name):
+            if self.hero_inventory_brain is not None:
+                self.hero_inventory_brain.heal_at = drive.heal_at
+            self.log_message(f"Эмоция: {drive.mood.get('name', name)}. {drive.mood.get('thought', '')}".strip())
+            return True
+        if kind == "directive" and drive.set_directive(name, now):
+            spec = drive.cfg["directives"].get(name) or {}
+            self.log_message(f"Подсказка герою: {spec.get('name', name)}" if drive.directive else "Подсказка снята")
+            return True
+        return False
 
     def _attack_nearest_enemy(self):
         """Атака ближайшего врага"""
@@ -917,6 +1328,17 @@ class EnhancedGameScene:
         
     def exit(self):
         """Выход из игровой сцены"""
+        if self.tactics is not None:
+            self.tactics.save()
+        if self.player is not None and getattr(self.player, "mind", None) is not None:
+            self.player.mind.save()
+        if getattr(self.game, "effect_manager", None) is self.effects:
+            self.game.effect_manager = None
+        for bag in self.loot_bags:
+            if bag["node"] is not None:
+                bag["node"].removeNode()
+        self.loot_bags.clear()
+
         # Уничтожаем игрока
         if self.player:
             self.player.destroy()
@@ -973,21 +1395,24 @@ class EnhancedGameScene:
             self._create_trap_at(x, y, z)
         elif self.creation_mode == "chest":
             self._create_chest_at(x, y, z)
+        elif self.creation_mode == "boss":
+            self._create_boss_at(x, y, z)
             
         logger.debug(f"Created {self.creation_mode} at position ({x:.1f}, {y:.1f})")
     
     def _create_enemy_at(self, x, y, z):
-        """Создание врага в указанной позиции"""
-        from src.entities.enemy import EnhancedEnemy
-        
-        enemy_types = ["basic", "strong", "elite"]
-        enemy_type = random.choice(enemy_types)
-        
-        enemy = EnhancedEnemy(self.game, x, y, z, enemy_type)
-        enemy.create_enemy()
-        enemy.apply_level_bonus(self._current_enemy_level_bonus())
-        self.enemies.append(enemy)
-        self.player_created_objects.append(enemy)
+        """Создание врага в указанной позиции (игрок-режиссёр: враги текущего акта)"""
+        self._spawn_enemy(self._plan().pick_enemy(self.current_level, self.rng, elite_chance=self._plan().elite_chance(self.enemy_level())), x, y,
+                          player_created=True)
+
+    def _create_boss_at(self, x, y, z):
+        """Клавиша 4: босс текущего акта рядом с героем."""
+        act = self._plan().act_for(self.current_level)
+        boss_type = act.get("boss") if self.rng.random() < 0.5 else act.get("miniboss")
+        boss = self._spawn_enemy(boss_type or act.get("boss"), x, y, player_created=True)
+        boss.is_boss = True
+        self.active_bosses.append(boss)
+        self.log_message(f"{getattr(boss, 'display_name', boss_type)} призван режиссёром")
     
     def _create_trap_at(self, x, y, z):
         """Создание ловушки в указанной позиции"""
@@ -1091,6 +1516,12 @@ class EnhancedGameScene:
             self.player.add_experience(50)
             self.player.health = min(self.player.max_health, self.player.health + 25)
             logger.info("Chest opened! Received: 50 XP, 25 HP")
+            if self.hero_inventory is not None:
+                from src.gameplay.loot import loot_tables, roll_loot
+                gold, items = roll_loot(loot_tables().get("chest") or {}, self.rng)
+                self.hero_inventory.gold += gold
+                taken = [it for it in items if self.hero_inventory.add(it)]
+                self.log_message(f"Сундук: {gold} золота" + (", " + ", ".join(it.name for it in taken) if taken else ""))
         
         # Анимация открытия
         chest.setHpr(0, 0, 45)  # Поворачиваем крышку
@@ -1113,6 +1544,16 @@ class EnhancedGameScene:
     def _handle_player_death(self):
         """Обработка смерти персонажа"""
         if not self.death_beacon and self.player:
+            # Враги, что были в схватке, запоминают: эта тактика убила героя
+            for brain in list(self.combat_brains.values()):
+                if brain.engaged_at is not None:
+                    brain.finish(hero_died=True)
+            if self.tactics is not None:
+                self.tactics.save()
+            mind = getattr(self.player, "mind", None)
+            if mind is not None:
+                mind.update(0.0, True, self.effects.now if self.effects else 0.0)
+                mind.save()
             # Сохраняем позицию смерти
             self.death_position = (self.player.x, self.player.y, self.player.z)
             

@@ -2,7 +2,8 @@
 
 Panda3D game. Python orchestrates; heavy number crunching lives in `rust_core/` (PyO3,
 optional at runtime — every tool has a Python fallback); settings/content in `lua_content/`
-(Lua 5.5 via `lupa.lua55`).
+(Lua 5.5). Read any Lua file with `tools/lua_bridge.py` (`load(path)`): the file is executed in a
+sandbox (`rust_core.LuaContent` / mlua, fallback lupa) and the data crosses as one JSON string.
 
 ## Environment
 
@@ -35,6 +36,11 @@ modules nobody imports (~18k LOC) and `qa.py docs` marks stale .md reports — d
 | Visual regression between two probe runs | `python tools/dev_probe_diff.py --before A --after B --frames` (image only for changed frames) | s |
 | Why did the hero AI do that | `agent_play "...; story"` (compressed ai_state transitions) | <1 s |
 | Performance hot spots | `python tools/qa.py perf "spawn enemy x10; wait 60"` | 2 s |
+| Can the hero beat the bosses / a whole session | `python tools/qa.py gauntlet` (hero at each boss's level) · `gauntlet --campaign --lives 5 --trace` (from level 1, XP only from kills, hero mind learns across lives) · `--boss-points N` to try balance | ~10 s per life |
+| Build/edit an item like a designer, no window | `tools/web_builder/headless.py` (`UI().pick("Шаблон из каталога", "venom_bite")…click("Проверить предмет (itemcheck)")`) | <1 s |
+| What does a Lua file contain (no reading Lua) | `python tools/qa.py lua show FILE --keys` / `--key a.b` · `qa.py lua check` (all files, both backends) | ms |
+| What changed in an item / all items OK | `python tools/qa.py item diff FILE` (vs HEAD) · `item digest FILE` · `item all` | <1 s |
+| Does an item work (schema → Lua → combat) | `python -m tools.effect_schema.itemcheck lua_content/items/X.lua` (`--forge N` stress item, `--hostile` Python/Lua parity hunt) | <1 s per 300 effects |
 
 Rules of thumb:
 - Read only the `RESULT` line + printed hypotheses first; open `summary.md` / `session.json`
@@ -42,8 +48,12 @@ Rules of thumb:
   (`sql "SELECT ..."` for anything custom).
 - `--fast` + a seed (agent_play defaults to seed 1) = byte-for-byte reproducible run. Every
   failing run prints a `repro:` command; each run dir also has `repro.sh`.
-- The player's controls are the only levers agent_play exposes: `spawn enemy|trap|chest` (keys
-  1/2/3), `attack` (space), `interact` (e). Key map: `lua_content/dev_tools.lua` → `agent.player_keys`.
+- The player's controls are the only levers agent_play exposes: `spawn enemy|trap|chest|boss` (keys
+  1/2/3/4), `attack` (space), `interact` (e), `emotion calm|rage|fear|curiosity|greed|resolve` (F1-F6)
+  and `direct north|south|east|west|chest|exit|npc|none` (arrows, C/X/N/Z). Emotion and directive
+  shift the hero's interest (utility choice in `src/gameplay/hero_drive.py`), they never command him;
+  `observe` shows `mood/directive/goal/stance`. Keys: `lua_content/dev_tools.lua` → `agent.player_keys`
+  and `lua_content/hero_mind.lua`.
 - Turn-based interactive play: run `python tools/agent_play.py --serve --port 8765` in the
   background, then `curl -s localhost:8765/do -d 'wait 5; observe'`, `curl -s -X POST localhost:8765/quit`.
 - Named scenario templates: `agent_play.py --list-scenarios`, `--scenario swarm` (lua_content/qa.lua).
@@ -53,9 +63,21 @@ Rules of thumb:
 - Item mechanics: the designer's words are encoded as executable specs (e.g. `tests/test_lost_my_self_spec.py`,
   run against the catalog AND the Lua item in `lua_content/items/`). Change the spec first, then the item;
   regenerate the Lua with `tools/effect_schema` (`ui_logic.to_lua`).
+- Effect semantics that are easy to get wrong (resources hp/mana/stamina, `mod` goes to the op's target,
+  stat bounds in `lua_content/effect_rules.lua`, float-only conditions) are listed in `docs/EFFECT_SCHEMA.md`.
+- Looking at an item: `effect_schema.digest.digest(item)` (one line per effect) and `diff(a, b)` (changed
+  effects only) instead of reading the Lua. Conditions in Lua are `pred("ctx.hp_pct < 40", function…)`:
+  tools get the source string, the engine calls the function.
 - After an intended gameplay change: `qa.py golden` shows what moved, then `qa.py golden --record`.
-- Default dev map: enemies spawn ~160u from the hero and rarely reach him — a run without
-  `spawn enemy` usually has no combat at all (hypothesis `NO_COMBAT`).
+- Periodic spawns appear 30-50u from the hero, outside his 30u vision; an idle run gets a fight
+  now and then, `spawn enemy` guarantees one. Enemies see the hero only via
+  `EffectManager.can_see` (vision_range, stealth) and fight with a learned tactic
+  (`src/gameplay/enemy_ai.py`, memory = Rust bandit in `src/gameplay/tactics.py`; tools run it
+  in-process only via `AI_EVOLVE_TACTICS_MEMORY=off`, so seeded runs stay reproducible).
+- The hero has a mind too (`src/gameplay/hero_mind.py`): on low HP it notices whether it is
+  empowered (e.g. Sorrow of Berserk) and learns "retreat" vs "press" from outcomes (same Rust
+  bandit; `AI_EVOLVE_HERO_MIND=off` in tools). Game Units derive stats from attributes
+  (`Unit(derive=True)`: hp_pct in conditions uses the real max HP); the training room does not.
 
 ## Where things live
 
@@ -65,8 +87,12 @@ Rules of thumb:
 - `tools/probe_kernels.py` — Rust/Python kernels; data crosses as columnar buffers
   (`array('d')`, `HeroTable` struct-of-arrays → one `scan_hero` FFI call).
 - `rust_core/src/analytics/` — those kernels in Rust; `rust_core/src/probe/` — frame analysis.
+- `tools/lua_bridge.py` — the only Lua loader (`load`, `eval_preds`, `bench`, JSON cache);
+  `rust_core/src/lua_content/` — its Rust backend; `export.lua` there is shared by both backends.
 - `lua_content/dev_tools.lua` — thresholds, agent limits, DB path; `lua_content/qa.lua` — scenarios, fuzz
   weights, invariants, sweep; `lua_content/probe_config.lua` — frame analysis.
+- `tools/qa_plugins/*.py` — extra `qa.py` commands, discovered automatically (`register(sub)`); a new
+  command needs no edit of qa.py.
 - `tools/qa.py` + `qa_graph.py` (import graph), `qa_pool.py` (asyncio subprocess pool),
   `probe_invariants.py`; Rust `QaKernels` (graph reachability, bootstrap stats, trajectory hashes).
 - Outputs go to `dev_probe_output/` (git-ignored), DB at `dev_probe_output/probe.sqlite`

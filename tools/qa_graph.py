@@ -30,8 +30,9 @@ SKIP_DIRS = {".git", "target", "dev_probe_output", "__pycache__", ".venv", "venv
              "node_modules", ".pytest_cache"}
 SEARCH_ROOTS = [ROOT, ROOT / "tools", ROOT / "src", ROOT / "python_layer", ROOT / "src" / "core"]
 CACHE = ROOT / "dev_probe_output" / ".qa_cache" / "graph.json"
-# Импорты, которых нет в ast: игра поднимается через importlib.import_module(entry_module)
-DYNAMIC_EDGES = {"tools/probe_runtime.py": ["main.py"]}
+# Импорты, которых нет в ast: игра поднимается через importlib.import_module(entry_module),
+# qa.py находит плагины сам (pkgutil). Значения - пути или glob относительно ROOT.
+DYNAMIC_EDGES = {"tools/probe_runtime.py": ["main.py"], "tools/qa.py": ["tools/qa_plugins/*.py"]}
 
 
 def py_files():
@@ -126,7 +127,8 @@ def _edges(path, imports):
 def _node_entry(path_str):
     f = Path(path_str)
     imports, is_script, doc, loc = _parse(f)
-    edges = {rel(t) for t in _edges(f, imports)} | set(DYNAMIC_EDGES.get(rel(f), []))
+    dynamic = {rel(g) for pattern in DYNAMIC_EDGES.get(rel(f), []) for g in ROOT.glob(pattern)}
+    edges = {rel(t) for t in _edges(f, imports)} | dynamic
     return rel(f), {"imports": sorted(edges), "script": is_script, "doc": doc, "loc": loc}
 
 

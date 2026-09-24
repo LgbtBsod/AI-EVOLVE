@@ -76,8 +76,11 @@ class EnhancedEnemy:
         # Движение и зоны обнаружения/атаки
         # Зона отслеживания должна быть заметно больше, чтобы враги
         # реагировали на появление героя в заметном радиусе.
-        self.detection_range = 20.0
+        # vision_range/attack_range - статы схемы эффектов (стелс героя, оружие);
+        # detection_range - прежнее имя обзора
+        self.vision_range = 20.0
         self.attack_range = 2.0
+        self.brain = None       # src/gameplay/enemy_ai.EnemyBrain (тактики), если сцена его дала
 
         # Точка спавна используется как центр области блуждания
         self.spawn_x = self.x
@@ -89,6 +92,14 @@ class EnhancedEnemy:
             max_health=self.max_health
         )
         
+    @property
+    def detection_range(self) -> float:
+        return self.vision_range
+
+    @detection_range.setter
+    def detection_range(self, value: float) -> None:
+        self.vision_range = float(value)
+
     def _setup_visuals(self, enemy_type: str, color: tuple | None) -> None:
         """Настройка визуальных параметров (размер, цвет) на основе типа врага"""
         # Визуальные параметры - не влияют на баланс
@@ -285,8 +296,20 @@ class EnhancedEnemy:
         """Проверка, жив ли враг"""
         return self.health > 0 and self.state != "dead"
     
+    # навыки по типу врага; боссы получают свои из lua_content/bosses.lua
+    TYPE_SKILLS = {"elite": ("war_cry", "crushing_blow"), "strong": ("crushing_blow",),
+                   "skeleton": ("venom_spit",), "goblin": ("venom_spit",)}
+
     def attack(self, target):
-        """Атака цели"""
+        """Атака цели: навык по типу (если готов) или удар оружием - через единый
+        менеджер эффектов; без него (тесты) - прежний путь через CombatSystem."""
+        manager = getattr(self.game, "effect_manager", None)
+        if manager is not None and manager.state(self) is not None:
+            for skill in getattr(self, "skills", None) or self.TYPE_SKILLS.get(self.enemy_type, ()):
+                if manager.ability(skill) is not None and manager.cast(self, skill, target).ok:
+                    return True
+            result = manager.cast(self, "weapon_attack", target)
+            return result.ok and any(not h.is_dodged for h in result.hits)
         current_time = time.time()
         if current_time - self.last_attack_time >= self.attack_cooldown and self.is_alive():
             # Проверяем расстояние до цели
@@ -381,11 +404,19 @@ class EnhancedEnemy:
         """Обновление ИИ врага"""
         if not self.is_alive():
             return
-        
+        if self.brain is not None:          # тактики, навыки на дистанции, телеграфы
+            self.brain.update(player, dt)
+            return
+
         # Вычисляем расстояние до игрока
         distance_to_player = self.get_distance_to(player)
-        
-        if distance_to_player <= self.detection_range:
+        manager = getattr(self.game, "effect_manager", None)
+        if manager is not None and manager.state(self) is not None:
+            sees = manager.can_see(self, player)       # обзор с учётом стелса героя
+        else:
+            sees = distance_to_player <= self.detection_range
+
+        if sees:
             # Игрок в зоне обнаружения
             if distance_to_player <= self.attack_range:
                 # Игрок в зоне атаки

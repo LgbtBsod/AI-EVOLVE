@@ -2,7 +2,7 @@
 UI-логика билдера (без Flet) — общий слой для web_builder/app.py и тестов.
 
 Цикл:  форма(dict) -> build_item_json -> validate -> render Lua
-       -> lupa load (опционально) -> sim.EffectRuntime (тренировочная комната).
+       -> исполнение Lua (tools/lua_bridge.py, опционально) -> sim.EffectRuntime.
 
 Форма повторяет чек-лист полей схемы Effect Schema v1:
   Effect: id, tags, trigger{kind,event,when,filter,owner_has}, ops[]
@@ -18,8 +18,8 @@ from typing import Any, Optional
 from .schema import Effect, Op, Trigger, Value, Scale
 from .validate import validate_item
 from .lua_gen import render_item
-from .lua_parse import parse_lua
-from .sim import EffectRuntime, Unit
+from .. import lua_bridge
+from .sim import STEP_HELP, EffectRuntime, Unit, run_step
 
 
 # ---------------------------------------------------------------- parsing
@@ -40,6 +40,11 @@ def value_from_form(d: Optional[dict]) -> Optional[Value]:
     if flat is None and pct_ is None and ref is None:
         return None
     return Value(flat=flat, pct=pct_, of=of, ref=ref)
+
+
+def parse_scenario(text: str) -> list[str]:
+    """Сценарий из поля билдера: шаги через `;` или перевод строки."""
+    return [p.strip() for p in text.replace("\n", ";").split(";") if p.strip()]
 
 
 def scale_from_form(d: Optional[dict]) -> Optional[Scale]:
@@ -87,8 +92,23 @@ def op_from_form(d: dict) -> Op:
     )
 
 
+def amplify_from_form(d: Optional[dict]) -> Optional[dict]:
+    """amplify {when | while_buff, every, of, factor}; без условия - нет усиления."""
+    if not d or not (d.get("when") or d.get("while_buff")):
+        return None
+    out: dict[str, Any] = {"every": _num(d.get("every")) or 10.0,
+                           "of": d.get("of") or "hp_missing_below_40",
+                           "factor": _num(d.get("factor")) or 2.0}
+    for k in ("when", "while_buff"):
+        if d.get(k):
+            out[k] = d[k]
+    return out
+
+
 def effect_from_form(d: dict) -> Effect:
     tr = d.get("trigger") or {}
+    cd = d.get("cooldown")
+    cooldown = value_from_form(cd) if isinstance(cd, dict) else None
     return Effect(
         id=d["id"],
         trigger=Trigger(
@@ -97,12 +117,15 @@ def effect_from_form(d: dict) -> Effect:
             when=tr.get("when") or None,
             filter=tr.get("filter") or None,
             owner_has=tr.get("owner_has") or None,
+            cross=tr.get("cross") or None,
         ),
         ops=[op_from_form(o) for o in d.get("ops", [])],
         tags=[t for t in (d.get("tags") or []) if t],
         duration=d.get("duration") or None,
-        cooldown=d.get("cooldown") or None,
+        cooldown=cooldown.to_json() if cooldown else None,
         stacks=d.get("stacks") or None,
+        amplify=amplify_from_form(d.get("amplify")),
+        threshold=_num(d.get("threshold")),
         meta=d.get("meta") or None,
     )
 
@@ -118,7 +141,8 @@ def build_item_json(form: dict) -> dict:
         if isinstance(ef, Effect):
             effects.append(ef.to_json())
             continue
-        if isinstance(ef, dict) and _looks_like_json_effect(ef):
+        # форма из редактора билдера помечена _form; остальное может быть готовым JSON схемы
+        if isinstance(ef, dict) and not ef.get("_form") and _looks_like_json_effect(ef):
             effects.append(json.loads(json.dumps(ef)))  # deep copy
         else:
             effects.append(effect_from_form(ef).to_json())
@@ -172,44 +196,16 @@ def to_lua(item: dict) -> str:
 
 
 def lua_load(lua_text: str) -> dict:
-    """Загрузка Lua через lupa (syntax-check + round-trip в python-таблицу)."""
-    import lupa
-    rt = lupa.LuaRuntime()
-    tbl = rt.execute(lua_text)                       # `return {...}`
-    py = _lua_to_py(rt, tbl)
-    # sanity: собственный парсер должен дать тот же набор id/ops
-    parsed = parse_lua(lua_text)
-    assert [e.get("id") for e in parsed.get("effects", [])] == \
-           [e.get("id") for e in py.get("effects", [])], "parser/lupa mismatch"
-    return py
-
-
-def _is_lua_table(obj) -> bool:
-    return hasattr(obj, "keys") and callable(getattr(obj, "keys", None))
-
-
-def _lua_to_py(rt, obj):
-    if _is_lua_table(obj):
-        keys = list(obj.keys())
-        if keys and all(isinstance(k, int) for k in keys):
-            return [_lua_to_py(rt, obj[k]) for k in sorted(keys)]
-        return {str(k): _lua_to_py(rt, obj[k]) for k in keys}
-    if isinstance(obj, bytes):
-        return obj.decode("utf-8")
-    return obj
+    """Исполнить сгенерированный Lua (проверка синтаксиса и семантики) -> dict."""
+    return lua_bridge.load(lua_text)
 
 
 def run_training_room(item: dict, scenario: Optional[dict] = None) -> dict:
     """Прогнать предмет в тренировочной комнате (sim.EffectRuntime).
 
-    scenario: {hero_hp, hero_max_hp, dummy_max_hp, base_stats, events[]}
-      - "use"            — использовать предмет
-      - "attack"         — полный цикл атаки героя (attack -> dmg -> attack_hit
-                           -> kill), урон = base_damage (или attack_damage-стат)
-      - "enemy_attack N" — враг бьёт героя на N (take_damage +Possible die)
-      - "kill"           — убить текущего манекена и возродить нового
-      - "tick T DT"      — тик времени
-      - "die" / прочие   — прямое fire_event
+    scenario: {hero_hp, hero_max_hp, dummy_max_hp, base_stats, base_damage, events[]};
+    шаги - язык sim.run_step (он же в itemcheck и билдере):
+    """ + STEP_HELP + """
     Возвращает отчёт: шаги событий + финальное состояние героя/манекена.
     """
     sc = {"hero_max_hp": 1000.0, "dummy_max_hp": 5000.0, "hero_hp": None,
@@ -225,33 +221,7 @@ def run_training_room(item: dict, scenario: Optional[dict] = None) -> dict:
     t = 0.0
     for ev in sc["events"]:
         label = str(ev)
-        parts = label.split()
-        kind = parts[0]
-        if kind == "attack":
-            rt.attack(t, base_damage=float(parts[1]) if len(parts) > 1
-                      else sc["base_damage"])
-        elif kind == "enemy_attack" and len(parts) > 1:
-            rt.receive_damage(float(parts[1]), t)
-        elif kind == "kill":
-            # убить текущего манекена, послать kill и возродить его же
-            # (для стеков типа Vampire's Fang; единая конвенция с
-            # sim.respawn_enemy — тот же объект, полное HP).
-            # kills инкрементирует рантайм: dummy.deal_damage не трогает
-            # hero.kills, а fire_event("kill") -> run_op("kill") увидит
-            # мёртвую цель и не засчитает повторный килл.
-            dummy.deal_damage(dummy.current_hp)
-            rt.owner.kills += 1
-            rt.fire_event("kill", t)
-            rt.respawn_enemy()
-        elif kind == "set_dummy" and len(parts) > 1:
-            # установить HP текущего манекена (для execute-сценариев)
-            dummy.current_hp = float(parts[1])
-            dummy.alive = dummy.current_hp > 0
-        elif kind == "tick" and len(parts) > 2:
-            t += float(parts[1])
-            rt.tick(t, float(parts[2]))
-        else:
-            rt.fire_event(label, t)
+        t = run_step(rt, label, t, base_damage=sc["base_damage"])
         steps.append({"event": label, "t": round(t, 3),
                       "hero_hp": round(hero.current_hp, 3),
                       "hero_alive": hero.alive,
@@ -262,19 +232,19 @@ def run_training_room(item: dict, scenario: Optional[dict] = None) -> dict:
 
 
 def full_cycle(form: dict, scenario: Optional[dict] = None,
-               with_lupa: bool = True) -> dict:
-    """Весь UI-цикл: форма -> JSON -> validate -> Lua -> lupa -> sim."""
+               with_lua: bool = True) -> dict:
+    """Весь UI-цикл: форма -> JSON -> validate -> Lua -> исполнение -> sim."""
     item = build_item_json(form)
     errs = validate(item)
     out: dict[str, Any] = {"item": item, "errors": errs}
     if errs:
         return out
     out["lua"] = to_lua(item)
-    if with_lupa:
+    if with_lua:
         try:
-            out["lupa_ok"] = True
+            out["lua_ok"] = True
             lua_load(out["lua"])
-        except ImportError:
-            out["lupa_ok"] = None
+        except RuntimeError:  # ни rust_core, ни lupa не установлены
+            out["lua_ok"] = None
     out["room"] = run_training_room(item, scenario)
     return out

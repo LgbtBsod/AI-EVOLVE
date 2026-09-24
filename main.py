@@ -85,9 +85,15 @@ class Game(ShowBase):
         self.dev_mode = dev_mode
         self.scene = None  # игровой мир; выставляет GameScene при загрузке game_world
         self._keys = {
-            "1": False, "2": False, "3": False,
+            "1": False, "2": False, "3": False, "4": False,
             "e": False, "space": False, "mouse1": False,
         }
+        # эмоции (F1-F6) и подсказки герою (стрелки, C/X/N/Z) - lua_content/hero_mind.lua
+        try:
+            from src.gameplay.hero_drive import player_keys
+            self._keys.update({k: False for k in player_keys()})
+        except Exception as exc:  # без них игра всё равно идёт
+            logger.warning("hero drive keys not loaded: %s", exc)
 
         # === ЯДРО ИГРЫ ===
         logger.info("=== Инициализация ядра игры ===")

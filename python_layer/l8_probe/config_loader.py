@@ -9,13 +9,16 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 
 try:
-    # lupa 2.x: модуля lupa.lua_runtime нет (импорт всегда падал, и Lua-конфиг
-    # молча не грузился). Стандарт проекта - Lua 5.5.
-    import lupa.lua55 as lupa_lua
-    LUPA_AVAILABLE = True
+    # Единый загрузчик Lua-контента проекта (rust_core/mlua или lupa, данные
+    # одним JSON). Раньше здесь была своя копия конвертера lupa -> dict,
+    # которая превращала Lua-массивы в словари {1: ..., 2: ...}.
+    from tools import lua_bridge
+    LUPA_AVAILABLE = bool(lua_bridge.available_backends())
 except ImportError:
+    lua_bridge = None
     LUPA_AVAILABLE = False
-    logging.warning("lupa not available, Lua config loading disabled")
+if not LUPA_AVAILABLE:
+    logging.warning("no Lua backend (rust_core / lupa), Lua config loading disabled")
 
 logger = logging.getLogger(__name__)
 
@@ -33,15 +36,7 @@ class LuaConfigLoader:
         """
         self.lua_path = self._find_lua_config(lua_path)
         self._config_cache: Dict[str, Dict[str, Any]] = {}
-        self._lua_runtime = None
-        
-        if LUPA_AVAILABLE:
-            try:
-                self._lua_runtime = lupa_lua.LuaRuntime()
-                logger.debug("Lua runtime initialized")
-            except Exception as e:
-                logger.warning(f"Failed to initialize Lua runtime: {e}")
-                self._lua_runtime = None
+        self._lua_runtime = lua_bridge if LUPA_AVAILABLE else None
     
     def _find_lua_config(self, lua_path: Optional[str]) -> Optional[Path]:
         """Find probe_config.lua in standard locations"""
@@ -94,14 +89,7 @@ class LuaConfigLoader:
             return self._get_defaults(profile)
         
         try:
-            with open(self.lua_path, 'r', encoding='utf-8') as f:
-                lua_code = f.read()
-            
-            # Execute Lua code
-            lua_table = self._lua_runtime.execute(lua_code)
-            
-            # Convert Lua table to Python dict
-            config = self._lua_to_python(lua_table)
+            config = lua_bridge.load(Path(self.lua_path))
             
             # Apply profile overrides if specified
             if profile != 'standard' and 'profiles' in config:
@@ -128,32 +116,6 @@ class LuaConfigLoader:
         except Exception as e:
             logger.error(f"Failed to load Lua config: {e}")
             return self._get_defaults(profile)
-    
-    def _lua_to_python(self, lua_obj) -> Any:
-        """Recursively convert Lua objects to Python types"""
-        if lua_obj is None:
-            return None
-        
-        try:
-            # Check if it's a Lua table (mapping)
-            if hasattr(lua_obj, 'items'):
-                result = {}
-                for key, value in lua_obj.items():
-                    result[key] = self._lua_to_python(value)
-                return result
-            
-            # Check if it's a Lua array (sequential numeric keys)
-            if hasattr(lua_obj, '__iter__') and not isinstance(lua_obj, (str, bytes)):
-                try:
-                    return [self._lua_to_python(item) for item in lua_obj]
-                except TypeError:
-                    pass
-            
-            # Primitive types
-            return lua_obj
-            
-        except Exception:
-            return str(lua_obj)
     
     def _get_defaults(self, profile: str) -> Dict[str, Any]:
         """Get default configuration for a profile"""

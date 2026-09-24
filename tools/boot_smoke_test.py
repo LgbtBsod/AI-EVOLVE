@@ -62,12 +62,14 @@ def main() -> int:
         if enemies_before == 0:
             failures.append("no enemies spawned in the world")
 
-        # Director action: "1" spawns an enemy next to the hero (edge-triggered)
+        # Director action: "1" spawns an enemy next to the hero (edge-triggered). Count what
+        # the player created, not who is alive: a slime next to the hero dies to one sword swing.
+        created_before = scene.player_spawns
         game._keys["1"] = True
         run_frames(game, 0.3)
         game._keys["1"] = False
         run_frames(game, 0.3)
-        if len(scene.enemies) <= enemies_before:
+        if scene.player_spawns <= created_before:
             failures.append(f"key '1' did not spawn an enemy ({enemies_before} -> {len(scene.enemies)})")
 
     if errors.lines:

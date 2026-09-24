@@ -36,6 +36,7 @@ return {
       enemy = "1",       -- spawn enemy
       trap = "2",        -- spawn trap
       chest = "3",       -- spawn chest
+      boss = "4",        -- spawn the current act's boss
       attack = "space",  -- атаковать ближайшего врага
       interact = "e",    -- взаимодействие (удержание)
     },

@@ -18,7 +18,8 @@ pyo3 = "0.29.2"
 
 # Lua для контента. Стандарт проекта — Lua 5.5 (Python-сторона: lupa.lua55).
 # vendored: Lua собирается из исходников (cc + MSVC/gcc), без pkg-config.
-mlua = { version = "0.12.1", features = ["lua55", "vendored"] }
+# serialize: Lua value -> JSON одной строкой (tools/lua_bridge.py, модуль lua_content).
+mlua = { version = "0.12.1", features = ["lua55", "vendored", "serialize"] }
 
 # SQLite для хранения. fallible_uint: ToSql для u64 (seed), как было в 0.30
 # (ошибка, если значение > i64::MAX).

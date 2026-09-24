@@ -13,6 +13,11 @@
     python tools/qa.py dead [--list]         # модули, которые никто не импортирует
     python tools/qa.py docs                  # какие .md устарели (ссылки на несуществующее/мёртвое)
     python tools/qa.py perf "SCRIPT"         # горячие функции игры (cProfile, fast-режим)
+    python tools/qa.py item check|digest|diff|all   # предметы: itemcheck, одна строка на эффект, diff с HEAD
+    python tools/qa.py lua check|show|bench         # весь Lua-контент: паритет бэкендов, данные без чтения Lua
+
+Команды из tools/qa_plugins/*.py подключаются сами: модуль с register(sub)
+(добавить подпарсер и set_defaults(func=...)) - новая команда без правки qa.py.
 
 Прогоны игры идут параллельно подпроцессами (tools/qa_pool.py, asyncio),
 статистика и обход графа - в Rust (rust_core.QaKernels), настройки - Lua
@@ -93,14 +98,16 @@ def cmd_doctor(args):
             check(mod, True)
         except ImportError:
             check(mod, False, fix)
-    try:
-        import lupa.lua55  # noqa: F401
-        check("Lua 5.5 (lupa.lua55)", True)
-    except ImportError:
-        check("Lua 5.5 (lupa.lua55)", False, "uv pip install 'lupa>=2.8'")
+    import lua_bridge
+    backends = lua_bridge.available_backends()
+    check("Lua 5.5 fallback (lupa.lua55)", "lupa" in backends, "uv pip install 'lupa>=2.8'")
+    check("Lua 5.5 content -> one JSON (rust_core.LuaContent)", "rust" in backends,
+          "uv pip install ./rust_core   (tools fall back to lupa)")
     check(f"rust_core kernels ({kernels.BACKEND})", kernels.BACKEND == "rust" and kernels._rust_qa is not None,
           "uv pip install ./rust_core   (needs cargo; tools fall back to Python, ~13-170x slower)")
     check("cargo (to build rust_core)", shutil.which("cargo") is not None, "https://rustup.rs")
+    for name, err in PLUGIN_ERRORS.items():
+        check(f"qa plugin {name}", False, err)
     if sys.platform.startswith("linux"):
         check("xvfb-run (screenshots without a display)", shutil.which("xvfb-run") is not None,
               "sudo apt-get install -y xvfb libgl1-mesa-dri")
@@ -687,8 +694,28 @@ def main(argv=None):
     p.add_argument("script")
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--top", type=int, default=15)
+    load_plugins(sub)
     args = parser.parse_args(argv)
-    return globals()[f"cmd_{args.cmd}"](args)
+    handler = getattr(args, "func", None) or globals()[f"cmd_{args.cmd}"]
+    return handler(args)
+
+
+# ---------------------------------------------------------------- plugins
+
+PLUGIN_ERRORS: dict[str, str] = {}
+
+
+def load_plugins(sub):
+    """tools/qa_plugins/*.py: register(sub) добавляет подкоманды. Сломанный плагин
+    не роняет qa.py - причина видна в `qa.py doctor`."""
+    import importlib
+    import pkgutil
+    import qa_plugins
+    for info in pkgutil.iter_modules(qa_plugins.__path__):
+        try:
+            importlib.import_module(f"qa_plugins.{info.name}").register(sub)
+        except Exception as exc:  # noqa: BLE001
+            PLUGIN_ERRORS[info.name] = f"{type(exc).__name__}: {exc}"
 
 
 if __name__ == "__main__":

@@ -19,7 +19,7 @@ lua_content/dev_tools.lua: agent.player_keys), без god-mode, плюс
   в БД прогонов (tools/probe_db.py).
 
 Команды (через ';' или с новой строки, '#' - комментарий):
-    spawn enemy|trap|chest [xN]   клавиши 1/2/3 (N раз)
+    spawn enemy|trap|chest|boss [xN]   клавиши 1/2/3/4 (N раз); boss - босс текущего акта
     attack [xN]                   space: удар по ближайшему врагу в радиусе
     interact [SEC]                удерживать e SEC секунд (по умолчанию 0.5)
     wait SEC                      прокрутить игру на SEC секунд игрового времени
@@ -143,8 +143,8 @@ def parse_script(text):
         if verb == "spawn":
             tokens = rest.split()
             n = repeat(tokens)
-            if len(tokens) != 1 or tokens[0] not in ("enemy", "trap", "chest"):
-                raise ScriptError(f"{src!r}: expected 'spawn enemy|trap|chest [xN]'")
+            if len(tokens) != 1 or tokens[0] not in ("enemy", "trap", "chest", "boss"):
+                raise ScriptError(f"{src!r}: expected 'spawn enemy|trap|chest|boss [xN]'")
             commands.append(("press", {"key": keys[tokens[0]], "times": n, "what": tokens[0]}, src))
         elif verb == "attack":
             tokens = rest.split()
@@ -152,6 +152,16 @@ def parse_script(text):
             if tokens:
                 raise ScriptError(f"{src!r}: expected 'attack [xN]'")
             commands.append(("press", {"key": keys["attack"], "times": n, "what": "attack"}, src))
+        elif verb in ("emotion", "direct"):
+            # те же клавиши, что у игрока (lua_content/hero_mind.lua): эмоция и подсказка - сдвиг
+            # интереса героя, не приказ
+            from src.gameplay.hero_drive import player_keys
+            kind = "emotion" if verb == "emotion" else "directive"
+            by_name = {name: key for key, (k, name) in player_keys().items() if k == kind}
+            name = rest.strip().lower()
+            if name not in by_name:
+                raise ScriptError(f"{src!r}: expected '{verb} {'|'.join(sorted(by_name))}'")
+            commands.append(("press", {"key": by_name[name], "times": 1, "what": f"{verb} {name}"}, src))
         elif verb == "interact":
             sec = float(rest) if rest else 0.5
             commands.append(("hold", {"key": keys["interact"], "seconds": sec}, src))
@@ -301,7 +311,17 @@ class PlaySession:
         return (f"t={m['t']} hero {'ALIVE' if m['alive'] else 'DEAD'} hp={m['hp']:.0f}/{m['max_hp']:.0f} "
                 f"lvl={m['lvl']} xp={m['xp']:.0f} ai={m['ai']} pos={m['pos']} | enemies={m['enemies']} "
                 f"nearest={near} | kills={m['kills']} dealt={m['dealt']:.0f} taken={m['taken']:.0f} "
-                f"| traps={m['traps']} chests={m['chests']}")
+                f"| traps={m['traps']} chests={m['chests']}" + self._mind_part())
+
+    def _mind_part(self):
+        """Эмоция, подсказка и «мысль» героя (hero_drive), стойка разума (hero_mind)."""
+        scene = self.scene()
+        hero = getattr(scene, "player", None) if scene is not None else None
+        drive, mind = getattr(hero, "drive", None), getattr(hero, "mind", None)
+        if drive is None:
+            return ""
+        part = f" | mood={drive.emotion} directive={drive.directive or '-'} goal={drive.goal or '-'}"
+        return part + (f" stance={mind.stance}" if mind is not None and mind.stance else "")
 
     def story_lines(self, limit=12):
         """Сжатая история решений ИИ: повторяющийся дребезг A<->B - одной строкой."""

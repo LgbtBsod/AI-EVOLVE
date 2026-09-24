@@ -463,7 +463,7 @@ class TrainingRoom:
         self.lua_configs = self._load_lua_configs()
         
     def _load_lua_configs(self) -> Dict[str, Any]:
-        """lua_content/training_room/*.lua через lupa.lua55 (стандарт проекта).
+        """lua_content/training_room/*.lua через tools/lua_bridge.py (Lua 5.5).
 
         Файлы объявляют глобальные таблицы (mannequins, scenarios, item_sets,
         thresholds) - они и возвращаются: {file_stem: {global: value}}.
@@ -475,23 +475,18 @@ class TrainingRoom:
             logger.warning(f"Lua config directory not found: {lua_path}")
             return configs
         try:
-            import lupa.lua55 as lua
-            from probe_settings import lua_to_py
+            import lua_bridge
         except ImportError:
-            logger.warning("lupa not installed - mannequins use built-in defaults")
-            return configs
+            from tools import lua_bridge
         for lua_file in sorted(lua_path.glob('*.lua')):
-            runtime = lua.LuaRuntime()
             try:
-                returned = runtime.execute(lua_file.read_text(encoding='utf-8'))
+                data = lua_bridge.load(lua_file, globals=("mannequins", "scenarios", "item_sets", "thresholds"))
+            except RuntimeError as exc:  # нет ни rust_core, ни lupa
+                logger.warning(f"{exc} - mannequins use built-in defaults")
+                return configs
             except Exception as exc:
                 logger.warning(f"Lua config {lua_file.name} failed: {exc}")
                 continue
-            g = runtime.globals()
-            data = {name: lua_to_py(g[name]) for name in ("mannequins", "scenarios", "item_sets", "thresholds")
-                    if g[name] is not None}
-            if returned is not None and not data:
-                data = lua_to_py(returned)
             configs[lua_file.stem] = data
             logger.info(f"Loaded Lua config: {lua_file.name} ({', '.join(data)})")
         return configs

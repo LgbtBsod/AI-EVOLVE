@@ -177,6 +177,7 @@ class Character(BaseEntity):
         self.defense = class_stats.defense
         self.attack_speed = class_stats.attack_speed
         self.attack_range = class_stats.attack_range
+        self.vision_range = 30.0    # как далеко герой замечает врагов и маяк (стат схемы эффектов)
         self.critical_chance = class_stats.critical_chance
         self.critical_damage = class_stats.critical_damage
         self.dodge_chance = class_stats.dodge_chance
@@ -223,6 +224,11 @@ class Character(BaseEntity):
         self.exploration_retarget_interval = 2.0
         self.last_exploration_target_time = 0.0
         
+        # Характеристики (сила, ловкость ... - см. lua_content/effect_rules.lua) и
+        # нераспределённые очки: 5 за уровень, тратит сам герой
+        self.attributes: dict[str, float] = {}
+        self.attribute_points = 0
+
         # Дополнительные характеристики игрока
         self.is_player = is_player
         if is_player:
@@ -661,7 +667,15 @@ class Character(BaseEntity):
                 self.set_animation_state("idle")
                 
     def attack(self, target):
-        """Атака цели"""
+        """Атака цели: удар оружием - способность weapon_attack единого менеджера
+        эффектов (кулдаун = 1 / скорость атаки, урон, крит, эффекты предметов).
+        Без менеджера (тесты с фейковой игрой) - прежний путь через CombatSystem."""
+        manager = getattr(self.game, "effect_manager", None)
+        if manager is not None and manager.state(self) is not None:
+            result = manager.cast(self, "weapon_attack", target)
+            if result.ok:
+                self.set_animation_state("attacking")
+            return result.ok and any(not h.is_dodged for h in result.hits)
         if self.attack_cooldown <= 0 and self.is_alive():
             self.set_animation_state("attacking")
             
@@ -806,9 +820,19 @@ class Character(BaseEntity):
 
         # 1. Бой и преследование врагов
         # Если здоровье низкое, приоритет — выживание: отходим от врага.
-        if nearest_enemy and self.health <= self.max_health * 0.3 and self.get_distance_to(nearest_enemy) <= 12:
+        # Разум героя (src/gameplay/hero_mind.py) сам решает, бежать ли на низком HP:
+        # с «Печалью берсерка» он со временем учится давить, а не убегать.
+        mind = getattr(self, "mind", None)
+        low = mind.should_retreat() if mind is not None else self.health <= self.max_health * 0.3
+        if nearest_enemy and low and self.get_distance_to(nearest_enemy) <= 12:
             self.ai_state = "retreating"
             self._move_away_from_enemy(nearest_enemy, dt)
+            return
+
+        drive = getattr(self, "drive", None)
+        if drive is not None:        # эмоция и подсказки игрока: выбор цели по полезности
+            self._update_ai_driven(drive, nearest_enemy, items, dt, exit_position, vision_range,
+                                   known_exit_positions, hint_positions)
             return
 
         if nearest_enemy and self.get_distance_to(nearest_enemy) <= self.attack_range:
@@ -861,6 +885,61 @@ class Character(BaseEntity):
         self.target_enemy = None
         self._explore_area(dt)
     
+
+    def _update_ai_driven(self, drive, nearest_enemy, items, dt, exit_position, vision_range,
+                          known_exit_positions, hint_positions):
+        """Цель - по полезности (src/gameplay/hero_drive.py): база из ситуации x вес эмоции
+        + интерес подсказки игрока. Подсказка тянет, но не приказывает: враг рядом важнее."""
+        import random
+        from src.gameplay.hero_drive import Option
+        now = getattr(getattr(self.game, "effect_manager", None), "now", None)
+        now = time.perf_counter() if now is None else now
+        options = []
+        if nearest_enemy is not None:
+            d = self.get_distance_to(nearest_enemy)
+            if d <= 12.0:
+                options.append(Option("fight", (nearest_enemy.x, nearest_enemy.y), max(0.2, 1.0 - d / 15.0)))
+        item = self._find_nearest_item(items)
+        if item is not None:
+            ix, iy = self._extract_item_position(item)
+            if ix is not None:
+                d = math.hypot(self.x - ix, self.y - iy)
+                if d <= 30.0:
+                    options.append(Option("loot", (ix, iy), 0.3 + 0.7 * (1.0 - d / 30.0)))
+        exit_target = self._select_best_exit_target(known_exit_positions=known_exit_positions,
+                                                    exit_position=exit_position, vision_range=vision_range)
+        if exit_target:
+            options.append(Option("exit", tuple(exit_target[:2]), 1.0))
+        hint = self._select_best_hint_target(hint_positions)
+        if hint:
+            options.append(Option("hint", tuple(hint[:2]), 1.0))
+        options.append(Option("explore", None, 1.0))
+        choice = drive.choose(options, (self.x, self.y), now)
+        goal = choice.goal if choice else "explore"
+        if goal == "fight":
+            self.ai_state = "fighting"
+            self.target_enemy = nearest_enemy
+            if self.get_distance_to(nearest_enemy) <= self.attack_range:
+                self.attack(nearest_enemy)
+            else:
+                self._move_towards_enemy(nearest_enemy, dt)
+            return
+        self.target_enemy = None
+        if goal in ("loot", "exit", "hint"):
+            self.ai_state = {"loot": "looting", "exit": "seeking_exit", "hint": "seeking_hint"}[goal]
+            self.move_towards(choice.target[0], choice.target[1], dt)
+            return
+        self.ai_state = "exploring"
+        if drive.direction() is not None:       # подсказана сторона: идти туда шаг за шагом
+            target = getattr(self, "_directed_target", None)
+            if target is None or getattr(self, "_explore_directive", None) != drive.directive \
+                    or math.hypot(self.x - target[0], self.y - target[1]) <= 1.0:
+                target = drive.explore_target((self.x, self.y), random)
+                self._directed_target, self._explore_directive = target, drive.directive
+            self.move_towards(target[0], target[1], dt)
+            return
+        self._directed_target = None
+        self._explore_area(dt)
 
     def _select_best_hint_target(self, hint_positions=None):
         """Выбор ближайшей позиции подсказки (карта/NPC)."""
@@ -1052,9 +1131,41 @@ class Character(BaseEntity):
             return math.sqrt((self.x - target_x)**2 + (self.y - target_y)**2)
         return float('inf')
     
+    # Навыки класса в порядке приоритета (способности - lua_content/abilities.lua)
+    CLASS_SKILLS = {
+        "warrior": ("second_wind", "cleave", "power_strike"),
+        "mage": ("self_heal", "fireball", "magic_bolt"),
+        "rogue": ("shadow_veil", "second_wind", "stealth_strike"),
+    }
+
+    def _use_skills_via_manager(self, manager, enemies) -> bool:
+        """Первый доступный навык класса. Круг (area) бьёт всех - френдли фаер:
+        не бить, если в круге сам герой или союзник; чистый AoE - только по 2+ врагам."""
+        target = self._find_nearest_enemy(enemies)
+        for skill in self.CLASS_SKILLS.get(self.character_class, ()):
+            ab = manager.ability(skill)
+            if ab is None:
+                continue
+            caught = manager.area_preview(self, skill, target)
+            if caught:
+                mine = manager.state(self).faction
+                if any(manager.state(e) is not None and manager.state(e).faction == mine for e in caught):
+                    continue
+                single = any(o.get("target") == "enemy" for o in ab.get("ops") or [])
+                if len(caught) < (1 if single else 2):
+                    continue
+            if manager.cast(self, skill, target).ok:
+                self.set_animation_state("attacking")
+                return True
+        return False
+
     def use_skill_automatically(self, enemies, dt):
         """Автоматическое использование скилов."""
         if not self.is_alive():
+            return
+        manager = getattr(self.game, "effect_manager", None)
+        if manager is not None and manager.state(self) is not None:
+            self._use_skills_via_manager(manager, enemies)
             return
 
         # Защитные/выживательные действия имеют приоритет над атакой,
@@ -1155,6 +1266,14 @@ class Character(BaseEntity):
             self.node.removeNode()
             self.node = None
     
+    @staticmethod
+    def _points_per_level() -> int:
+        try:
+            from ..gameplay.progression import progression
+            return int(progression()["hero_points_per_level"])
+        except Exception:  # без Lua-контента - правило по умолчанию
+            return 5
+
     def add_experience(self, amount: float) -> int:
         """Начисляет опыт и повышает уровень, пока хватает накопленного опыта.
 
@@ -1171,20 +1290,13 @@ class Character(BaseEntity):
             self.experience -= self.experience_to_next_level
             self.level += 1
             levels_gained += 1
-            # Рост порога следующего уровня и самих характеристик - не
-            # драматичный, но заметный прогресс за каждый уровень.
+            # Порог растёт; вместо фиксированного роста статов - очки
+            # характеристик (world.lua -> progression.hero_points_per_level),
+            # их распределяет сам герой (src/gameplay/progression.HeroGrowth).
+            # Полного лечения нет: повышение уровня посреди боя снимало всё
+            # напряжение (docs/GAMEPLAY_REVIEW.md).
             self.experience_to_next_level = int(self.experience_to_next_level * 1.25)
-            self.max_health += 15
-            self.max_mana += 5
-            self.max_stamina += 5
-            self.physical_damage += 2
-            self.magical_damage += 1
-            self.defense += 1
-            # Полное восстановление при левел-апе - обычная награда за прогресс,
-            # а не просто число в характеристиках.
-            self.health = self.max_health
-            self.mana = self.max_mana
-            self.stamina = self.max_stamina
+            self.attribute_points = int(getattr(self, "attribute_points", 0) or 0) + self._points_per_level()
             logger.info(f"{self.entity_id}: level up -> {self.level}")
         return levels_gained
 

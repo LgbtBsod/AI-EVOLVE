@@ -10,6 +10,8 @@ use crate::probe::{ProbeConfig, analyze_frame, compute_ssim};
 use crate::semantic_core::{LogCompressor as RustLogCompressor, StateDiffCalculator as RustStateDiffCalculator, EventCorrelator as RustEventCorrelator};
 use crate::analytics;
 use crate::qa;
+use crate::lua_content;
+use crate::tactics;
 use image::DynamicImage;
 
 /// Python module for rust_core
@@ -23,6 +25,8 @@ fn rust_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyEventCorrelator>()?;
     m.add_class::<PyRunAnalytics>()?;
     m.add_class::<PyQaKernels>()?;
+    m.add_class::<PyLuaContent>()?;
+    m.add_class::<PyTacticsBandit>()?;
     // Aliases for cleaner Python API
     m.add("WorldGenerator", m.getattr("PyWorldGenerator")?)?;
     m.add("SimulationEnv", m.getattr("PySimulationEnv")?)?;
@@ -32,6 +36,8 @@ fn rust_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("EventCorrelator", m.getattr("PyEventCorrelator")?)?;
     m.add("RunAnalytics", m.getattr("PyRunAnalytics")?)?;
     m.add("QaKernels", m.getattr("PyQaKernels")?)?;
+    m.add("LuaContent", m.getattr("PyLuaContent")?)?;
+    m.add("TacticsBandit", m.getattr("PyTacticsBandit")?)?;
     m.add("VERSION", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }
@@ -507,5 +513,109 @@ impl PyQaKernels {
     fn fnv1a64_lines(py: Python<'_>, data: &Bound<'_, PyAny>, offsets: &Bound<'_, PyAny>) -> PyResult<Vec<u64>> {
         let (data, offsets) = (buf::<u8>(py, data)?, buf::<u64>(py, offsets)?);
         Ok(py.detach(|| qa::fnv1a64_lines(&data, &offsets)))
+    }
+}
+
+// ============================================================================
+// Lua content FFI (tools/lua_bridge.py)
+// ============================================================================
+
+/// Sandboxed Lua 5.5 -> one JSON string (json.loads on the Python side).
+#[pyclass]
+struct PyLuaContent;
+
+fn lua_limits(memory_mb: usize, max_instructions: u64) -> lua_content::Limits {
+    lua_content::Limits { memory_bytes: memory_mb << 20, instructions: max_instructions }
+}
+
+#[pymethods]
+impl PyLuaContent {
+    /// Lua helpers shared with the lupa fallback (export.lua).
+    #[classattr]
+    const EXPORT_LUA: &'static str = lua_content::EXPORT_LUA;
+
+    /// Execute `source` and return its data as JSON. `globals`: names of global
+    /// tables to return instead of the chunk's return value (settings files).
+    #[staticmethod]
+    #[pyo3(signature = (source, chunk_name="content", globals=None, memory_mb=1024, max_instructions=2_000_000_000))]
+    fn load_json(py: Python<'_>, source: &str, chunk_name: &str, globals: Option<Vec<String>>,
+                 memory_mb: usize, max_instructions: u64) -> PyResult<String> {
+        let globals = globals.unwrap_or_default();
+        let limits = lua_limits(memory_mb, max_instructions);
+        py.detach(|| lua_content::export_json(source, chunk_name, &globals, limits))
+            .map_err(pyo3::exceptions::PyValueError::new_err)
+    }
+
+    /// Evaluate every pred() condition of `source` on each context of `ctxs_json`
+    /// (JSON array) -> JSON array of {condition source: result}.
+    #[staticmethod]
+    #[pyo3(signature = (source, ctxs_json, chunk_name="content", memory_mb=1024, max_instructions=2_000_000_000))]
+    fn eval_preds_json(py: Python<'_>, source: &str, ctxs_json: &str, chunk_name: &str,
+                       memory_mb: usize, max_instructions: u64) -> PyResult<String> {
+        let limits = lua_limits(memory_mb, max_instructions);
+        py.detach(|| lua_content::eval_preds_json(source, chunk_name, ctxs_json, limits))
+            .map_err(pyo3::exceptions::PyValueError::new_err)
+    }
+}
+
+// ============================================================================
+// Tactics memory FFI (src/gameplay/tactics.py)
+// ============================================================================
+
+/// Discounted UCB1 bandit: contexts (enemy archetypes) x arms (tactics).
+#[pyclass]
+struct PyTacticsBandit {
+    inner: tactics::Bandit,
+}
+
+#[pymethods]
+impl PyTacticsBandit {
+    #[new]
+    #[pyo3(signature = (contexts, arms, c=0.6, decay=0.97))]
+    fn new(contexts: usize, arms: usize, c: f64, decay: f64) -> PyResult<Self> {
+        if arms == 0 || contexts == 0 {
+            return Err(pyo3::exceptions::PyValueError::new_err("contexts and arms must be > 0"));
+        }
+        Ok(Self { inner: tactics::Bandit::new(contexts, arms, c, decay) })
+    }
+
+    #[pyo3(signature = (ctx, allowed=None))]
+    fn select(&self, ctx: usize, allowed: Option<Vec<bool>>) -> PyResult<usize> {
+        self.check(ctx, 0)?;
+        Ok(self.inner.select(ctx, &allowed.unwrap_or_default()))
+    }
+
+    fn update(&mut self, ctx: usize, arm: usize, reward: f64) -> PyResult<()> {
+        self.check(ctx, arm)?;
+        self.inner.update(ctx, arm, reward);
+        Ok(())
+    }
+
+    fn means(&self, ctx: usize) -> PyResult<Vec<f64>> {
+        self.check(ctx, 0)?;
+        Ok(self.inner.means(ctx))
+    }
+
+    /// (counts, sums) - to save the memory between sessions.
+    fn state(&self) -> (Vec<f64>, Vec<f64>) {
+        (self.inner.counts.clone(), self.inner.sums.clone())
+    }
+
+    fn load_state(&mut self, counts: Vec<f64>, sums: Vec<f64>) -> PyResult<()> {
+        if counts.len() != self.inner.counts.len() || sums.len() != self.inner.sums.len() {
+            return Err(pyo3::exceptions::PyValueError::new_err("state shape does not match"));
+        }
+        self.inner.counts = counts;
+        self.inner.sums = sums;
+        Ok(())
+    }
+}
+
+impl PyTacticsBandit {
+    fn check(&self, ctx: usize, arm: usize) -> PyResult<()> {
+        if ctx >= self.inner.contexts() || arm >= self.inner.arms {
+            return Err(pyo3::exceptions::PyIndexError::new_err("context or arm out of range"));
+        }
+        Ok(())
     }
 }

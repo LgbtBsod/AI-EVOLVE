@@ -2,11 +2,12 @@
 Lua-генератор для Effect Schema v1.
 
 Сериализует Python/JSON модель (Effect/Op/Value/Scale/Trigger) в читаемый
-Lua-table с предикатами-лямбдами. Сгенерированный код:
+Lua-table. Условия пишутся как pred("исходник", function(ctx) ... end):
+движок вызывает функцию, инструменты получают исходник без разбора текста.
+Сгенерированный код:
 
-  * валиден как Lua 5.4 (проверяется через lupa в тестах),
-  * round-trip-ится обратно в JSON парсером lua_parse.py,
-  * грузится движком (rust_core использует mlua/lua54).
+  * валиден как Lua 5.5 (исполняется в тестах через tools/lua_bridge.py),
+  * round-trip-ится обратно в JSON тем же мостом (rust_core/mlua или lupa).
 
 API:
     render_effect(ef: Effect|dict) -> str
@@ -37,10 +38,27 @@ def _is_expr(pred: str) -> bool:
     return any(ch in pred for ch in "<>=!()") or "." in pred
 
 
-def _pred_body(pred: str) -> str:
-    if _is_expr(pred):
-        return f"({pred})"
-    return f"PRED[{_str(pred)}](ctx)"
+# Ключи, значения которых - условия (предикаты)
+PRED_KEYS = ("when", "filter")
+
+# Хелпер в начале каждого Lua-файла предмета: условие = исходник (для
+# инструментов: экспорт без разбора текста функции) + функция (для Lua-движка:
+# p(ctx) вызывается напрямую через __call)
+PRED_PRELUDE = (
+    "local PRED_MT = { __call = function(p, ctx) return p.fn(ctx) end }\n"
+    "local function pred(src, fn) return setmetatable({ src = src, fn = fn }, PRED_MT) end"
+)
+
+
+def _pred_value(src: str) -> str:
+    """Условие -> `pred("src", function(ctx) return <lua> end)`; именованное -> из реестра PRED."""
+    if not _is_expr(src):
+        return f"pred({_str(src)}, PRED[{_str(src)}])"
+    # транслятор по белому списку AST: `!=` -> `~=`, max -> math.max,
+    # цепочки сравнений -> and (раньше выражение копировалось как есть)
+    from .pred_lua import to_lua
+    lua = to_lua(src)
+    return f"pred({_str(src)}, function(ctx) return {lua if lua.startswith('(') else f'({lua})'} end)"
 
 
 # ---------------------------------------------------------------- scalars
@@ -57,6 +75,8 @@ def _scalar_str(v) -> str | None:
 
 def _render_kv(k: str, v, pad_in: str) -> list[str]:
     """Одна строка `k = ...` (или несколько) с запятой."""
+    if k in PRED_KEYS and isinstance(v, str) and v:
+        return [f"{pad_in}{k} = {_pred_value(v)},"]
     s = _scalar_str(v)
     if s is not None:
         return [f"{pad_in}{k} = {s},"]
@@ -93,6 +113,9 @@ def _parts(d: dict, outer_pad: str) -> list[tuple[str, str]]:
     out = []
     for k, v in d.items():
         if v is None or v == "" or v == [] or v == {}:
+            continue
+        if k in PRED_KEYS and isinstance(v, str):
+            out.append((k, _pred_value(v)))
             continue
         s = _scalar_str(v)
         if s is not None:
@@ -152,7 +175,7 @@ def render_effect(ef, indent: int = 0) -> str:
         d["tags"] = list(ef["tags"])
     tr = ef.get("trigger", {"kind": "passive"})
     trd = {"kind": tr.get("kind", "passive")}
-    for k in ("event", "filter", "owner_has"):
+    for k in ("event", "filter", "owner_has", "cross"):
         if tr.get(k):
             trd[k] = tr[k]
     when = tr.get("when")
@@ -162,6 +185,8 @@ def render_effect(ef, indent: int = 0) -> str:
         d["_trigger_when"] = when
     else:
         d["trigger"] = trd
+    if ef.get("threshold") is not None:
+        d["threshold"] = ef["threshold"]
     for k in ("duration", "cooldown", "stacks", "amplify", "meta"):
         if ef.get(k):
             d[k] = ef[k]
@@ -175,7 +200,7 @@ def render_effect(ef, indent: int = 0) -> str:
                          ", ".join([f'{kk} = {_vv}' for kk, _vv in
                                     ((kk, _scalar_str(vv) if _scalar_str(vv) is not None else _table_expr(vv, pad_in))
                                      for kk, vv in trd.items())]) +
-                         f', when = function(ctx) return {_pred_body(v)} end }},')
+                         f', when = {_pred_value(v)} }},')
             continue
         if k == "trigger" and when:
             continue  # уже выведена вместе с when
@@ -211,21 +236,28 @@ def collect_predicates(effects: list) -> list[str]:
                 walk_ops([f])
 
     for ef in effects:
-        w = (ef.get("trigger") or {}).get("when")
-        if w and not _is_expr(w):
-            names.add(w)
+        tr = ef.get("trigger") or {}
+        for w in (tr.get("when"), tr.get("filter"), (ef.get("amplify") or {}).get("when")):
+            if isinstance(w, str) and w and not _is_expr(w):
+                names.add(w)
         walk_ops(ef.get("ops", []))
     return sorted(n for n in names if n and not _is_expr(n))
 
 
 def render_predicate_registry(effects: list) -> str:
+    """Реестр PRED: именованные условия из lua_content/effect_rules.lua (predicates)
+    переводятся в Lua; движок может подменить реестр своим (`PRED or {...}`)."""
     preds = collect_predicates(effects)
     if not preds:
         return ""
-    lines = ["-- Именованные предикаты: движок может передать реестр PRED",
+    from .pred_lua import to_lua
+    from .sim import named_predicates
+    known = named_predicates()
+    lines = ["-- Именованные условия (lua_content/effect_rules.lua -> predicates)",
              "local PRED = PRED or {"]
     for p in preds:
-        lines.append(f"  {_str(p)} = function(ctx) return true end, -- fallback")
+        body = f"return {to_lua(known[p])}" if p in known else "return true -- неизвестное имя: условие даёт движок"
+        lines.append(f"  [{_str(p)}] = function(ctx) {body} end,")
     lines.append("}")
     return "\n".join(lines)
 
@@ -240,6 +272,7 @@ def render_item(item: dict, effects: list) -> str:
         f"-- {item.get('description', '')}",
         f"-- Сгенерировано CAS Item Builder (effect-schema v1) : {now}",
     ]
+    out.append(PRED_PRELUDE)
     reg = render_predicate_registry(eff_dicts)
     if reg:
         out.append(reg)
@@ -251,10 +284,38 @@ def render_item(item: dict, effects: list) -> str:
         if v is None or v == "" or v == [] or v == {}:
             continue
         out.extend(_render_kv(k, v, "  "))
-    out.append("  effects = {")
-    for ef in eff_dicts:
-        r = render_effect(ef, indent=2)
-        out.append(r + ",")
-    out.append("  },")
+    if len(eff_dicts) <= EFFECTS_PER_BLOCK:
+        out.append("  effects = {")
+        for ef in eff_dicts:
+            out.append("    " + render_effect(ef, indent=2) + ",")
+        out.append("  },")
+    else:
+        out.extend(_render_blocks(eff_dicts))
     out.append("}")
     return "\n".join(out) + "\n"
+
+
+# В одной Lua-функции не больше 131071 вложенных функций (OP_CLOSURE, поле Bx),
+# а каждое условие - это function(ctx). Предмет на 100 тыс. эффектов (~150 тыс.
+# условий) не загружался: "too many functions". Большие предметы пишутся блоками:
+# каждый блок - своя функция, главный чанк держит лишь их число.
+EFFECTS_PER_BLOCK = 2000
+
+
+def _render_blocks(effects: list) -> list[str]:
+    out = ["  -- эффекты блоками по %d: лимит Lua 131071 функций на одну функцию" % EFFECTS_PER_BLOCK,
+           "  effects = (function(...)",
+           "    local all = {}",
+           "    for _, block in ipairs({ ... }) do",
+           "      for _, ef in ipairs(block) do all[#all + 1] = ef end",
+           "    end",
+           "    return all",
+           "  end)("]
+    for start in range(0, len(effects), EFFECTS_PER_BLOCK):
+        out.append("    (function() return {")
+        for ef in effects[start:start + EFFECTS_PER_BLOCK]:
+            out.append("      " + render_effect(ef, indent=3) + ",")
+        last = start + EFFECTS_PER_BLOCK >= len(effects)
+        out.append("    } end)()" + ("" if last else ","))
+    out.append("  ),")
+    return out

@@ -1,7 +1,7 @@
 """Executable spec of Lost My Self (Sorrow of Berserk), from the game designer.
 
   - activates when hero HP < 40%;
-  - +20% strength, +10% stamina, +5% crit chance, +10% crit damage, +5% attack speed;
+  - +20% strength, +10% max stamina (stamina is a resource), +5% crit chance, +10% crit damage, +5% attack speed;
   - each attack spends 0.5% max HP and deals 1.5% max HP;
   - per each 10% of HP below 40%: attack cost +0.5% max HP, damage +1.5% max HP,
     hp regen +20, lifesteal +5%, crit chance +5%, crit damage +10%, attack speed +10%;
@@ -27,7 +27,7 @@ from tools.effect_schema.sim import EffectRuntime, Unit  # noqa: E402
 LUA_ITEM = ROOT / "lua_content" / "items" / "sorrow_of_berserk.lua"
 
 MAX_HP = 10000.0
-BASE = {"strength": 100.0, "stamina": 100.0, "crit_chance": 10.0, "crit_dmg": 50.0,
+BASE = {"strength": 100.0, "max_stamina": 100.0, "crit_chance": 10.0, "crit_dmg": 50.0,
         "aspd": 1.0, "lifesteal": 0.0, "hp_regen": 0.0}
 EFFECTS = ("lost_my_self", "lost_my_self.attack")
 
@@ -67,7 +67,7 @@ def test_inactive_at_or_above_40(make, hp_pct):
 def test_base_bonuses_below_40_without_full_step(make):
     rt = make(35)  # 5% below the threshold: no 10% step yet
     assert bonus(rt, "strength") == pytest.approx(20.0)     # +20% of 100
-    assert bonus(rt, "stamina") == pytest.approx(10.0)      # +10% of 100
+    assert bonus(rt, "max_stamina") == pytest.approx(10.0)  # +10% of 100
     assert bonus(rt, "crit_chance") == pytest.approx(5.0)   # +5 points
     assert bonus(rt, "crit_dmg") == pytest.approx(10.0)     # +10 points
     assert bonus(rt, "aspd") == pytest.approx(0.05)         # +5% of 1.0
