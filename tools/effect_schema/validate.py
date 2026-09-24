@@ -6,8 +6,9 @@ from .schema import (OP_KINDS, TARGETS, OPS, TRIGGER_KINDS, EVENTS, FLAGS,
                      CONTEXT_ONLY_STATS, RESOURCE_STATS, is_stat)
 
 
-def _validate_pred(pred, path: str) -> list[str]:
-    """Условие должно быть булевым выражением над полями рантайма (sim.sample_context)."""
+def _validate_pred(pred, path: str, effects=()) -> list[str]:
+    """Условие должно быть булевым выражением над полями рантайма (sim.sample_context);
+    effects - эффекты предмета: их баффы добавляют поля buff_<id>."""
     if not isinstance(pred, str) or not pred.strip():
         return [f"{path}: predicate must be a non-empty string"]
     from .sim import eval_pred, named_predicates, sample_context  # лениво: sim - только stdlib
@@ -18,13 +19,14 @@ def _validate_pred(pred, path: str) -> list[str]:
     if bool_errs:
         return [f"{path}: {e}" for e in bool_errs]
     try:
-        eval_pred(pred, sample_context())   # неизвестное поле ctx -> ошибка здесь, а не в бою
+        eval_pred(pred, sample_context(list(effects)))   # неизвестное поле ctx -> ошибка здесь, а не в бою
         return []
     except Exception as e:
         return [f"{path}: invalid predicate {pred!r} ({type(e).__name__}: {e})"]
 
 
-def validate_effect(ef: dict, path: str = "effect") -> list[str]:
+def validate_effect(ef: dict, path: str = "effect", item_effects=None) -> list[str]:
+    item_effects = item_effects if item_effects is not None else [ef]
     errs: list[str] = []
 
     def err(msg):
@@ -57,7 +59,7 @@ def validate_effect(ef: dict, path: str = "effect") -> list[str]:
     for pk in ("when", "filter"):
         pv = tr.get(pk) if isinstance(tr, dict) else None
         if isinstance(pv, str) and pv:
-            errs += _validate_pred(pv, f"{path}.trigger.{pk}")
+            errs += _validate_pred(pv, f"{path}.trigger.{pk}", item_effects)
     amp = ef.get("amplify")
     if amp is not None:
         if not isinstance(amp, dict):
@@ -72,17 +74,17 @@ def validate_effect(ef: dict, path: str = "effect") -> list[str]:
             if not amp.get("when") and not amp.get("while_buff"):
                 err("amplify needs `when` (predicate) or `while_buff`")
             if isinstance(amp.get("when"), str):
-                errs += _validate_pred(amp["when"], f"{path}.amplify.when")
+                errs += _validate_pred(amp["when"], f"{path}.amplify.when", item_effects)
     ops = ef.get("ops")
     if not isinstance(ops, list) or not ops:
         err("ops must be a non-empty list")
     else:
         for i, o in enumerate(ops):
-            errs += validate_op(o, f"{path}.ops[{i}]")
+            errs += validate_op(o, f"{path}.ops[{i}]", item_effects)
     return errs
 
 
-def validate_op(o: dict, path: str) -> list[str]:
+def validate_op(o: dict, path: str, item_effects=()) -> list[str]:
     errs: list[str] = []
 
     def err(msg):
@@ -119,6 +121,13 @@ def validate_op(o: dict, path: str) -> list[str]:
         err(f"extend.on={ext['on']!r} is not an event")
     if kind == "apply_effect" and not o.get("buff_id"):
         err("kind=apply_effect requires buff_id (the id of the effect to apply)")
+    if kind == "summon" and not o.get("summon"):
+        err("kind=summon requires summon (creature type)")
+    if o.get("target") == "area" and o.get("center", "target") not in ("target", "self"):
+        err("area center must be 'target' or 'self'")
+    if o.get("every") is not None:
+        if kind not in ("deal", "heal") or o.get("duration") is None:
+            err("every (periodic op) is for deal/heal and needs duration")
     if kind in ("buff", "extend", "remove_buff") and not o.get("buff_id"):
         err(f"kind={kind} requires buff_id")
     v = o.get("value")
@@ -126,7 +135,7 @@ def validate_op(o: dict, path: str) -> list[str]:
         err("needs value or scale")
     when = o.get("when")
     if isinstance(when, str) and when:
-        errs += _validate_pred(when, f"{path}.when")
+        errs += _validate_pred(when, f"{path}.when", item_effects)
     if isinstance(v, dict):
         if not any(k in v for k in ("flat", "pct", "ref")):
             err("value needs one of flat/pct/ref")
@@ -141,7 +150,7 @@ def validate_op(o: dict, path: str) -> list[str]:
         elif not is_stat(s["of"]):
             err(f"scale.of unknown stat {s['of']!r}")
     for i, f in enumerate(o.get("fail", []) or []):
-        errs += validate_op(f, f"{path}.fail[{i}]")
+        errs += validate_op(f, f"{path}.fail[{i}]", item_effects)
     return errs
 
 
@@ -198,7 +207,7 @@ def validate_item(item: dict) -> list[str]:
     effects = item.get("effects", [])
     ids = set()
     for i, ef in enumerate(effects):
-        errs += validate_effect(ef, f"effects[{i}]")
+        errs += validate_effect(ef, f"effects[{i}]", effects)
         eid = ef.get("id") if isinstance(ef, dict) else None
         if eid in ids:
             errs.append(f"effects[{i}]: duplicate id {eid!r}")

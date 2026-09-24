@@ -285,8 +285,20 @@ class EnhancedEnemy:
         """Проверка, жив ли враг"""
         return self.health > 0 and self.state != "dead"
     
+    # навыки по типу врага; боссы получают свои из lua_content/bosses.lua
+    TYPE_SKILLS = {"elite": ("war_cry", "crushing_blow"), "strong": ("crushing_blow",),
+                   "skeleton": ("venom_spit",), "goblin": ("venom_spit",)}
+
     def attack(self, target):
-        """Атака цели"""
+        """Атака цели: навык по типу (если готов) или удар оружием - через единый
+        менеджер эффектов; без него (тесты) - прежний путь через CombatSystem."""
+        manager = getattr(self.game, "effect_manager", None)
+        if manager is not None and manager.state(self) is not None:
+            for skill in getattr(self, "skills", None) or self.TYPE_SKILLS.get(self.enemy_type, ()):
+                if manager.ability(skill) is not None and manager.cast(self, skill, target).ok:
+                    return True
+            result = manager.cast(self, "weapon_attack", target)
+            return result.ok and any(not h.is_dodged for h in result.hits)
         current_time = time.time()
         if current_time - self.last_attack_time >= self.attack_cooldown and self.is_alive():
             # Проверяем расстояние до цели

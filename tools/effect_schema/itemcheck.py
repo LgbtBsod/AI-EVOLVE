@@ -136,10 +136,11 @@ def predicates(item: dict) -> list[str]:
     return list(dict.fromkeys(out))
 
 
-def random_contexts(n: int, seed: int) -> list[dict]:
-    """Случайные ctx по полям рантайма: обычные значения, нули, 1 HP, большие числа."""
+def random_contexts(n: int, seed: int, effects=()) -> list[dict]:
+    """Случайные ctx по полям рантайма (с buff_<id> баффов предмета): обычные значения,
+    нули, 1 HP, большие числа."""
     rng = random.Random(seed)
-    fields = sorted(sample_context())
+    fields = sorted(sample_context(list(effects)))
     ctxs = []
     for i in range(n):
         ctx = {}
@@ -190,7 +191,7 @@ def check_lua(item: dict, backends: list[str]) -> tuple[Check, Optional[str]]:
 def check_preds(item: dict, lua: str, backends: list[str], samples: int, seed: int) -> Check:
     srcs = predicates(item)
     named = named_predicates()
-    ctxs = random_contexts(samples, seed)
+    ctxs = random_contexts(samples, seed, item.get("effects", []))
     findings: list[str] = []
     t0 = time.perf_counter()
     py_rows: list[dict] = [{} for _ in ctxs]
@@ -317,7 +318,7 @@ def coverage(item: dict) -> dict[str, tuple[set, set]]:
             used["features"].update(f"scale.{k}" for k in ("cap", "floor") if s.get(k) is not None)
             if s and s.get("factor", 1) != 1:
                 used["features"].add("scale.factor")
-            for k in ("when", "fail", "duration", "cooldown", "extend"):
+            for k in ("when", "fail", "duration", "cooldown", "extend", "every"):
                 if o.get(k):
                     used["features"].add(f"op.{k}")
             ops(o.get("fail"))
@@ -342,7 +343,7 @@ def coverage(item: dict) -> dict[str, tuple[set, set]]:
         "stats": set(KNOWN_STATS - CONTEXT_ONLY_STATS - RESOURCE_STATS), "resources": set(RESOURCE_STATS),
         "op_kinds": set(OP_KINDS), "ops": set(OPS), "targets": set(TARGETS), "events": set(EVENTS),
         "triggers": set(TRIGGER_KINDS), "flags": set(FLAGS), "value_forms": {"flat", "pct", "pct_of", "ref"},
-        "features": {"scale.cap", "scale.floor", "scale.factor", "op.when", "op.fail", "op.duration", "op.cooldown",
+        "features": {"scale.cap", "scale.floor", "scale.factor", "op.when", "op.fail", "op.duration", "op.cooldown", "op.every",
                      "op.extend", "trigger.filter", "trigger.owner_has", "trigger.cross", "named_predicate",
                      "effect.amplify", "effect.threshold", "effect.cooldown", "amplify.while_buff"},
     }

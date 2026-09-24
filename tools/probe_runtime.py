@@ -304,8 +304,9 @@ def get_entities(game):
 
 
 def get_combat_system(game):
-    """Объект с register_event_handler(callback) или None."""
-    return getattr(game, "combat_system", None)
+    """Объект с register_event_handler(callback) или None: единый менеджер
+    эффектов игры (через него идут все удары и навыки), иначе старый CombatSystem."""
+    return getattr(game, "effect_manager", None) or getattr(game, "combat_system", None)
 
 
 def entity_id_of(entity):

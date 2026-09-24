@@ -5,7 +5,8 @@
     qa.py item diff PATH [--base REF]               # что поменялось в предмете относительно git REF (HEAD)
     qa.py item all                                  # каждый предмет lua_content/items + каждый шаблон каталога
 
-PATH: файл .lua/.json или catalog:<id шаблона> (шаблон вместе с зависимостями).
+PATH: файл .lua/.json, файл-коллекция#id предмета (lua_content/items/game_items.lua#vampire_fang)
+или catalog:<id шаблона> (шаблон вместе с зависимостями).
 """
 from __future__ import annotations
 
@@ -28,6 +29,7 @@ def load(spec: str, ref: str | None = None) -> dict:
     if spec.startswith("catalog:"):
         tid = spec.split(":", 1)[1]
         return {"name": tid, "effects": bundle(tid)}
+    spec, _, item_id = spec.partition("#")       # файл-коллекция: path#id
     path = (ROOT / spec) if not spec.startswith("/") else __import__("pathlib").Path(spec)
     if ref is None:
         text = path.read_text(encoding="utf-8")
@@ -37,9 +39,12 @@ def load(spec: str, ref: str | None = None) -> dict:
         if r.returncode != 0:
             return {"name": f"{rel}@{ref}", "effects": []}  # файла ещё не было
         text = r.stdout
-    if path.suffix == ".json":
-        return json.loads(text)
-    return lua_bridge.load(text)
+    data = json.loads(text) if path.suffix == ".json" else lua_bridge.load(text)
+    if isinstance(data, dict) and isinstance(data.get("items"), list):   # файл-коллекция предметов
+        if item_id:
+            return next(it for it in data["items"] if it.get("id") == item_id)
+        return {"name": path.name, "effects": [ef for it in data["items"] for ef in it.get("effects") or []]}
+    return data
 
 
 def cmd_check(args) -> int:
@@ -69,7 +74,16 @@ def cmd_diff(args) -> int:
 def cmd_all(args) -> int:
     from tools.effect_schema import itemcheck
     from tools.effect_schema.catalog import CATALOG
-    specs = [p.relative_to(ROOT).as_posix() for p in sorted(ITEMS.glob("*.lua"))] + [f"catalog:{t}" for t in CATALOG]
+    from tools import lua_bridge
+    specs = []
+    for p in sorted(ITEMS.glob("*.lua")):
+        rel = p.relative_to(ROOT).as_posix()
+        data = lua_bridge.load(p, cache=True)
+        if isinstance(data, dict) and isinstance(data.get("items"), list):
+            specs += [f"{rel}#{it['id']}" for it in data["items"] if it.get("effects")]
+        else:
+            specs.append(rel)
+    specs += [f"catalog:{t}" for t in CATALOG]
     bad = 0
     for spec in specs:
         report = itemcheck.check_item(load(spec), pred_samples=args.samples)

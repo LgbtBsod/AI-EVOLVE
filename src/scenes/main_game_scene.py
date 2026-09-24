@@ -9,6 +9,13 @@ from panda3d.core import CardMaker, TransparencyAttrib
 
 logger = logging.getLogger(__name__)
 
+class LootBagTarget:
+    """Мешок добычи как цель ИИ героя (x, y как у сундука)."""
+
+    def __init__(self, bag):
+        self.x, self.y = bag["x"], bag["y"]
+
+
 class EnhancedGameScene:
     """Улучшенная игровая сцена с правильным рендерингом"""
     
@@ -66,11 +73,28 @@ class EnhancedGameScene:
         self.last_echo_refresh_time = 0.0
         self._runtime_task_names = set()
         self._opened_chest_ids = set()
+
+        # Единый менеджер эффектов (удары, навыки, зелья, предметы) и инвентари
+        self.effects = None
+        self.hero_inventory = None
+        self.hero_inventory_brain = None
+        self.enemy_brains = {}          # id(enemy) -> InventoryBrain (элиты, боссы)
+        self.enemy_inventories = {}     # id(enemy) -> Inventory
+        self.allies = []                # призванные союзники героя
+        self.loot_bags = []             # {"x", "y", "gold", "items", "node"}
+        self.messages = []              # (время, текст) - лента событий для HUD
+        self.game_time = 0.0
+        self.rng = random
         
     def enter(self):
         """Вход в игровую сцену"""
         logger.info("Entering enhanced game scene...")
-        
+
+        from src.effects.abilities import load_abilities
+        from src.effects.manager import EffectManager
+        self.effects = EffectManager(world=self, abilities=load_abilities())
+        self.game.effect_manager = self.effects
+
         # Создаем игровой мир
         self._create_world()
         
@@ -359,6 +383,70 @@ class EnhancedGameScene:
         # Создаем игрока немного выше земли
         self.player = Character("player_1", self.game, 0, 0, 0.5, "warrior", (0, 0, 1, 1), is_player=True)  # Синий цвет
         self.player.create_character()
+        self._equip_hero()
+
+    def _equip_hero(self):
+        """Регистрация героя в менеджере эффектов, инвентарь и стартовый набор."""
+        from src.gameplay.inventory import Inventory, InventoryBrain
+        from src.gameplay.items import catalog
+        if self.effects is None or self.player is None:
+            return
+        self.effects.register(self.player, "hero")
+        player = self.player
+        self.hero_inventory = Inventory(
+            player, capacity=20, gold=20,
+            on_change=lambda inv: self.effects.equip(player, inv.equipped.values()))
+        self.hero_inventory_brain = InventoryBrain(self.hero_inventory, role=player.character_class)
+        player.inventory = self.hero_inventory
+        cat = catalog()
+        for item_id in ("rusty_sword", "leather_armor", "health_potion", "health_potion"):
+            item = cat.get(item_id)
+            if item is not None:
+                self.hero_inventory.add(item)
+                if item.equippable:
+                    self.hero_inventory.equip(item)
+
+    # ---------------------------------------------------------------- мир для менеджера эффектов
+    def entities(self):
+        """Все сущности мира (для способностей по площади)."""
+        out = [self.player] if self.player is not None else []
+        return out + list(self.enemies) + list(self.allies)
+
+    def spawn_summon(self, kind, x, y, faction, level, owner):
+        """Призыв (операция summon): враг на стороне призвавшего."""
+        from src.entities.enemy import EnhancedEnemy
+        creature = EnhancedEnemy(self.game, x, y, 0.5, kind, level=max(1, int(level)))
+        if getattr(self.game, "render", None) is not None:
+            creature.create_enemy()
+        creature.summoned_by = owner
+        if faction == "hero":
+            self.allies.append(creature)
+            if self.effects is not None:
+                self.effects.register(creature, "hero")
+        else:
+            self._register_enemy(creature)
+            self.enemies.append(creature)
+        self.log_message(f"призван {kind}")
+        return creature
+
+    def _register_enemy(self, enemy):
+        """Враг в менеджере эффектов + снаряжение по таблице добычи (элиты и боссы пьют зелья)."""
+        if self.effects is None:
+            return
+        from src.gameplay.inventory import Inventory, InventoryBrain
+        from src.gameplay.loot import outfit
+        self.effects.register(enemy, "monsters")
+        inv = Inventory(enemy, capacity=8,
+                        on_change=lambda inv, e=enemy: self.effects.equip(e, inv.equipped.values()))
+        outfit(inv, enemy.enemy_type, self.rng)
+        enemy.inventory = inv
+        self.enemy_inventories[id(enemy)] = inv
+        if inv.bag or inv.equipped:
+            self.enemy_brains[id(enemy)] = InventoryBrain(inv, role="monster", heal_at=0.3)
+
+    def log_message(self, text):
+        self.messages.append((self.game_time, text))
+        del self.messages[:-50]
         
     def _create_hud(self):
         """Создание HUD"""
@@ -395,6 +483,7 @@ class EnhancedGameScene:
             enemy = EnhancedEnemy(self.game, x, y, z, enemy_type)
             enemy.create_enemy()
             enemy.apply_level_bonus(level_bonus)
+            self._register_enemy(enemy)
             self.enemies.append(enemy)
             
     def _setup_camera(self):
@@ -485,6 +574,10 @@ class EnhancedGameScene:
         """Обновление игровой сцены"""
         if self.is_paused:
             return
+        self.game_time += dt
+        if self.effects is not None:
+            self.effects.update(dt)
+        self._update_inventories(dt)
             
         # Обновляем игрока
         if self.player and self.player.is_alive():
@@ -535,6 +628,9 @@ class EnhancedGameScene:
                 # нигде не читался - убийства не давали опыта вообще.
                 if self.player:
                     self.player.add_experience(getattr(enemy, "experience_reward", 0))
+                self._drop_enemy_loot(enemy)
+                if self.effects is not None:
+                    self.effects.unregister(enemy)
                 enemy.destroy()
                 self.enemies.remove(enemy)
                 if enemy in self.player_created_objects:
@@ -561,12 +657,72 @@ class EnhancedGameScene:
             self._handle_player_death()
             
     def _get_interactive_items(self):
-        """Список интерактивных объектов для AI (например, сундуков)."""
+        """Список интерактивных объектов для AI: сундуки и мешки добычи."""
         chests = []
         for obj in self.player_created_objects:
             if hasattr(obj, 'getName') and obj.getName() == 'chest':
                 chests.append(obj)
-        return chests
+        return chests + [LootBagTarget(bag) for bag in self.loot_bags]
+
+    # ---------------------------------------------------------------- инвентари и добыча
+    def _update_inventories(self, dt):
+        """Решения ИИ по инвентарю: зелья, экипировка, карты (герой и враги)."""
+        if self.effects is None:
+            return
+        if self.player is not None and self.player.is_alive() and self.hero_inventory_brain is not None:
+            before = len(self.hero_inventory.log)
+            self.hero_inventory_brain.update(
+                dt, lambda item: self.effects.use_item(self.player, item), self._learn_from_item)
+            for line in self.hero_inventory.log[before:]:
+                self.log_message(f"Герой {line}")
+        for enemy in self.enemies:
+            brain = self.enemy_brains.get(id(enemy))
+            if brain is not None and enemy.is_alive():
+                act = brain.update(dt, lambda item, e=enemy: self.effects.use_item(e, item))
+                if act and act.startswith("potion"):
+                    self.log_message(f"{enemy.enemy_type} выпил зелье")
+        self._pickup_loot_bags()
+
+    def _learn_from_item(self, item):
+        """Карта или артефакт: знание о выходе."""
+        reveals = (item.knowledge or {}).get("reveals")
+        if reveals == "exit":
+            self._register_exit_knowledge(precise=True)
+            self.log_message(f"{item.name}: выход отмечен")
+        elif reveals in ("exit_region", "exit_direction"):
+            self._register_exit_knowledge(precise=False)
+            self.log_message(f"{item.name}: направление к выходу")
+
+    def _drop_enemy_loot(self, enemy):
+        from src.gameplay.loot import enemy_drop
+        inv = self.enemy_inventories.pop(id(enemy), None)
+        self.enemy_brains.pop(id(enemy), None)
+        if inv is None or getattr(enemy, "summoned_by", None) is not None:
+            return
+        gold, items = enemy_drop(inv, enemy.enemy_type, self.rng)
+        if gold <= 0 and not items:
+            return
+        bag = {"x": enemy.x, "y": enemy.y, "gold": gold, "items": items, "node": None}
+        if getattr(self.game, "render", None) is not None:
+            node = self.game.render.attachNewNode("loot")
+            self._create_visible_cube(node, "loot_bag", 0, 0, 0.2, 0.5, 0.5, 0.4, (0.9, 0.75, 0.2, 1))
+            node.setPos(enemy.x, enemy.y, 0.1)
+            bag["node"] = node
+        self.loot_bags.append(bag)
+
+    def _pickup_loot_bags(self):
+        if self.player is None or not self.player.is_alive():
+            return
+        for bag in self.loot_bags[:]:
+            if math.hypot(self.player.x - bag["x"], self.player.y - bag["y"]) > 2.0:
+                continue
+            self.hero_inventory.gold += bag["gold"]
+            taken = [it for it in bag["items"] if self.hero_inventory.add(it)]
+            names = ", ".join(it.name for it in taken)
+            self.log_message(f"Добыча: {bag['gold']} золота" + (f", {names}" if names else ""))
+            if bag["node"] is not None:
+                bag["node"].removeNode()
+            self.loot_bags.remove(bag)
 
 
     def _get_hint_positions(self):
@@ -626,6 +782,7 @@ class EnhancedGameScene:
             enemy = EnhancedEnemy(self.game, x, y, 0, enemy_type)
             enemy.create_enemy()
             enemy.apply_level_bonus(self._current_enemy_level_bonus())
+            self._register_enemy(enemy)
             self.enemies.append(enemy)
 
             self.last_enemy_spawn = current_time
@@ -917,6 +1074,13 @@ class EnhancedGameScene:
         
     def exit(self):
         """Выход из игровой сцены"""
+        if getattr(self.game, "effect_manager", None) is self.effects:
+            self.game.effect_manager = None
+        for bag in self.loot_bags:
+            if bag["node"] is not None:
+                bag["node"].removeNode()
+        self.loot_bags.clear()
+
         # Уничтожаем игрока
         if self.player:
             self.player.destroy()
@@ -986,6 +1150,7 @@ class EnhancedGameScene:
         enemy = EnhancedEnemy(self.game, x, y, z, enemy_type)
         enemy.create_enemy()
         enemy.apply_level_bonus(self._current_enemy_level_bonus())
+        self._register_enemy(enemy)
         self.enemies.append(enemy)
         self.player_created_objects.append(enemy)
     
@@ -1091,6 +1256,12 @@ class EnhancedGameScene:
             self.player.add_experience(50)
             self.player.health = min(self.player.max_health, self.player.health + 25)
             logger.info("Chest opened! Received: 50 XP, 25 HP")
+            if self.hero_inventory is not None:
+                from src.gameplay.loot import loot_tables, roll_loot
+                gold, items = roll_loot(loot_tables().get("chest") or {}, self.rng)
+                self.hero_inventory.gold += gold
+                taken = [it for it in items if self.hero_inventory.add(it)]
+                self.log_message(f"Сундук: {gold} золота" + (", " + ", ".join(it.name for it in taken) if taken else ""))
         
         # Анимация открытия
         chest.setHpr(0, 0, 45)  # Поворачиваем крышку

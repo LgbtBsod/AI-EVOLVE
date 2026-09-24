@@ -38,9 +38,11 @@ OP_KINDS = {
     "remove_buff",  # снять бафф
     "apply_effect",  # применить другой эффект по id
     "kill",         # убить цель
+    "summon",       # призвать существ: summon = тип, count = сколько (менеджер эффектов)
 }
 
-TARGETS = {"self", "enemy", "ally", "allies", "source"}
+# area - все враждебные в радиусе (radius; center = "target" | "self")
+TARGETS = {"self", "enemy", "ally", "allies", "source", "area"}
 
 OPS = {"add", "sub", "mul", "div", "set", "min", "max"}
 
@@ -64,7 +66,7 @@ KNOWN_STATS = {
     "strength", "agility", "intelligence", "vitality", "wisdom", "charisma", "luck", "endurance",
     # боевые статы
     "defense", "aspd", "crit_chance", "crit_dmg", "lifesteal", "tenacity", "move_speed",
-    "attack_damage", "kills",
+    "attack_damage", "spell_power", "dodge", "kills",
     # псевдо-стат runtime: фактический урон последнего удара героя
     # (ctx.last_damage в sim; источник для heal {"pct": N, "of": "last_damage"})
     "last_damage",

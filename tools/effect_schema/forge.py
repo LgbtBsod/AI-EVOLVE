@@ -162,6 +162,16 @@ def coverage_effects(rng: random.Random, preds: PredGen) -> list[dict]:
                  "ops": [{"kind": "deal", "target": "enemy", "stat": "hp", "op": "sub", "value": {"flat": 3},
                           "flags": ["true_damage"]}]})
 
+    # 4b) по площади, призыв, урон и лечение со временем (менеджер эффектов игры)
+    effs.append({"id": "area.nova", "tags": ["forge", "area"], "trigger": {"kind": "event", "event": "cast"},
+                 "ops": [{"kind": "deal", "target": "area", "radius": 4, "center": "self", "stat": "hp", "op": "sub",
+                          "value": {"pct": 80, "of": "spell_power"}},
+                         {"kind": "deal", "target": "enemy", "stat": "hp", "op": "sub", "value": {"flat": 2},
+                          "every": 1, "duration": {"flat": 3}, "flags": ["true_damage"]},
+                         {"kind": "heal", "target": "self", "stat": "hp", "op": "add", "value": {"flat": 3},
+                          "every": 1, "duration": {"flat": 3}},
+                         {"kind": "summon", "target": "self", "summon": "skeleton", "count": 2}]})
+
     # 5) казнь, owner_has, кулдаун эффекта
     effs.append({"id": "execute", "tags": ["forge"], "trigger": {"kind": "event", "event": "attack"},
                  "ops": [{"kind": "kill", "target": "enemy", "when": "ctx.enemy_hp_pct < 10"}]})

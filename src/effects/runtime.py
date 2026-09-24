@@ -39,14 +39,18 @@ DEFAULT_RULES: dict[str, dict] = {
                  "strength": 0.0, "agility": 0.0, "intelligence": 0.0, "vitality": 0.0,
                  "wisdom": 0.0, "charisma": 0.0, "luck": 0.0, "endurance": 0.0,
                  "defense": 0.0, "tenacity": 0.0, "crit_chance": 0.0, "crit_dmg": 50.0, "aspd": 1.0,
-                 "lifesteal": 0.0, "move_speed": 5.0, "attack_damage": 0.0},
+                 "lifesteal": 0.0, "move_speed": 5.0, "attack_damage": 0.0, "spell_power": 0.0, "dodge": 0.0},
     "resources": {"hp": {"max": "max_hp", "regen": "hp_regen"},
                   "mana": {"max": "max_mana", "regen": "mana_regen"},
                   "stamina": {"max": "max_stamina", "regen": "stamina_regen"}},
     "bounds": {"max_hp": {"min": 1}, "max_mana": {"min": 0}, "max_stamina": {"min": 0},
                "crit_chance": {"min": 0, "max": 100}, "aspd": {"min": 0.1}, "move_speed": {"min": 0},
-               "tenacity": {"min": 0, "max": 100}},
+               "tenacity": {"min": 0, "max": 100}, "dodge": {"min": 0, "max": 75}},
     "predicates": {"low_hp_40": "ctx.hp_pct < 40"},
+    "attributes": {"strength": {"attack_damage": 0.5}, "agility": {"crit_chance": 0.2, "aspd": 0.01},
+                   "intelligence": {"max_mana": 2}, "vitality": {"max_hp": 5, "hp_regen": 0.05},
+                   "wisdom": {"mana_regen": 0.05}, "endurance": {"max_stamina": 3, "stamina_regen": 0.05},
+                   "luck": {"crit_chance": 0.1}, "charisma": {}},
 }
 
 
@@ -433,6 +437,8 @@ class EffectRuntime:
         self._buff_granted_at: dict[str, float] = {}
         self._effect_fired_at: dict[str, float] = {}   # Effect.cooldown
         self._compiled: dict[str, Callable[[dict], Any]] = {}  # условие -> замыкание (_test)
+        self._periodic: list[dict] = []                        # DoT/HoT (every + duration)
+        self._buff_fields = buff_fields(effects)               # buff_id -> имя поля ctx
         self._now = 0.0
         # --- hp_cross -----------------------------------------------------
         # Зоны пересечения порога HP (kind="condition", threshold=N):
@@ -457,9 +463,14 @@ class EffectRuntime:
 
     def context(self, extra: Optional[dict] = None) -> dict:
         """Контекст условий и значений: статы владельца, enemy_* цели,
-        last_damage (фактический урон последнего удара героя)."""
+        last_damage (фактический урон последнего удара героя) и buff_<id> -
+        сколько секунд осталось баффу (0 - не активен) для каждого баффа,
+        который выдают эффекты: `ctx.buff_enraged > 0` включает бонусы на время баффа."""
         ctx = {**self.owner.ctx(extra), **self.target_ctx("enemy", self.enemy)}
         ctx["last_damage"] = self.last_damage
+        for bid, field in self._buff_fields.items():
+            b = self.owner.buffs.get(bid)
+            ctx[field] = max(0.0, b.get("until", 0.0) - self._now) if b else 0.0
         return ctx
 
     def target_ctx(self, prefix: str, t: Optional[Unit]) -> dict:
@@ -706,9 +717,22 @@ class EffectRuntime:
         # здесь — ре-ентрансные события из ops (например kill внутри fail-ветки)
 
     def tick(self, t: float, dt: float):
-        """regen + duration-истечение баффов + tick-события."""
+        """regen + DoT/HoT + duration-истечение баффов + tick-события."""
         self.refresh_passives(t)
         self.owner.regen(dt)
+        keep = []
+        for p in self._periodic:
+            while p["next"] <= t and p["next"] <= p["until"] + 1e-9:
+                p["next"] += p["every"]
+                o, tgt = p["op"], p["target"]
+                if o["kind"] == "deal":
+                    tgt.deal_damage(p["amount"])
+                    self.log.append(f"t={t:.1f} {p['src']} tick deal {p['amount']:.2f} -> {tgt.name} hp={tgt.current_hp:.1f}")
+                else:
+                    tgt.heal(p["amount"], o.get("stat") or "hp")
+            if p["next"] <= p["until"] + 1e-9:
+                keep.append(p)
+        self._periodic = keep
         expired = [b for b, d in self.owner.buffs.items() if d.get("until", 1e18) <= t]
         for b in expired:
             self.owner.buffs.pop(b)
@@ -730,6 +754,18 @@ class EffectRuntime:
         if target is None:
             return
         amount = compute_amount(o, ctx, self._default_stat(o, target))
+
+        if kind in ("deal", "heal") and o.get("every") and o.get("duration") is not None:
+            # DoT/HoT: те же правила, что в менеджере эффектов игры - тик каждые every с
+            every = max(0.1, float(o["every"]))
+            self._periodic.append({"op": {k: v for k, v in o.items() if k not in ("every", "duration")},
+                                   "target": target, "amount": amount, "every": every, "next": t + every,
+                                   "until": t + self._duration(o["duration"], ctx), "src": src})
+            self.log.append(f"t={t:.1f} {src} {kind} over time {amount:.2f} every {every:g}s")
+            return
+        if kind == "summon":
+            self.log.append(f"t={t:.1f} {src} summon {o.get('summon')} x{o.get('count', 1)} (no world in training room)")
+            return
 
         if kind == "mod":
             # Событийная mod-операция задаёт СВОЙ текущий вклад: прошлый вклад
@@ -912,8 +948,8 @@ class EffectRuntime:
     def _resolve_target(self, name):
         if name == "self":
             return self.owner
-        if name in ("enemy", "source"):
-            return self.enemy
+        if name in ("enemy", "source", "area"):
+            return self.enemy  # в комнате один манекен: area попадает в него
         return self.owner  # allies/allies->self в одиночном тесте
 
     def _owner_has_ok(self, tr: dict, t: float) -> bool:
@@ -970,9 +1006,27 @@ def run_step(rt: EffectRuntime, step: str, t: float, base_damage: float = 0.0) -
     return t
 
 
-def sample_context() -> dict:
-    """Полный контекст рантайма на юнитах по умолчанию: какие поля видят условия."""
-    return EffectRuntime(Unit("hero"), [], enemy=Unit("enemy")).context()
+def buff_fields(effects: list[dict]) -> dict[str, str]:
+    """buff_id каждой операции buff в эффектах -> поле контекста buff_<id>."""
+    out: dict[str, str] = {}
+
+    def walk(ops):
+        for o in ops or []:
+            if isinstance(o, dict):
+                if o.get("kind") == "buff" and o.get("buff_id"):
+                    out[o["buff_id"]] = "buff_" + "".join(c if c.isalnum() else "_" for c in o["buff_id"])
+                walk(o.get("fail"))
+
+    for ef in effects or []:
+        if isinstance(ef, dict):
+            walk(ef.get("ops"))
+    return out
+
+
+def sample_context(effects: Optional[list[dict]] = None) -> dict:
+    """Полный контекст рантайма на юнитах по умолчанию: какие поля видят условия
+    (с effects - ещё и buff_<id> баффов, которые эти эффекты выдают)."""
+    return EffectRuntime(Unit("hero"), list(effects or []), enemy=Unit("enemy")).context()
 
 
 def summarize(rt: EffectRuntime) -> dict:

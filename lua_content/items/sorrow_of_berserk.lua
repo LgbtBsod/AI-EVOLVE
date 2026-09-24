@@ -1,12 +1,17 @@
 -- Sorrow of Berserk
 -- Lost My Self below 40% HP; Blood Price attacks; Last Will shield (5 s iframe, 30 s cooldown, +5 s per kill).
--- Сгенерировано CAS Item Builder (effect-schema v1) : 2026-09-24 07:40:11
+-- Сгенерировано CAS Item Builder (effect-schema v1) : 2026-09-24 08:22:16
 local PRED_MT = { __call = function(p, ctx) return p.fn(ctx) end }
 local function pred(src, fn) return setmetatable({ src = src, fn = fn }, PRED_MT) end
 
 return {
+  id = "sorrow_of_berserk",
   name = "Sorrow of Berserk",
   description = "Lost My Self below 40% HP; Blood Price attacks; Last Will shield (5 s iframe, 30 s cooldown, +5 s per kill).",
+  kind = "equipment",
+  slot = "amulet",
+  rarity = "legendary",
+  value = 400,
   effects = {
     {
       id = "lost_my_self",

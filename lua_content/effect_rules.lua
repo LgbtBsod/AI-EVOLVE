@@ -16,6 +16,7 @@ return {
     defense = 0, tenacity = 0,
     crit_chance = 0, crit_dmg = 50, aspd = 1.0,
     lifesteal = 0, move_speed = 5, attack_damage = 0,
+    spell_power = 0, dodge = 0,     -- dodge в пунктах (%), в игре dodge_chance 0..1
   },
 
   -- ресурсы как у Character в игре: текущее значение меняют heal/drain/deal/set,
@@ -24,6 +25,19 @@ return {
     hp      = { max = "max_hp",      regen = "hp_regen" },
     mana    = { max = "max_mana",    regen = "mana_regen" },
     stamina = { max = "max_stamina", regen = "stamina_regen" },
+  },
+
+  -- атрибуты -> производные статы игры (за единицу атрибута). Эффект «+20% силы»
+  -- меняет strength, а в бою это становится уроном и т.д. по этой таблице.
+  attributes = {
+    strength     = { attack_damage = 0.5 },
+    agility      = { crit_chance = 0.2, aspd = 0.01 },
+    intelligence = { max_mana = 2 },
+    vitality     = { max_hp = 5, hp_regen = 0.05 },
+    wisdom       = { mana_regen = 0.05 },
+    endurance    = { max_stamina = 3, stamina_regen = 0.05 },
+    luck         = { crit_chance = 0.1 },
+    charisma     = {},
   },
 
   -- именованные условия (trigger.when = "low_hp_40"): одно выражение для
@@ -41,5 +55,6 @@ return {
     aspd        = { min = 0.1 },   -- атак в секунду; 0 = герой никогда не бьёт
     move_speed  = { min = 0 },
     tenacity    = { min = 0, max = 100 },
+    dodge       = { min = 0, max = 75 },
   },
 }

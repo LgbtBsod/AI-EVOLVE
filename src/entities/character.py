@@ -661,7 +661,15 @@ class Character(BaseEntity):
                 self.set_animation_state("idle")
                 
     def attack(self, target):
-        """Атака цели"""
+        """Атака цели: удар оружием - способность weapon_attack единого менеджера
+        эффектов (кулдаун = 1 / скорость атаки, урон, крит, эффекты предметов).
+        Без менеджера (тесты с фейковой игрой) - прежний путь через CombatSystem."""
+        manager = getattr(self.game, "effect_manager", None)
+        if manager is not None and manager.state(self) is not None:
+            result = manager.cast(self, "weapon_attack", target)
+            if result.ok:
+                self.set_animation_state("attacking")
+            return result.ok and any(not h.is_dodged for h in result.hits)
         if self.attack_cooldown <= 0 and self.is_alive():
             self.set_animation_state("attacking")
             
@@ -1052,9 +1060,36 @@ class Character(BaseEntity):
             return math.sqrt((self.x - target_x)**2 + (self.y - target_y)**2)
         return float('inf')
     
+    # Навыки класса в порядке приоритета (способности - lua_content/abilities.lua)
+    CLASS_SKILLS = {
+        "warrior": ("second_wind", "cleave", "power_strike"),
+        "mage": ("self_heal", "fireball", "magic_bolt"),
+        "rogue": ("second_wind", "stealth_strike"),
+    }
+
+    def _use_skills_via_manager(self, manager, enemies) -> bool:
+        """Первый доступный навык класса. AoE - только если рядом 2+ врага."""
+        target = self._find_nearest_enemy(enemies)
+        for skill in self.CLASS_SKILLS.get(self.character_class, ()):
+            ab = manager.ability(skill)
+            if ab is None:
+                continue
+            if skill == "cleave":
+                near = sum(1 for e in enemies if e.is_alive() and self.get_distance_to(e) <= 3.5)
+                if near < 2:
+                    continue
+            if manager.cast(self, skill, target).ok:
+                self.set_animation_state("attacking")
+                return True
+        return False
+
     def use_skill_automatically(self, enemies, dt):
         """Автоматическое использование скилов."""
         if not self.is_alive():
+            return
+        manager = getattr(self.game, "effect_manager", None)
+        if manager is not None and manager.state(self) is not None:
+            self._use_skills_via_manager(manager, enemies)
             return
 
         # Защитные/выживательные действия имеют приоритет над атакой,
