@@ -24,7 +24,8 @@ def _lost_my_self():
         trigger=Trigger(kind="condition", when="ctx.hp_pct < 40"),
         ops=[
             Op(kind="mod", target="self", stat="strength", op="add", value=Value(pct=20)),
-            Op(kind="mod", target="self", stat="stamina", op="add", value=Value(pct=10)),
+            # «+10% выносливости»: стамина - ресурс (как в игре), бонус идёт в её максимум
+            Op(kind="mod", target="self", stat="max_stamina", op="add", value=Value(pct=10)),
             # крит, крит-урон и вампиризм - ПУНКТЫ (10% -> 15%), а не % от
             # текущего значения: иначе при базе 0 вампиризм не рос вовсе
             Op(kind="mod", target="self", stat="crit_chance", op="add",
@@ -81,7 +82,21 @@ def _poison_dot():
         id="venom_bite", tags=["debuff", "dot"],
         trigger=Trigger(kind="event", event="attack_hit"),
         ops=[Op(kind="apply_effect", target="enemy", buff_id="poison_stack")],
-        meta={"name": "Venom Bite", "description": "Applies poison on hit."},
+        meta={"name": "Venom Bite", "description": "Applies a poison stack on hit."},
+    )
+
+
+def _poison_stack():
+    # Раньше этого эффекта не было нигде: apply_effect из Venom Bite ничего не
+    # делал, и яд молча не срабатывал (нашёл валидатор ссылок validate_item)
+    return Effect(
+        id="poison_stack", tags=["debuff", "dot"],
+        trigger=Trigger(kind="applied"),
+        ops=[Op(kind="deal", target="enemy", stat="hp", op="sub",
+                value=Value(pct=2, of="enemy_max_hp"), flags=["true_damage"]),
+             Op(kind="mod", target="enemy", stat="defense", op="sub", value=Value(flat=2))],
+        meta={"name": "Poison Stack",
+              "description": "2% of the target's max HP as true damage and -2 defense while it lives."},
     )
 
 
@@ -191,6 +206,7 @@ CATALOG = {
     "lost_my_self": ("😡 Lost My Self (berserk passive)", _lost_my_self),
     "lost_my_self.attack": ("🩸 Blood Price (drain+deal on attack)", _lost_my_self_attack),
     "venom_bite": ("🐍 Venom Bite (apply debuff)", _poison_dot),
+    "poison_stack": ("☠️ Poison Stack (applied by Venom Bite)", _poison_stack),
     "last_will": ("🛡 Last Will (timed buff)", _last_will_buff),
     "vampires_fang": ("🦇 Vampire's Fang (lifesteal + kill scaling)",
                       _form_effect(**_VAMPIRE_FORM)),
@@ -207,6 +223,33 @@ CATALOG = {
 
 def get_template(tid: str) -> Effect:
     return CATALOG[tid][1]()
+
+
+def requires(tid: str) -> list[str]:
+    """Шаблоны, без которых tid не работает (owner_has, apply_effect), рекурсивно."""
+    out: list[str] = []
+
+    def walk(t):
+        ef = get_template(t).to_json()
+        refs = [(ef.get("trigger") or {}).get("owner_has")]
+
+        def ops(lst):
+            for o in lst or []:
+                if o.get("kind") == "apply_effect":
+                    refs.append(o.get("buff_id"))
+                ops(o.get("fail"))
+        ops(ef.get("ops"))
+        for r in refs:
+            if r and r in CATALOG and r not in out and r != tid:
+                out.append(r)
+                walk(r)
+    walk(tid)
+    return out
+
+
+def bundle(tid: str) -> list[dict]:
+    """Шаблон вместе с зависимостями - минимальный рабочий предмет (JSON-эффекты)."""
+    return [get_template(t).to_json() for t in [tid, *requires(tid)]]
 
 
 def template_names() -> dict:

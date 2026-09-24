@@ -44,7 +44,8 @@ TARGETS = {"self", "enemy", "ally", "allies", "source"}
 
 OPS = {"add", "sub", "mul", "div", "set", "min", "max"}
 
-TRIGGER_KINDS = {"passive", "condition", "event"}
+# applied: эффект без собственного триггера, его запускает apply_effect другого эффекта
+TRIGGER_KINDS = {"passive", "condition", "event", "applied"}
 
 EVENTS = {
     "use", "attack", "attack_hit", "cast", "crit", "dodge",
@@ -54,10 +55,15 @@ EVENTS = {
 
 # известные статы (не закрытый список; кастомные -- через "custom:<name>")
 KNOWN_STATS = {
-    "hp", "max_hp", "hp_pct", "hp_missing", "hp_missing_below_40",
-    "strength", "stamina",
-    "agility", "intelligence", "defense", "aspd", "crit_chance", "crit_dmg",
-    "hp_regen", "lifesteal", "mana", "max_mana", "tenacity", "move_speed",
+    # ресурсы (текущее значение) и их максимум/реген - как у Character в игре
+    "hp", "max_hp", "hp_regen",
+    "mana", "max_mana", "mana_regen",
+    "stamina", "max_stamina", "stamina_regen",
+    "hp_pct", "hp_missing", "hp_missing_below_40",
+    # атрибуты (src/systems/attributes/attribute_system.py: BaseAttribute)
+    "strength", "agility", "intelligence", "vitality", "wisdom", "charisma", "luck", "endurance",
+    # боевые статы
+    "defense", "aspd", "crit_chance", "crit_dmg", "lifesteal", "tenacity", "move_speed",
     "attack_damage", "kills",
     # псевдо-стат runtime: фактический урон последнего удара героя
     # (ctx.last_damage в sim; источник для heal {"pct": N, "of": "last_damage"})
@@ -65,7 +71,13 @@ KNOWN_STATS = {
 }
 
 # ctx-поля, доступные только как источник (value.of / scale.of), но не как цель op
-CONTEXT_ONLY_STATS = {"hp_missing", "hp_missing_below_40", "kills", "last_damage"}
+CONTEXT_ONLY_STATS = {"hp_missing", "hp_missing_below_40", "kills", "last_damage", "hp_pct"}
+
+# ресурсы: текущее значение меняют heal/drain/deal/set, максимум - стат max_<ресурс>
+# (lua_content/effect_rules.lua -> resources); mod по ресурсу ничего бы не сделал
+RESOURCE_STATS = {"hp", "mana", "stamina"}
+
+FLAGS = {"no_crit", "true_damage", "silent", "iframe"}
 
 # префиксы контекста цели/союзников (sim.target_ctx): enemy_hp_pct, ally_kills ...
 TARGET_PREFIXES = ("enemy_", "ally_", "allies_", "source_")
@@ -136,11 +148,12 @@ class Scale:
 
 @dataclass
 class Trigger:
-    kind: str = "passive"              # passive | condition | event
+    kind: str = "passive"              # passive | condition | event | applied
     event: Optional[str] = None        # для kind=event
     when: Optional[str] = None         # именованный предикат или выражение
     filter: Optional[str] = None       # доп. фильтр события
     owner_has: Optional[str] = None    # id родительского эффекта (sub-effect)
+    cross: Optional[str] = None        # event=hp_cross: имя зоны (эффект с threshold)
 
     def to_json(self) -> dict:
         return {k: v for k, v in asdict(self).items() if v is not None}
@@ -148,7 +161,7 @@ class Trigger:
     @staticmethod
     def from_json(d: dict) -> "Trigger":
         return Trigger(**{k: d.get(k) for k in
-                          ("kind", "event", "when", "filter", "owner_has")})
+                          ("kind", "event", "when", "filter", "owner_has", "cross")})
 
 
 # ---------------------------------------------------------------- Op
@@ -224,6 +237,9 @@ class Effect:
     # x2 за каждые 10% ниже 40% -> {when="ctx.hp <= 1", every=10,
     # of="hp_missing_below_40", factor=2}. Универсально - не поле под предмет.
     amplify: Optional[dict] = None
+    # condition-эффект с порогом HP объявляет зону: при пересечении порога
+    # шлётся событие hp_cross (trigger.cross = meta.name или id эффекта)
+    threshold: Optional[float] = None
     meta: Optional[dict] = None                      # name/description/icon... для UI
 
     def to_json(self) -> dict:
@@ -231,6 +247,8 @@ class Effect:
                              "ops": [o.to_json() for o in self.ops]}
         if self.tags:
             d["tags"] = list(self.tags)
+        if self.threshold is not None:
+            d["threshold"] = self.threshold
         for k in ("duration", "cooldown", "stacks", "amplify", "meta"):
             v = getattr(self, k)
             if v:
@@ -245,7 +263,8 @@ class Effect:
             ops=[Op.from_json(o) for o in d.get("ops", [])],
             tags=list(d.get("tags", [])),
             duration=d.get("duration"), cooldown=d.get("cooldown"),
-            stacks=d.get("stacks"), amplify=d.get("amplify"), meta=d.get("meta"),
+            stacks=d.get("stacks"), amplify=d.get("amplify"),
+            threshold=d.get("threshold"), meta=d.get("meta"),
         )
 
     # -- convenience -----------------------------------------------------

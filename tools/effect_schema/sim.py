@@ -14,8 +14,10 @@ mod/heal/drain/deal/set/buff/extend/remove_buff/apply_effect/kill.
 
 Предикаты: БЕЗОПАСНЫЙ мини-язык выражений (никакого eval!). Поддерживается
 грамматика: сравнения (< <= > >= == !=) над ctx.<поле>, числовыми литералами,
-скобками, + - * / и константами max/min(...). Именованные предикаты берутся
-из реестра PREDICATES. Любое иное выражение отвергается PrediciationException
+скобками, + - * / % ** и функциями max/min/floor/ceil/abs. Именованные
+предикаты - выражения из lua_content/effect_rules.lua (predicates). Арифметика
+повторяет Lua (деление на ноль -> inf/nan, а не исключение), чтобы одно и то же
+условие давало один ответ в движке и здесь. Любое иное выражение отвергается PrediciationException
 (ранее здесь был сырой eval, допускавший sandbox-escape через
 dunder-атрибуты, например "max.__class__.__subclasses__").
 """
@@ -25,8 +27,41 @@ from __future__ import annotations
 import ast
 import math
 import operator as _op
-import re
+from functools import lru_cache
 from typing import Any, Callable, Optional
+
+# ---------------------------------------------------------------- stat rules
+
+# Те же значения, что lua_content/effect_rules.lua (действуют без Lua-бэкенда)
+DEFAULT_RULES: dict[str, dict] = {
+    "defaults": {"max_hp": 1000.0, "max_mana": 100.0, "max_stamina": 100.0,
+                 "hp_regen": 0.0, "mana_regen": 0.0, "stamina_regen": 0.0,
+                 "strength": 0.0, "agility": 0.0, "intelligence": 0.0, "vitality": 0.0,
+                 "wisdom": 0.0, "charisma": 0.0, "luck": 0.0, "endurance": 0.0,
+                 "defense": 0.0, "tenacity": 0.0, "crit_chance": 0.0, "crit_dmg": 50.0, "aspd": 1.0,
+                 "lifesteal": 0.0, "move_speed": 5.0, "attack_damage": 0.0},
+    "resources": {"hp": {"max": "max_hp", "regen": "hp_regen"},
+                  "mana": {"max": "max_mana", "regen": "mana_regen"},
+                  "stamina": {"max": "max_stamina", "regen": "stamina_regen"}},
+    "bounds": {"max_hp": {"min": 1}, "max_mana": {"min": 0}, "max_stamina": {"min": 0},
+               "crit_chance": {"min": 0, "max": 100}, "aspd": {"min": 0.1}, "move_speed": {"min": 0},
+               "tenacity": {"min": 0, "max": 100}},
+    "predicates": {"low_hp_40": "ctx.hp_pct < 40"},
+}
+
+
+@lru_cache(maxsize=1)
+def rules() -> dict[str, dict]:
+    """Правила статов из lua_content/effect_rules.lua поверх DEFAULT_RULES."""
+    merged = {k: dict(v) for k, v in DEFAULT_RULES.items()}
+    try:
+        from .. import lua_bridge
+        data = lua_bridge.load(lua_bridge.ROOT / "lua_content" / "effect_rules.lua", cache=True)
+    except Exception:  # нет Lua-бэкенда или файл сломан - дефолты выше
+        return merged
+    for section in merged:
+        merged[section].update(data.get(section) or {})
+    return merged
 
 # ---------------------------------------------------------------- predicates
 
@@ -35,16 +70,14 @@ def _hp_missing_below_40(ctx) -> float:
     return max(0.0, 40.0 - ctx.get("hp_pct", 100.0))
 
 
-PREDICATES: dict[str, Callable[[dict], bool]] = {
-    "low_hp_40": lambda ctx: ctx.get("hp_pct", 100.0) < 40,
-}
+def named_predicates() -> dict[str, str]:
+    """Именованные условия: имя -> выражение (lua_content/effect_rules.lua -> predicates).
+    Одно определение для Python и для Lua (lua_gen кладёт их в реестр PRED файла)."""
+    return dict(rules()["predicates"])
 
 _ALLOWED_CTX: dict[str, Callable[[dict], float]] = {
     "hp_missing_below_40": _hp_missing_below_40,
 }
-
-_EXPR_RE = re.compile(r"^ctx\.(\w+)\s*(<=|>=|<|>|==|!=)\s*([\d.]+)$")
-
 
 class PrediciationException(ValueError):
     """Выражение-предикат не проходит строгую whitelist-грамматику."""
@@ -52,108 +85,156 @@ class PrediciationException(ValueError):
 
 # ---- безопасный AST-интерпретатор выражений предикатов -------------------
 
+def _lua_div(a, b):
+    """Lua `/`: всегда float, деление на ноль даёт ±inf или nan (Python бросает)."""
+    try:
+        return a / b
+    except ZeroDivisionError:
+        if a == 0 or math.isnan(a):
+            return math.nan
+        return math.copysign(math.inf, a) * math.copysign(1.0, b)
+
+
+def _lua_mod(a, b):
+    """Lua `%` на float - luai_nummod (lua-5.5.1/llimits.h): m = fmod(a, b), затем
+    сдвиг на b, если знаки m и b разошлись. Отличие от Python - знак нуля:
+    0.0 % -5.0 в Python = -0.0, в Lua = 0.0, а дальше x / ±0 даёт ±inf."""
+    a, b = float(a), float(b)
+    if b == 0 or math.isinf(a) or math.isnan(a) or math.isnan(b):
+        return math.nan
+    m = math.fmod(a, b)
+    if (b < 0) if m > 0 else (m < 0 and b > 0):
+        m += b
+    return m
+
+
+def _odd_int(y) -> bool:
+    return float(y).is_integer() and int(y) % 2 == 1
+
+
+def _lua_pow(a, b):
+    """Lua `^` = C pow: переполнение -> inf, 0^-n -> inf, (-8)^0.5 -> nan (Python: исключение/complex).
+    Порядок как в C: сначала область определения (отрицательное основание и
+    нецелая степень -> nan), потом переполнение (Python для (-44.8)**82475.8
+    бросает OverflowError, C даёт nan)."""
+    a, b = float(a), float(b)
+    if b == 2:  # luai_numpow: x^2 считается как x*x (pow может отличаться в последнем бите)
+        return a * a
+    if a < 0 and math.isfinite(a) and math.isfinite(b) and not b.is_integer():
+        return math.nan  # pow(-inf, y) при этом +inf: проверка только для конечного основания
+    try:
+        r = a ** b
+    except ZeroDivisionError:
+        return math.copysign(math.inf, a) if _odd_int(b) else math.inf
+    except OverflowError:
+        return -math.inf if a < 0 and _odd_int(b) else math.inf
+    return math.nan if isinstance(r, complex) else r
+
+
+def _lua_round(fn):
+    """floor/ceil условия: float (как pred_lua пишет их в Lua), inf/nan - как есть
+    (Python на них бросает исключение)."""
+    return lambda x: float(fn(x)) if math.isfinite(x) else float(x)
+
+
 _BINOPS = {ast.Add: _op.add, ast.Sub: _op.sub, ast.Mult: _op.mul,
-           ast.Div: _op.truediv, ast.Mod: _op.mod, ast.Pow: _op.pow}
+           ast.Div: _lua_div, ast.Mod: _lua_mod, ast.Pow: _lua_pow}
 _CMPOPS = {ast.Lt: _op.lt, ast.LtE: _op.le, ast.Gt: _op.gt,
            ast.GtE: _op.ge, ast.Eq: _op.eq, ast.NotEq: _op.ne}
-_FUNCS = {"max": max, "min": min, "floor": math.floor, "ceil": math.ceil,
+_FUNCS = {"max": max, "min": min, "floor": _lua_round(math.floor), "ceil": _lua_round(math.ceil),
           "abs": abs}
 
 
-def _ast_eval(node, ctx: dict):
+def _field(key: str) -> Callable[[dict], Any]:
+    if key.startswith("_"):
+        raise PrediciationException(f"private attribute {key!r} forbidden")
+    derived = _ALLOWED_CTX.get(key)
+
+    def get(ctx):
+        try:
+            return ctx[key]
+        except KeyError:
+            if derived is not None:
+                return derived(ctx)
+            raise PrediciationException(f"unknown ctx field {key!r}") from None
+    return get
+
+
+def _compile(node) -> Callable[[dict], Any]:
+    """AST условия -> замыкание ctx -> значение. Белый список узлов проверяется
+    один раз при компиляции (никакого eval); вызов - только замыкания, без
+    повторного обхода дерева. and/or ленивые, как в Lua."""
     if isinstance(node, ast.Expression):
-        return _ast_eval(node.body, ctx)
+        return _compile(node.body)
     if isinstance(node, ast.Constant):
         if isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
-            return node.value
+            v = float(node.value)  # все числа условия - float, как в Lua (pred_lua)
+            return lambda ctx: v
         raise PrediciationException(f"literal {node.value!r} not allowed")
-    if isinstance(node, ast.Name):
-        if node.id in _FUNCS:
-            return _FUNCS[node.id]
-        raise PrediciationException(f"unknown name {node.id!r} "
-                                    "(only ctx.<field> and max/min/floor/ceil/abs)")
     if isinstance(node, ast.Attribute):
-        # разрешено ТОЛЬКО ctx.<известное поле>; никаких dunder-атрибутов
+        # разрешено ТОЛЬКО ctx.<поле>; никаких dunder-атрибутов
         if not isinstance(node.value, ast.Name) or node.value.id != "ctx":
             raise PrediciationException("attribute access must be ctx.<field>")
-        key = node.attr
-        if key.startswith("_"):
-            raise PrediciationException(f"private attribute {key!r} forbidden")
-        if key in ctx:
-            return ctx[key]
-        if key in _ALLOWED_CTX:
-            return _ALLOWED_CTX[key](ctx)
-        raise PrediciationException(f"unknown ctx field {key!r}")
+        return _field(node.attr)
     if isinstance(node, ast.BinOp) and type(node.op) in _BINOPS:
-        return _BINOPS[type(node.op)](_ast_eval(node.left, ctx),
-                                      _ast_eval(node.right, ctx))
+        fn, left, right = _BINOPS[type(node.op)], _compile(node.left), _compile(node.right)
+        return lambda ctx: fn(left(ctx), right(ctx))
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
-        v = _ast_eval(node.operand, ctx)
-        return v if isinstance(node.op, ast.UAdd) else -v
+        inner = _compile(node.operand)
+        return inner if isinstance(node.op, ast.UAdd) else (lambda ctx: -inner(ctx))
     if isinstance(node, ast.Compare):
-        left = _ast_eval(node.left, ctx)
-        for c_op, comp in zip(node.ops, node.comparators):
-            if type(c_op) not in _CMPOPS:
-                raise PrediciationException("comparison operator not allowed")
-            right = _ast_eval(comp, ctx)
-            if not _CMPOPS[type(c_op)](left, right):
-                return False
-            left = right
-        return True
+        if any(type(o) not in _CMPOPS for o in node.ops):
+            raise PrediciationException("comparison operator not allowed")
+        first = _compile(node.left)
+        chain = [(_CMPOPS[type(o)], _compile(c)) for o, c in zip(node.ops, node.comparators)]
+
+        def compare(ctx):
+            left = first(ctx)
+            for cmp, comp in chain:
+                right = comp(ctx)
+                if not cmp(left, right):
+                    return False
+                left = right
+            return True
+        return compare
     if isinstance(node, ast.BoolOp):
-        vals = [_ast_eval(v, ctx) for v in node.values]
+        parts = [_compile(v) for v in node.values]
         if isinstance(node.op, ast.And):
-            return all(vals)
-        return any(vals)
+            return lambda ctx: all(p(ctx) for p in parts)
+        return lambda ctx: any(p(ctx) for p in parts)
     if isinstance(node, ast.Call):
         fn = node.func
         # вызов разрешён только простому имени из whitelist (max/min/...);
         # ctx.foo(...) и (obj).__class__(...) — запрещены
-        if not isinstance(fn, ast.Name) or fn.id not in _FUNCS:
+        if not isinstance(fn, ast.Name) or fn.id not in _FUNCS or node.keywords:
             raise PrediciationException("call of non-whitelisted function")
-        return _FUNCS[fn.id](*[_ast_eval(a, ctx) for a in node.args])
+        f, args = _FUNCS[fn.id], [_compile(a) for a in node.args]
+        return lambda ctx: f(*[a(ctx) for a in args])
+    if isinstance(node, ast.Name):
+        raise PrediciationException(f"unknown name {node.id!r} "
+                                    "(only ctx.<field> and max/min/floor/ceil/abs)")
     raise PrediciationException(f"expression element not allowed: "
                                 f"{type(node).__name__}")
 
 
-_AST_CACHE: dict[str, ast.Expression] = {}
-
-
-def _compile_pred(expr: str) -> ast.Expression:
-    cached = _AST_CACHE.get(expr)
-    if cached is not None:
-        return cached
+@lru_cache(maxsize=65536)
+def compile_pred(expr: str) -> Callable[[dict], Any]:
     try:
         tree = ast.parse(expr.strip(), mode="eval")
     except SyntaxError as e:
         raise PrediciationException(f"invalid predicate expression {expr!r}: {e}") from e
-    _AST_CACHE[expr] = tree
-    return tree
+    return _compile(tree)
 
 
 def eval_pred(pred: Optional[Any], ctx: dict) -> bool:
-    """Вычислить предикат (строка-выражение / имя из PREDICATES / callable)."""
+    """Вычислить условие (строка-выражение / имя из effect_rules.lua / callable)."""
     if not pred:
         return True
     if callable(pred):
         return bool(pred(ctx))
     pred = str(pred).strip()
-    if pred in PREDICATES:
-        return bool(PREDICATES[pred](ctx))
-    m = _EXPR_RE.match(pred)
-    if m:  # быстрый путь для канонической формы "ctx.x OP num"
-        key, op_, rhs = m.group(1), m.group(2), float(m.group(3))
-        left = ctx.get(key)
-        if left is None and key in _ALLOWED_CTX:
-            left = _ALLOWED_CTX[key](ctx)
-        if left is None:
-            raise KeyError(f"ctx.{key} not found for predicate {pred!r}")
-        return {
-            "<": _op.lt, ">": _op.gt, "<=": _op.le,
-            ">=": _op.ge, "==": _op.eq, "!=": _op.ne,
-        }[op_](left, rhs)
-    # общий случай: whitelist AST (без eval!)
-    return bool(_ast_eval(_compile_pred(pred), ctx))
+    named = rules()["predicates"].get(pred)
+    return bool(compile_pred(named if named is not None else pred)(ctx))
 
 
 # ---------------------------------------------------------------- values
@@ -192,9 +273,12 @@ def _ctx_get(ctx: dict, key: Optional[str]) -> float:
     raise KeyError(f"unknown ctx field {key!r}")
 
 
-def compute_amount(op: dict, ctx: dict) -> float:
-    """Итог: base + floor(steps)*value*factor, steps из scale."""
-    total = resolve_value(op.get("value"), ctx, op.get("stat"))
+def compute_amount(op: dict, ctx: dict, default_stat: Optional[str] = None) -> float:
+    """Итог: base + floor(steps)*value*factor, steps из scale.
+    default_stat: откуда брать pct без `of` (по умолчанию - стат операции у владельца;
+    для цели-врага рантайм передаёт enemy_<стат>)."""
+    default_stat = default_stat or op.get("stat")
+    total = resolve_value(op.get("value"), ctx, default_stat)
     s = op.get("scale")
     if s:
         steps = _ctx_get(ctx, s["of"]) / float(s["every"])
@@ -203,7 +287,7 @@ def compute_amount(op: dict, ctx: dict) -> float:
             steps = min(steps, float(s["cap"]))
         if s.get("floor") is not None:
             steps = max(steps, float(s["floor"]))
-        total += steps * resolve_value(s.get("value"), ctx, op.get("stat")) \
+        total += steps * resolve_value(s.get("value"), ctx, default_stat) \
                  * float(s.get("factor", 1.0))
     return total
 
@@ -211,51 +295,87 @@ def compute_amount(op: dict, ctx: dict) -> float:
 # ---------------------------------------------------------------- unit
 
 class Unit:
-    """Юнит тренировки: статы + контекст для резолва значений."""
+    """Юнит тренировки: статы + ресурсы (hp, mana, stamina) + контекст для резолва значений.
+
+    База, ресурсы и границы итоговых статов - lua_content/effect_rules.lua."""
 
     def __init__(self, name: str, max_hp: float = 1000.0, **stats):
+        r = rules()
         self.name = name
-        self.base: dict[str, float] = {"max_hp": max_hp, "strength": 0.0,
-                                       "stamina": 0.0, "crit_chance": 0.0,
-                                       "crit_dmg": 50.0, "aspd": 1.0,
-                                       "hp_regen": 0.0, "lifesteal": 0.0,
-                                       "defense": 0.0}
+        self.base: dict[str, float] = {k: float(v) for k, v in r["defaults"].items()}
+        self.base["max_hp"] = float(max_hp)
+        self.base.update({k: float(v) for k, v in stats.items()})
+        self.bounds: dict[str, dict] = r["bounds"]
+        # ресурс -> {max: стат максимума, regen: стат регена в секунду}
+        self.resources: dict[str, dict] = r["resources"]
         self.mods: dict[str, float] = {}          # mod-эффекты (add/sub/mul/div)
-        self.current_hp = max_hp
+        self.current_hp = self._eff("max_hp")     # hp отдельно: его читает весь код комнаты
+        self.pools: dict[str, float] = {}         # прочие ресурсы: mana, stamina
+        self.refill()
         self.buffs: dict[str, dict] = {}          # buff_id -> {until, ...}
         self.alive = True
         self.kills = 0
-        self.base.update({k: float(v) for k, v in stats.items()})
 
     # effective stats -----------------------------------------------------
     def stat(self, key: str) -> float:
-        if key == "hp":
-            return self.current_hp
-        if key == "max_hp":
-            return self._eff("max_hp")
+        if key in self.resources:
+            return self.resource(key)
         if key == "hp_pct":
             return self.current_hp / self._eff("max_hp") * 100.0
         return self._eff(key)
 
     def _eff(self, key: str) -> float:
         v = self.base.get(key, 0.0) + self.mods.get(key, 0.0)
+        b = self.bounds.get(key)
+        if b:
+            v = min(max(v, b.get("min", -math.inf)), b.get("max", math.inf))
         return v
 
     def ctx(self, extra: Optional[dict] = None) -> dict:
-        c = {
-            "hp": self.current_hp, "max_hp": self._eff("max_hp"),
+        c = {k: self._eff(k) for k in (*self.base, *self.mods) if k not in self.resources}
+        c.update({name: self.resource(name) for name in self.resources})
+        c.update({
             "hp_pct": self.stat("hp_pct"),
             "hp_missing": self._eff("max_hp") - self.current_hp,
-            "strength": self._eff("strength"), "stamina": self._eff("stamina"),
-            "crit_chance": self._eff("crit_chance"),
-            "crit_dmg": self._eff("crit_dmg"), "aspd": self._eff("aspd"),
-            "hp_regen": self._eff("hp_regen"), "lifesteal": self._eff("lifesteal"),
-            "defense": self._eff("defense"), "kills": float(self.kills),
-        }
+            "kills": float(self.kills),
+        })
         c["hp_missing_below_40"] = _hp_missing_below_40(c)
         if extra:
             c.update(extra)
         return c
+
+    # resources --------------------------------------------------------------
+    def resource(self, name: str) -> float:
+        return self.current_hp if name == "hp" else self.pools[name]
+
+    def max_of(self, name: str) -> float:
+        return self._eff(self.resources[name]["max"])
+
+    def set_resource(self, name: str, value: float):
+        """Ресурс в пределах [0, максимум]; hp 0 = смерть."""
+        value = min(max(value, 0.0), self.max_of(name))
+        if name == "hp":
+            self.current_hp = value
+            self.alive = value > 0
+        else:
+            self.pools[name] = value
+
+    def refill(self):
+        """Все ресурсы, кроме hp, - до максимума (новый юнит, респавн)."""
+        self.pools = {name: self.max_of(name) for name in self.resources if name != "hp"}
+
+    def clamp_resources(self):
+        """Максимум упал (мод max_hp/max_mana/max_stamina) - текущее значение не выше него."""
+        for name in self.resources:
+            if self.resource(name) > self.max_of(name):
+                self.set_resource(name, self.max_of(name))
+
+    def regen(self, dt: float):
+        """Реген всех ресурсов за dt. Отрицательный реген - потеря (HP до 0 - смерть)."""
+        for name, spec in self.resources.items():
+            rate = self._eff(spec["regen"]) if spec.get("regen") else 0.0
+            if rate:
+                self.heal(rate * dt, name)
 
     # damage/heal ----------------------------------------------------------
     def deal_damage(self, amount: float, log=None):
@@ -265,8 +385,15 @@ class Unit:
         if self.current_hp <= 0:
             self.alive = False
 
-    def heal(self, amount: float):
-        self.current_hp = min(self._eff("max_hp"), self.current_hp + amount)
+    def heal(self, amount: float, resource: str = "hp"):
+        """Лечение не воскрешает (мёртвого поднимает только set hp). Отрицательное
+        лечение (hp_regen ушёл в минус) - это урон: HP не ниже 0, в 0 - смерть."""
+        if resource != "hp":
+            self.set_resource(resource, self.resource(resource) + amount)
+        elif amount < 0:
+            self.deal_damage(-amount)
+        elif self.alive:
+            self.current_hp = min(self._eff("max_hp"), self.current_hp + amount)
 
 
 # ---------------------------------------------------------------- runtime
@@ -292,21 +419,19 @@ class EffectRuntime:
         # если флаг не выставлен (смерть от базового удара). Так исключается
         # двойной подсчёт и двойное событие "kill".
         self._killed_this_attack: bool = False
-        # Слой событийных (накопительных) mod-ops: каждое событие attack_hit /
-        # kill применяет их ОДИН раз; refresh_passives() пересобирает
-        # owner.mods как event + passive-слой, поэтому повторные вызовы
-        # refresh идемпотентны (нет двойного применения scale-of-counter).
-        self._event_mods: dict[str, float] = {}
-        # Вклад каждой событийной mod-операции: (источник, индекс) -> (стат,
-        # вклад). Повторное срабатывание ЗАМЕНЯЕТ вклад операции текущим
-        # значением (Vampire's Fang: +5 и +1 за kill => 5 + kills, cap 10), а
-        # не складывает его с прошлым ударом - иначе бонус рос бы с каждой
-        # атакой без предела. _event_mods = сумма вкладов.
-        self._op_contrib: dict[tuple, tuple[str, float]] = {}
+        # Событийный слой mods: вклад каждой событийной mod-операции,
+        # (источник, индекс) -> (юнит-цель, стат, вклад). refresh_passives()
+        # пересобирает mods как событийный + пассивный слой, поэтому повторные
+        # вызовы refresh идемпотентны. Повторное срабатывание ЗАМЕНЯЕТ вклад
+        # операции текущим значением (Vampire's Fang: +5 и +1 за kill =>
+        # 5 + kills, cap 10), а не складывает его с прошлым ударом - иначе бонус
+        # рос бы с каждой атакой без предела. Цель target=enemy - это манекен.
+        self._op_contrib: dict[tuple, tuple[Unit, str, float]] = {}
         # Когда бафф выдан последний раз: кулдаун живёт дольше самого баффа
         # (раньше хранился в записи баффа, которая удаляется при истечении -
         # после истечения щит выдавался снова без кулдауна)
         self._buff_granted_at: dict[str, float] = {}
+        self._effect_fired_at: dict[str, float] = {}   # Effect.cooldown
         self._now = 0.0
         # --- hp_cross -----------------------------------------------------
         # Зоны пересечения порога HP (kind="condition", threshold=N):
@@ -317,6 +442,13 @@ class EffectRuntime:
         self.crossed: set[str] = set()
 
     # public API ------------------------------------------------------------
+    def context(self, extra: Optional[dict] = None) -> dict:
+        """Контекст условий и значений: статы владельца, enemy_* цели,
+        last_damage (фактический урон последнего удара героя)."""
+        ctx = {**self.owner.ctx(extra), **self.target_ctx("enemy", self.enemy)}
+        ctx["last_damage"] = self.last_damage
+        return ctx
+
     def target_ctx(self, prefix: str, t: Optional[Unit]) -> dict:
         """Контекст цели с префиксом: enemy_hp_pct, ally_hp и т.д."""
         if t is None:
@@ -342,11 +474,18 @@ class EffectRuntime:
         steps = math.floor(_ctx_get(ctx, amp.get("of")) / float(amp.get("every", 10)))
         return float(amp.get("factor", 2)) ** max(0, steps)
 
-    def _passive_layer(self, ctx: dict) -> dict[str, float]:
-        """Пассивный слой mods — ЧИСТАЯ функция от переданного контекста
-        (hp_pct, kills, ...): passive/condition-эффекты, mod-ops. Никаких
-        побочных записей; вызывается из refresh_passives() и fire_event()."""
-        layer: dict[str, float] = {}
+    def units(self) -> list[Unit]:
+        return [u for u in (self.owner, self.enemy) if u is not None]
+
+    def _prefix(self, unit: Unit) -> str:
+        """Префикс ctx-полей юнита: свои - без префикса, врага - enemy_."""
+        return "" if unit is self.owner else "enemy_"
+
+    def _passive_layer(self, ctx: dict) -> dict[int, dict[str, float]]:
+        """Пассивный слой mods по юнитам (id(unit) -> {стат: вклад}) - ЧИСТАЯ
+        функция от переданного контекста (hp_pct, kills, ...): passive/condition-
+        эффекты, mod-ops. Вызывается из refresh_passives()."""
+        layers: dict[int, dict[str, float]] = {}
         for ef in self.effects:
             tr = ef.get("trigger", {})
             kind = tr.get("kind")
@@ -356,38 +495,49 @@ class EffectRuntime:
                 continue
             mult = self._amplify(ef, ctx)
             for o in ef.get("ops", []):
-                if o.get("kind") == "mod":
-                    self._apply_mod(o, ctx, sink=layer, mult=mult)
-        return layer
+                if o.get("kind") != "mod":
+                    continue
+                unit = self._resolve_target(o.get("target", "self"))
+                if unit is not None:
+                    self._apply_mod(o, ctx, unit, sink=layers.setdefault(id(unit), {}), mult=mult)
+        return layers
+
+    def _event_layers(self) -> dict[int, dict[str, float]]:
+        layers: dict[int, dict[str, float]] = {}
+        for unit, stat, v in self._op_contrib.values():
+            layer = layers.setdefault(id(unit), {})
+            layer[stat] = layer.get(stat, 0.0) + v
+        return layers
 
     def refresh_passives(self, t: float = 0.0):
-        """Пересчитать owner.mods = событийный слой + пассивный слой.
+        """Пересчитать mods каждого юнита = событийный слой + пассивный слой.
 
-        Двухслойная модель mods юнита:
-          * СОБЫТИЙНЫЙ слой (`_event_mods`) — накопления от событийных
-            mod-ops (напр. Vampire's Fang: strength +5, +1 за kill);
-            каждое событие применяет их ровно один раз;
+        Двухслойная модель mods:
+          * СОБЫТИЙНЫЙ слой (`_op_contrib`) — вклад событийных mod-ops
+            (напр. Vampire's Fang: strength +5, +1 за kill); повторное
+            срабатывание операции заменяет её вклад;
           * ПАССИВНЫЙ слой — pure-функция состояния (_passive_layer).
         mods пересобирается с нуля при каждом вызове => refresh ИДЕМПОТЕНТЕН
         (ранее condition-эффекты со scale.of=kills применялись и в событии,
         и в refresh — стаки удваивались).
         """
         self._now = t
-        event = getattr(self, "_event_mods", None) or {}
+        event = self._event_layers()
         # Пассивный слой считается от base + событийного слоя, БЕЗ прошлого
         # пассивного вклада: иначе "+20% strength" брался от уже усиленной
         # силы (100 -> 120 -> 24% ...) - петля обратной связи.
-        self.owner.mods = dict(event)
-        ctx = {**self.owner.ctx(),
-               **self.target_ctx("enemy", self.enemy)}
-        ctx["last_damage"] = self.last_damage
+        for unit in self.units():
+            unit.mods = dict(event.get(id(unit), {}))
+        ctx = self.context()
         self._scan_hp_cross(ctx, t)
-        layer = self._passive_layer(ctx)
-        event = self._event_mods
-        merged = {k: v for k, v in event.items()}
-        for k, v in layer.items():
-            merged[k] = merged.get(k, 0.0) + v
-        self.owner.mods = merged
+        passive = self._passive_layer(ctx)
+        event = self._event_layers()  # hp_cross-события выше могли его изменить
+        for unit in self.units():
+            merged = dict(event.get(id(unit), {}))
+            for k, v in passive.get(id(unit), {}).items():
+                merged[k] = merged.get(k, 0.0) + v
+            unit.mods = merged
+            unit.clamp_resources()
 
     # hp_cross ---------------------------------------------------------------
     def _hp_zone_name(self, ef: dict) -> Optional[str]:
@@ -426,7 +576,11 @@ class EffectRuntime:
         e = self.enemy
         if e is None:
             return
+        # новый манекен - без дебаффов прошлого (событийный вклад по врагу сброшен)
+        self._op_contrib = {k: c for k, c in self._op_contrib.items() if c[0] is not e}
+        e.mods = {}
         e.current_hp = e._eff("max_hp")
+        e.refill()
         e.alive = True
 
     def attack(self, t: float = 0.0, base_damage: Optional[float] = None):
@@ -499,11 +653,7 @@ class EffectRuntime:
             self.fire_event("die", t)
 
     def fire_event(self, event: str, t: float = 0.0, extra: Optional[dict] = None):
-        ctx = {**self.owner.ctx(extra),
-               **self.target_ctx("enemy", self.enemy)}
-        # псевдо-поле: фактический урон последнего базового удара — источник
-        # для value {"ref": "ctx.last_damage"} / {"pct": N, "of": "last_damage"}
-        ctx["last_damage"] = self.last_damage
+        ctx = self.context(extra)
         self._now = t
         # Активные баффы с extend.on == событие продлеваются (Last Will: каждый
         # kill под щитом +5 с). Раньше extend срабатывал только если сам
@@ -524,6 +674,13 @@ class EffectRuntime:
                 continue
             if tr.get("filter") and not eval_pred(tr["filter"], ctx):
                 continue
+            # Effect.cooldown: событийный эффект срабатывает не чаще раза в N с
+            # (раньше поле объявлялось в схеме, но рантайм его не читал)
+            if ef.get("cooldown"):
+                last = self._effect_fired_at.get(ef["id"])
+                if last is not None and t - last < resolve_value(ef["cooldown"], ctx):
+                    continue
+                self._effect_fired_at[ef["id"]] = t
             self.run_ops(ef.get("ops", []), ctx, t, f"{ef['id']}#{event}",
                          event=event)
         # Событийный слой пополняет run_op("mod") - по каждой операции
@@ -538,9 +695,7 @@ class EffectRuntime:
     def tick(self, t: float, dt: float):
         """regen + duration-истечение баффов + tick-события."""
         self.refresh_passives(t)
-        regen = self.owner._eff("hp_regen")
-        if regen:
-            self.owner.heal(regen * dt)
+        self.owner.regen(dt)
         expired = [b for b, d in self.owner.buffs.items() if d.get("until", 1e18) <= t]
         for b in expired:
             self.owner.buffs.pop(b)
@@ -561,45 +716,47 @@ class EffectRuntime:
         target = self._resolve_target(o.get("target", "self"))
         if target is None:
             return
-        amount = compute_amount(o, ctx)
+        amount = compute_amount(o, ctx, self._default_stat(o, target))
 
         if kind == "mod":
-            # Событийные mod-ops — НАКОПИТЕЛЬНЫЕ стаки: применяются к
-            # owner.mods ровно один раз здесь, и ровно это изменение
-            # закрепляется в слое `_event_mods` (его не сбрасывает пересчёт
-            # пассивов). Дельта меряется вокруг одной операции: вложенные
-            # события и пересборка пассивного слоя в неё не попадают.
+            # Событийная mod-операция задаёт СВОЙ текущий вклад: прошлый вклад
+            # этой же операции снимается, новый записывается в _op_contrib.
+            # Дельта меряется вокруг одной операции: вложенные события и
+            # пересборка пассивного слоя в неё не попадают.
             stat = o.get("stat")
             key = op_key if op_key is not None else (src, id(o))
-            old_stat, old = self._op_contrib.get(key, (stat, 0.0))
+            old_unit, old_stat, old = self._op_contrib.get(key, (target, stat, 0.0))
             if old:
-                self.owner.mods[old_stat] = self.owner.mods.get(old_stat, 0.0) - old
-            before = self.owner.mods.get(stat, 0.0)
-            self._apply_mod(o, ctx)
-            self._op_contrib[key] = (stat, self.owner.mods.get(stat, 0.0) - before)
-            totals: dict[str, float] = {}
-            for st, v in self._op_contrib.values():
-                totals[st] = totals.get(st, 0.0) + v
-            self._event_mods = {k: v for k, v in totals.items() if abs(v) > 1e-12}
+                old_unit.mods[old_stat] = old_unit.mods.get(old_stat, 0.0) - old
+            before = target.mods.get(stat, 0.0)
+            self._apply_mod(o, ctx, target)
+            self._op_contrib[key] = (target, stat, target.mods.get(stat, 0.0) - before)
+            target.clamp_resources()  # мод max_hp вниз: текущее HP не выше нового максимума
         elif kind == "heal":
-            target.heal(amount)
-            self.log.append(f"t={t:.1f} {src} heal {amount:.2f} -> hp={target.current_hp:.1f}")
+            res = o.get("stat") or "hp"
+            target.heal(amount, res)
+            self.log.append(f"t={t:.1f} {src} heal {amount:.2f} -> {res}={target.resource(res):.1f}")
         elif kind == "deal":
-            target.deal_damage(amount, log=self._dmg_log(target))
-            self.log.append(f"t={t:.1f} {src} deal {amount:.2f} -> {target.name} hp={target.current_hp:.1f}")
+            res = o.get("stat") or "hp"
+            if res == "hp":
+                target.deal_damage(amount, log=self._dmg_log(target))
+            else:  # mana burn
+                target.set_resource(res, target.resource(res) - amount)
+            self.log.append(f"t={t:.1f} {src} deal {amount:.2f} -> {target.name} {res}={target.resource(res):.1f}")
         elif kind == "set":
-            if o.get("stat") == "hp":
-                target.current_hp = min(amount, target._eff("max_hp"))
-                target.alive = target.current_hp > 0
-                self.log.append(f"t={t:.1f} {src} set hp={amount:.1f}")
+            res = o.get("stat")
+            if res in target.resources:
+                target.set_resource(res, amount)
+                self.log.append(f"t={t:.1f} {src} set {res}={target.resource(res):.1f}")
         elif kind == "drain":
-            cost = amount
-            if cost > target.current_hp:
-                self.log.append(f"t={t:.1f} {src} drain FAIL (cost {cost:.2f} > hp {target.current_hp:.1f})")
+            res = o.get("stat") or "hp"
+            cost, have = amount, target.resource(res)
+            if cost > have:
+                self.log.append(f"t={t:.1f} {src} drain FAIL (cost {cost:.2f} > {res} {have:.1f})")
                 self.run_ops(o.get("fail", []), ctx, t, src + ".fail", event=event)
             else:
-                target.current_hp -= cost
-                self.log.append(f"t={t:.1f} {src} drain {cost:.2f} -> hp={target.current_hp:.1f}")
+                target.set_resource(res, have - cost)  # ровно до 0 HP - смерть (раньше alive оставался True)
+                self.log.append(f"t={t:.1f} {src} drain {cost:.2f} -> {res}={target.resource(res):.1f}")
         elif kind == "buff":
             bid = o.get("buff_id")
             prev = target.buffs.get(bid)
@@ -689,20 +846,23 @@ class EffectRuntime:
         b["until"] += add
         self.log.append(f"t={t:.1f} {src} extend {bid} +{add:.1f}s")
 
-    def _apply_mod(self, o: dict, ctx: Optional[dict] = None,
-                   sink: Optional[dict] = None, mult: float = 1.0):
-        """Применить mod-оп. sink=None -> owner.mods (совместимость);
-        sink=dict -> накопление в отдельный слой (persistent/passive)."""
-        if ctx is None:
-            ctx = self.owner.ctx()
+    def _default_stat(self, o: dict, unit: Unit) -> Optional[str]:
+        """pct без `of` - процент от того же стата ЦЕЛИ операции."""
         stat = o.get("stat")
-        amount = compute_amount(o, ctx)
+        return stat and self._prefix(unit) + stat
+
+    def _apply_mod(self, o: dict, ctx: dict, unit: Unit,
+                   sink: Optional[dict] = None, mult: float = 1.0):
+        """Применить mod-оп к юниту. sink=None -> unit.mods (событийный путь);
+        sink=dict -> накопление в отдельный слой (пассивный)."""
+        stat = o.get("stat")
+        amount = compute_amount(o, ctx, self._default_stat(o, unit))
         mo = o.get("op", "add")
         if mo in ("add", "sub"):
-            amount *= mult  # meta.amplify (Lost My Self под Last Will)
-        dst = self.owner.mods if sink is None else sink
+            amount *= mult  # Effect.amplify (Lost My Self при 1 HP)
+        dst = unit.mods if sink is None else sink
         cur = dst.get(stat, 0.0)
-        base = self.owner.base.get(stat, 0.0)
+        base = unit.base.get(stat, 0.0)
         if mo == "add":
             dst[stat] = cur + amount
         elif mo == "sub":
@@ -753,14 +913,16 @@ class EffectRuntime:
             return False
         ptr = parent.get("trigger", {})
         if ptr.get("kind") == "condition":
-            ctx = {**self.owner.ctx(),
-                   **self.target_ctx("enemy", self.enemy)}
-            ctx["last_damage"] = self.last_damage
-            return eval_pred(ptr.get("when"), ctx)
+            return eval_pred(ptr.get("when"), self.context())
         return True
 
     def _dmg_log(self, target):
         return None  # урон уже логируется в deal/kill
+
+
+def sample_context() -> dict:
+    """Полный контекст рантайма на юнитах по умолчанию: какие поля видят условия."""
+    return EffectRuntime(Unit("hero"), [], enemy=Unit("enemy")).context()
 
 
 def summarize(rt: EffectRuntime) -> dict:

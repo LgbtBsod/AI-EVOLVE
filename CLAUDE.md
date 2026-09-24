@@ -36,6 +36,7 @@ modules nobody imports (~18k LOC) and `qa.py docs` marks stale .md reports — d
 | Visual regression between two probe runs | `python tools/dev_probe_diff.py --before A --after B --frames` (image only for changed frames) | s |
 | Why did the hero AI do that | `agent_play "...; story"` (compressed ai_state transitions) | <1 s |
 | Performance hot spots | `python tools/qa.py perf "spawn enemy x10; wait 60"` | 2 s |
+| Does an item work (schema → Lua → combat) | `python -m tools.effect_schema.itemcheck lua_content/items/X.lua` (`--forge N` stress item, `--hostile` Python/Lua parity hunt) | <1 s per 300 effects |
 
 Rules of thumb:
 - Read only the `RESULT` line + printed hypotheses first; open `summary.md` / `session.json`
@@ -54,6 +55,8 @@ Rules of thumb:
 - Item mechanics: the designer's words are encoded as executable specs (e.g. `tests/test_lost_my_self_spec.py`,
   run against the catalog AND the Lua item in `lua_content/items/`). Change the spec first, then the item;
   regenerate the Lua with `tools/effect_schema` (`ui_logic.to_lua`).
+- Effect semantics that are easy to get wrong (resources hp/mana/stamina, `mod` goes to the op's target,
+  stat bounds in `lua_content/effect_rules.lua`, float-only conditions) are listed in `docs/EFFECT_SCHEMA.md`.
 - Looking at an item: `effect_schema.digest.digest(item)` (one line per effect) and `diff(a, b)` (changed
   effects only) instead of reading the Lua. Conditions in Lua are `pred("ctx.hp_pct < 40", function…)`:
   tools get the source string, the engine calls the function.

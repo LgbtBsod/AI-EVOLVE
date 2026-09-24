@@ -175,7 +175,7 @@ def render_effect(ef, indent: int = 0) -> str:
         d["tags"] = list(ef["tags"])
     tr = ef.get("trigger", {"kind": "passive"})
     trd = {"kind": tr.get("kind", "passive")}
-    for k in ("event", "filter", "owner_has"):
+    for k in ("event", "filter", "owner_has", "cross"):
         if tr.get(k):
             trd[k] = tr[k]
     when = tr.get("when")
@@ -185,6 +185,8 @@ def render_effect(ef, indent: int = 0) -> str:
         d["_trigger_when"] = when
     else:
         d["trigger"] = trd
+    if ef.get("threshold") is not None:
+        d["threshold"] = ef["threshold"]
     for k in ("duration", "cooldown", "stacks", "amplify", "meta"):
         if ef.get(k):
             d[k] = ef[k]
@@ -243,13 +245,19 @@ def collect_predicates(effects: list) -> list[str]:
 
 
 def render_predicate_registry(effects: list) -> str:
+    """Реестр PRED: именованные условия из lua_content/effect_rules.lua (predicates)
+    переводятся в Lua; движок может подменить реестр своим (`PRED or {...}`)."""
     preds = collect_predicates(effects)
     if not preds:
         return ""
-    lines = ["-- Именованные предикаты: движок может передать реестр PRED",
+    from .pred_lua import to_lua
+    from .sim import named_predicates
+    known = named_predicates()
+    lines = ["-- Именованные условия (lua_content/effect_rules.lua -> predicates)",
              "local PRED = PRED or {"]
     for p in preds:
-        lines.append(f"  {_str(p)} = function(ctx) return true end, -- fallback")
+        body = f"return {to_lua(known[p])}" if p in known else "return true -- неизвестное имя: условие даёт движок"
+        lines.append(f"  [{_str(p)}] = function(ctx) {body} end,")
     lines.append("}")
     return "\n".join(lines)
 

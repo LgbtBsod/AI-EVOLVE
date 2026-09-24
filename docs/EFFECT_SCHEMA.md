@@ -89,6 +89,51 @@ when = pred("ctx.hp_pct < 40", function(ctx) return (ctx.hp_pct < 40) end)
 8. **Длительность щита Last Will — ровно 5 с.** Пример черновика с `duration.scale.factor = 2`
    (5 + 10 с за шаг = 35 с) противоречит дизайну: удвоение относится к бонусам при 1 HP, а не к щиту.
 
+## Что нашли кузница предметов и itemcheck
+
+Кузница (`tools/effect_schema/forge.py`) собирает предмет, который задействует всю схему, плюс N
+случайных эффектов со сложными условиями; `itemcheck` гоняет его от валидации до боя (см. ниже).
+Каждый пункт найден так и теперь закреплён тестом (`tests/test_item_forge.py`).
+
+9. **Ресурсы: hp, mana, stamina** — как у `Character` в игре. Текущее значение меняют только
+   `heal/drain/deal/set`; максимум (`max_hp/max_mana/max_stamina`) и реген (`hp_regen/mana_regen/
+   stamina_regen`, в секунду, на тике) — обычные статы для `mod`. Раньше `heal/drain` по мане молча
+   били по HP, а `mod stamina` был «статом». Lost My Self даёт +10% **максимальной** стамины.
+10. **`mod` пишется юниту-цели.** `target = "enemy"` вешает дебафф на врага (раньше — на героя).
+    `pct` без `of` берётся от того же стата цели. Новый враг (респавн) приходит без старых дебаффов.
+11. **Границы статов и значения по умолчанию** — в `lua_content/effect_rules.lua` (`max_hp ≥ 1`,
+    `crit_chance ∈ [0, 100]`, `aspd ≥ 0.1` …). Границы режут итоговый стат, а не бонус эффекта.
+    Когда максимум падает, текущий ресурс обрезается (раньше HP оставался выше максимума).
+12. **Отрицательный реген — это урон**: HP не уходит ниже нуля, в 0 — смерть. Лечение не воскрешает.
+13. **`trigger.kind = "applied"`** — эффект без своего триггера, его запускает `apply_effect`.
+    Валидатор проверяет, что `apply_effect` и `owner_has` ведут на эффекты предмета и что в
+    цепочках `apply_effect` нет циклов. Так нашёлся Venom Bite, чей яд `poison_stack` не был
+    определён нигде: эффект молча ничего не делал.
+14. **`threshold` (эффект) и `trigger.cross`** — зона `hp_cross` теперь часть схемы: раньше их
+    понимал только симулятор, а генератор Lua их терял.
+15. **`cooldown` эффекта исполняется**: событийный эффект срабатывает не чаще раза в N секунд.
+16. **Именованные условия** (`when = "low_hp_40"`) — выражения в `effect_rules.lua → predicates`.
+    Lua-файл предмета получает настоящую функцию; раньше там стояла заглушка `return true`.
+17. **Числа в условиях — float в обоих языках**, симулятор считает как Lua: деление на ноль даёт
+    ±inf или nan, а не исключение; `%` — это `luai_nummod` (знак нуля: `0.0 % -5` = `0.0`, а не
+    `-0.0`); `(-8) ^ 0.5` = nan, `x ^ 2` = `x * x`; константы в Lua пишутся как `40.0`,
+    `floor/ceil` дают float. Контекст движок передаёт float-ами. Деление на литерал 0 —
+    ошибка валидации. После этих правок 40 «враждебных» сидов (≈20 тыс. условий × 300 ctx)
+    дают ноль расхождений между Python, mlua и lupa.
+
+## Проверка предмета: itemcheck
+
+```
+python -m tools.effect_schema.itemcheck lua_content/items/sorrow_of_berserk.lua
+python -m tools.effect_schema.itemcheck --forge 2000 --seed 3        # выковать и проверить
+python -m tools.effect_schema.itemcheck --forge 300 --seed 5 --hostile   # искать расхождения Python/Lua
+```
+
+Одна строка на проверку: `validate` (схема, ссылки, булевость условий), `lua` (рендер и исполнение
+каждым бэкендом — те же данные), `preds` (каждое условие в Lua и Python на случайных ctx одним
+вызовом), `sim` (сценарий боя со всеми событиями, инварианты после каждого шага), `determinism`,
+`coverage` (какие части схемы задействованы). Предмет на 10 тыс. эффектов проверяется за ~25 с.
+
 ## Lost My Self (Sorrow of Berserk) по дизайну
 
 ```lua
@@ -97,7 +142,7 @@ when = pred("ctx.hp_pct < 40", function(ctx) return (ctx.hp_pct < 40) end)
   amplify = { when = "ctx.hp <= 1", every = 10, of = "hp_missing_below_40", factor = 2 },  -- при 1 HP: x8
   ops = {
     { kind = "mod", target = "self", stat = "strength",    op = "add", value = { pct = 20 } },
-    { kind = "mod", target = "self", stat = "stamina",     op = "add", value = { pct = 10 } },
+    { kind = "mod", target = "self", stat = "max_stamina", op = "add", value = { pct = 10 } },
     { kind = "mod", target = "self", stat = "crit_chance", op = "add", value = { flat = 5 },
       scale = { every = 10, of = "hp_missing_below_40", value = { flat = 5 } } },
     { kind = "mod", target = "self", stat = "crit_dmg",    op = "add", value = { flat = 10 },

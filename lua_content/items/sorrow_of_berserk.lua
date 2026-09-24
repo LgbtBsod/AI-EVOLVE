@@ -1,6 +1,6 @@
 -- Sorrow of Berserk
 -- Lost My Self below 40% HP; Blood Price attacks; Last Will shield (5 s iframe, 30 s cooldown, +5 s per kill).
--- Сгенерировано CAS Item Builder (effect-schema v1) : 2026-09-24 07:19:07
+-- Сгенерировано CAS Item Builder (effect-schema v1) : 2026-09-24 07:40:11
 local PRED_MT = { __call = function(p, ctx) return p.fn(ctx) end }
 local function pred(src, fn) return setmetatable({ src = src, fn = fn }, PRED_MT) end
 
@@ -14,9 +14,9 @@ return {
         "berserk",
         "passive",
       },
-      trigger = { kind = "condition", when = pred("ctx.hp_pct < 40", function(ctx) return (ctx.hp_pct < 40) end) },
+      trigger = { kind = "condition", when = pred("ctx.hp_pct < 40", function(ctx) return (ctx.hp_pct < 40.0) end) },
       amplify = {
-        when = pred("ctx.hp <= 1", function(ctx) return (ctx.hp <= 1) end),
+        when = pred("ctx.hp <= 1", function(ctx) return (ctx.hp <= 1.0) end),
         every = 10,
         of = "hp_missing_below_40",
         factor = 2
@@ -28,8 +28,8 @@ return {
       ops = {
         -- op: mod self strength add
         { kind = "mod", target = "self", stat = "strength", op = "add", value = { pct = 20 } },
-        -- op: mod self stamina add
-        { kind = "mod", target = "self", stat = "stamina", op = "add", value = { pct = 10 } },
+        -- op: mod self max_stamina add
+        { kind = "mod", target = "self", stat = "max_stamina", op = "add", value = { pct = 10 } },
         -- op: mod self crit_chance add
         {
           kind = "mod",

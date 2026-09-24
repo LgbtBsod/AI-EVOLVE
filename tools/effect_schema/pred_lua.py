@@ -6,6 +6,10 @@ lua_gen копировал выражение в Lua как есть - и раб
 `!=` в Lua синтаксическая ошибка, max/floor там не определены, а цепочка
 `a < b < c` в Lua сравнивает boolean с числом и падает.
 
+Числа условия - всегда float (константы пишутся как 40.0, floor/ceil + 0.0), и
+контекст ctx движок обязан передавать float-ами: так Lua и Python считают по
+одним правилам IEEE (симулятор повторяет Lua: деление на ноль -> inf/nan).
+
 Правило, которое проверяет валидатор (check_boolean): операнды and/or и само
 условие - сравнения (или and/or сравнений). В Lua 0 - истина, в Python - ложь,
 поэтому числовой операнд в and/or дал бы разный результат в двух языках.
@@ -16,6 +20,7 @@ lua_gen копировал выражение в Lua как есть - и раб
 from __future__ import annotations
 
 import ast
+import math
 
 _BIN = {ast.Add: "+", ast.Sub: "-", ast.Mult: "*", ast.Div: "/", ast.Mod: "%", ast.Pow: "^"}
 _CMP = {ast.Lt: "<", ast.LtE: "<=", ast.Gt: ">", ast.GtE: ">=", ast.Eq: "==", ast.NotEq: "~="}
@@ -27,9 +32,15 @@ class PredicateError(ValueError):
 
 
 def _num(v) -> str:
+    """Константа -> float-литерал Lua. Все числа условия - float в обоих языках:
+    целые в Lua ведут себя иначе (math.min(40, x) -> целое 40, целое % 0 -> ошибка,
+    переполнение по модулю 2^64), а Python считает целые точно."""
     if isinstance(v, bool) or not isinstance(v, (int, float)):
         raise PredicateError(f"literal {v!r} not allowed")
-    return repr(v) if isinstance(v, float) else str(v)
+    f = float(v)
+    if not math.isfinite(f):
+        raise PredicateError(f"literal {v!r} is not a finite number")
+    return repr(f)
 
 
 def _emit(node) -> str:
@@ -42,6 +53,9 @@ def _emit(node) -> str:
             raise PredicateError("attribute access must be ctx.<field>")
         return f"ctx.{node.attr}"
     if isinstance(node, ast.BinOp) and type(node.op) in _BIN:
+        if isinstance(node.op, (ast.Div, ast.Mod)) and isinstance(node.right, ast.Constant) \
+                and node.right.value == 0:
+            raise PredicateError("division by the constant 0")
         return f"({_emit(node.left)} {_BIN[type(node.op)]} {_emit(node.right)})"
     if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.UAdd, ast.USub)):
         inner = _emit(node.operand)
@@ -60,7 +74,9 @@ def _emit(node) -> str:
     if isinstance(node, ast.Call):
         if not isinstance(node.func, ast.Name) or node.func.id not in _FUNCS or node.keywords:
             raise PredicateError("call of non-whitelisted function")
-        return f"math.{node.func.id}(" + ", ".join(_emit(a) for a in node.args) + ")"
+        call = f"math.{node.func.id}(" + ", ".join(_emit(a) for a in node.args) + ")"
+        # math.floor/ceil в Lua возвращают целое - + 0.0 оставляет число float
+        return f"({call} + 0.0)" if node.func.id in ("floor", "ceil") else call
     raise PredicateError(f"expression element not allowed: {type(node).__name__}")
 
 

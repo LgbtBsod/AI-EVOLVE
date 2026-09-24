@@ -27,7 +27,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from tools.effect_schema.catalog import CATALOG, get_template, template_names  # noqa: E402
+from tools.effect_schema.catalog import CATALOG, bundle, get_template, requires, template_names  # noqa: E402
 from tools.effect_schema.lua_gen import render_item  # noqa: E402
 from tools.effect_schema.lua_parse import parse_lua  # noqa: E402
 from tools.effect_schema import sim, ui_logic  # noqa: E402
@@ -52,10 +52,27 @@ class TestSchemaValidation(unittest.TestCase):
     """Все шаблоны каталога проходят валидатор."""
 
     def test_catalog_templates_validate(self):
+        # шаблон проверяется вместе с тем, на что ссылается (owner_has, apply_effect)
         for tid in CATALOG:
-            ef = get_template(tid).to_json()
-            errs = validate_item({"effects": [ef]})
+            errs = validate_item({"effects": bundle(tid)})
             self.assertEqual(errs, [], f"{tid}: {errs}")
+
+    def test_reference_errors(self):
+        alone = validate_item({"effects": [get_template("venom_bite").to_json()]})
+        self.assertEqual(alone, ["effects[0]: apply_effect 'poison_stack' is not an effect of this item"])
+        loop = [{"id": a, "trigger": {"kind": "applied"},
+                 "ops": [{"kind": "apply_effect", "target": "self", "buff_id": b}]}
+                for a, b in (("a", "b"), ("b", "a"))]
+        self.assertIn("apply_effect cycle: a -> b -> a", validate_item({"effects": loop}))
+
+    def test_resource_rules(self):
+        def errs(op):
+            return validate_item({"effects": [{"id": "x", "trigger": {"kind": "passive"}, "ops": [op]}]})
+        self.assertTrue(errs({"kind": "mod", "stat": "hp", "op": "add", "value": {"flat": 1}}))
+        self.assertTrue(errs({"kind": "set", "stat": "strength", "op": "set", "value": {"flat": 1}}))
+        self.assertTrue(errs({"kind": "heal", "stat": "strength", "value": {"flat": 1}}))
+        self.assertEqual(errs({"kind": "drain", "stat": "mana", "value": {"flat": 1}}), [])
+        self.assertTrue(errs({"kind": "buff", "buff_id": "b", "flags": ["godmode"]}))
 
 
 class TestHealthPotionRoom(unittest.TestCase):
@@ -104,21 +121,30 @@ class TestBerserkPassiveRoom(unittest.TestCase):
         # hp=390: hp_pct=39 -> активно; missing_below_40=1 -> steps=floor(1/10)=0
         hero, dummy, rt = equip("lost_my_self")
         hero.base["strength"] = 100.0
-        hero.base["crit_chance"] = 100.0
+        hero.base["crit_chance"] = 10.0
         hero.current_hp = 390.0
         rt.refresh_passives()
         ctx = hero.ctx()
         self.assertAlmostEqual(ctx["hp_missing_below_40"], 1.0, delta=TOL)
-        # только базовые проценты, скейл-шагов нет
+        # только базовые бонусы, скейл-шагов нет
         self.assertAlmostEqual(hero._eff("strength"), 120.0, delta=1e-4)     # +20% of strength
-        self.assertAlmostEqual(hero._eff("crit_chance"), 105.0, delta=1e-4)  # +5% of crit
+        self.assertAlmostEqual(hero._eff("crit_chance"), 15.0, delta=1e-4)   # +5 points
         self.assertAlmostEqual(hero._eff("hp_regen"), 0.0, delta=1e-4)       # flat0 + 0*20
+
+    def test_effective_crit_chance_is_capped_but_bonus_is_not(self):
+        # lua_content/effect_rules.lua: crit_chance in [0, 100]; the item bonus itself stays whole
+        hero, dummy, rt = equip("lost_my_self")
+        hero.base["crit_chance"] = 95.0
+        hero.current_hp = 100.0                      # 3 steps: +20 points
+        rt.refresh_passives()
+        self.assertAlmostEqual(hero.mods["crit_chance"], 20.0, delta=1e-4)
+        self.assertEqual(hero._eff("crit_chance"), 100.0)
 
     def test_scaling_at_10pct_hp(self):
         # hp=100: hp_pct=10 -> missing_below_40 = 30 -> steps = 3
         hero, dummy, rt = equip("lost_my_self")
-        hero.base.update({"strength": 100.0, "stamina": 100.0,
-                          "crit_chance": 100.0, "aspd": 1.0})
+        hero.base.update({"strength": 100.0, "max_stamina": 100.0,
+                          "crit_chance": 10.0, "aspd": 1.0})
         hero.current_hp = 100.0
         rt.refresh_passives()
         ctx = hero.ctx()
@@ -127,12 +153,10 @@ class TestBerserkPassiveRoom(unittest.TestCase):
         self.assertEqual(steps, 3)
         self.assertAlmostEqual(hero._eff("strength"),
                                100.0 + 0.20 * 100.0, delta=1e-4)
-        self.assertAlmostEqual(hero._eff("stamina"),
+        self.assertAlmostEqual(hero._eff("max_stamina"),
                                100.0 + 0.10 * 100.0, delta=1e-4)
-        # crit_chance: add pct=5 + scale every=10 val pct=5
-        self.assertAlmostEqual(hero._eff("crit_chance"),
-                               100.0 + 0.05 * 100.0 + steps * 0.05 * 100.0,
-                               delta=1e-4)
+        # crit_chance: +5 points + 5 points per step (flat, not % of crit)
+        self.assertAlmostEqual(hero._eff("crit_chance"), 10.0 + 5.0 + steps * 5.0, delta=1e-4)
         # aspd: add pct=5 + scale every=10 val pct=10
         self.assertAlmostEqual(hero._eff("aspd"),
                                1.0 + 0.05 * 1.0 + steps * 0.10 * 1.0,
@@ -374,7 +398,7 @@ class TestUiLogicFullCycle(unittest.TestCase):
         for tid in CATALOG:
             with self.subTest(tid=tid):
                 form = {"name": template_names()[tid],
-                        "effects": [self._form_from_template(tid)]}
+                        "effects": [self._form_from_template(t) for t in [tid, *requires(tid)]]}
                 out = ui_logic.full_cycle(form,
                                           scenario={"events": ["use", "attack"]})
                 self.assertEqual(out["errors"], [], tid)

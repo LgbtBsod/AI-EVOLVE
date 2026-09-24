@@ -33,7 +33,7 @@
 | Стат | Бонус |
 |------|-------|
 | Strength | +20% |
-| Stamina | +10% |
+| Max stamina (стамина — ресурс, как HP и мана) | +10% |
 | Crit Rate | +5% |
 | Crit Damage | +10% |
 | Attack Speed | +5% |
