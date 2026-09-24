@@ -79,8 +79,15 @@ class WorldPlan:
         return "elite" if spec.get("loot") == "elite" else "normal"
 
     # ---------------------------------------------------------------- enemies
-    def pick_enemy(self, level: int, rng: random.Random, elite_chance: float = 0.12) -> str:
+    @staticmethod
+    def elite_chance(enemy_level: int) -> float:
+        """Элита редка в начале (2% на 1-м уровне) и растёт на 1% за уровень до 30%."""
+        return min(0.30, 0.02 + 0.01 * max(0, int(enemy_level) - 1))
+
+    def pick_enemy(self, level: int, rng: random.Random, elite_chance: Optional[float] = None) -> str:
         act = self.act_for(level)
+        if elite_chance is None:
+            elite_chance = self.elite_chance(level)
         pool = act.get("elites") if rng.random() < elite_chance and act.get("elites") else act.get("enemies")
         return rng.choice(pool or ["basic"])
 

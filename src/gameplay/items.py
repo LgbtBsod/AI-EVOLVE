@@ -32,6 +32,7 @@ class ItemDef:
     effects: tuple[dict, ...] = ()                              # эффекты схемы
     knowledge: Optional[dict] = None                            # что открывает (карты, артефакты)
     description: str = ""
+    attack: Optional[str] = None     # оружие: способность удара (sword_swing - дугой, bow_shot - в одну цель)
 
     @property
     def equippable(self) -> bool:
@@ -67,6 +68,7 @@ class ItemDef:
             effects=tuple(effects),
             knowledge=d.get("knowledge") or None,
             description=str(d.get("description") or ""),
+            attack=d.get("attack") or None,
         )
 
 

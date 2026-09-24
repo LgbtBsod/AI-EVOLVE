@@ -2,6 +2,8 @@
 -- Предметы игры. Поля предмета:
 --   id, name (ru), kind = equipment | consumable | map | artifact,
 --   slot (weapon/armor/amulet/ring/trinket - для equipment и artifact),
+--   attack - оружие: способность удара (abilities.lua): sword_swing / axe_swing - дугой,
+--            spear_thrust / bow_shot - в одну цель, staff_blast - по площади; нет - weapon_attack,
 --   rarity = common | rare | epic | legendary, value (золото у торговца),
 --   stats  - плоские статы, пока предмет надет (имена статов схемы эффектов),
 --   effects - эффекты по схеме Effect -> Ops[] (docs/EFFECT_SCHEMA.md),
@@ -18,9 +20,9 @@ return {
   items = {
     -- ------------------------------------------------------------ оружие
     { id = "rusty_sword", name = "Ржавый меч", kind = "equipment", slot = "weapon", rarity = "common", value = 10,
-      stats = { attack_damage = 4 } },
+      attack = "sword_swing", stats = { attack_damage = 4 } },
     { id = "iron_sword", name = "Железный меч", kind = "equipment", slot = "weapon", rarity = "common", value = 30,
-      stats = { attack_damage = 8 } },
+      attack = "sword_swing", stats = { attack_damage = 8 } },
     { id = "vampire_fang", name = "Клык вампира", kind = "equipment", slot = "weapon", rarity = "rare", value = 90,
       stats = { attack_damage = 6 },
       effects = {
@@ -28,7 +30,7 @@ return {
           ops = { { kind = "heal", target = "self", stat = "hp", op = "add", value = { pct = 12, of = "last_damage" } } } },
       } },
     { id = "executioner_axe", name = "Топор палача", kind = "equipment", slot = "weapon", rarity = "epic", value = 160,
-      stats = { attack_damage = 12, aspd = -0.1 },
+      attack = "axe_swing", stats = { attack_damage = 12, aspd = -0.1 },
       effects = {
         { id = "executioner_axe.judgement", trigger = { kind = "event", event = "attack" },
           ops = { { kind = "kill", target = "enemy", when = "ctx.enemy_hp_pct < 12" } } },
@@ -45,11 +47,17 @@ return {
       } },
     -- дальность атаки: лук бьёт издалека, копьё - дальше меча
     { id = "hunting_bow", name = "Охотничий лук", kind = "equipment", slot = "weapon", rarity = "common", value = 35,
-      stats = { attack_damage = 6, attack_range = 7, aspd = -0.1 } },
+      attack = "bow_shot", stats = { attack_damage = 6, attack_range = 7, aspd = -0.1 } },
     { id = "ash_spear", name = "Ясеневое копьё", kind = "equipment", slot = "weapon", rarity = "common", value = 30,
-      stats = { attack_damage = 7, attack_range = 1.5 } },
+      attack = "spear_thrust", stats = { attack_damage = 7, attack_range = 1.5 } },
+    { id = "woodcutter_axe", name = "Топор лесоруба", kind = "equipment", slot = "weapon", rarity = "common", value = 25,
+      attack = "axe_swing", stats = { attack_damage = 9, aspd = -0.15 } },
+    { id = "apprentice_staff", name = "Посох ученика", kind = "equipment", slot = "weapon", rarity = "common", value = 30,
+      attack = "staff_blast", stats = { spell_power = 10, attack_range = 5, intelligence = 3 } },
+    { id = "worn_dagger", name = "Старый кинжал", kind = "equipment", slot = "weapon", rarity = "common", value = 12,
+      stats = { attack_damage = 3, aspd = 0.3, crit_chance = 5 } },
     { id = "stormcaller", name = "Зов бури", kind = "equipment", slot = "weapon", rarity = "epic", value = 150,
-      stats = { attack_damage = 9, agility = 6 },
+      attack = "sword_swing", stats = { attack_damage = 9, agility = 6 },
       effects = {
         { id = "stormcaller.crit", trigger = { kind = "event", event = "crit" },
           ops = { { kind = "deal", target = "enemy", stat = "hp", op = "sub", value = { flat = 18 }, flags = { "true_damage" } } } },

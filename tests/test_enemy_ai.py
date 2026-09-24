@@ -257,3 +257,35 @@ def test_hero_ai_does_not_fireball_itself():
     mgr.update(2.0)
     mage._use_skills_via_manager(mgr, [close])
     assert "fireball" in mgr.state(mage).cooldowns
+
+
+# ---------------------------------------------------------------- weapon shapes
+
+def test_sword_swings_an_arc_bow_hits_one_staff_blasts_a_circle():
+    mgr, hero = arena()
+    hero.physical_damage = 20.0
+    front = Fighter(x=1.5, hp=100.0)
+    side = Fighter(x=1.0, y=1.0, hp=100.0)             # 45 градусов - внутри дуги 110
+    behind = Fighter(x=-1.5, hp=100.0)                 # сзади - вне дуги
+    friend = Fighter(x=1.2, y=-0.8, hp=100.0)          # свой перед мечом - получит (френдли фаер)
+    for e, f in ((front, "monsters"), (side, "monsters"), (behind, "monsters"), (friend, "hero")):
+        mgr.register(e, f)
+    mgr.equip(hero, [catalog().get("rusty_sword")])
+    assert mgr.resolve(hero, "weapon_attack") == "sword_swing"
+    assert mgr.cast(hero, "weapon_attack", front).ok
+    assert front.health < 100 and side.health < 100 and friend.health < 100
+    assert behind.health == 100 and hero.health == 500
+
+    mgr2, archer = arena()
+    a, b = Fighter(x=6.0, hp=100.0), Fighter(x=6.5, hp=100.0)
+    mgr2.register(a, "monsters")
+    mgr2.register(b, "monsters")
+    mgr2.equip(archer, [catalog().get("hunting_bow")])
+    assert mgr2.cast(archer, "weapon_attack", a).ok and a.health < 100 and b.health == 100
+
+    mgr3, mage = arena()
+    c, d = Fighter(x=4.0, hp=100.0), Fighter(x=5.0, hp=100.0)
+    mgr3.register(c, "monsters")
+    mgr3.register(d, "monsters")
+    mgr3.equip(mage, [catalog().get("apprentice_staff")])
+    assert mgr3.cast(mage, "weapon_attack", c).ok and c.health < 100 and d.health < 100

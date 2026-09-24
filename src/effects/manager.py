@@ -27,6 +27,9 @@ take_damage (шипы) помечается reflect и сам реакций н�
 
 Всё по-честному: area бьёт ВСЕХ живых в круге - союзников и самого
 заклинателя тоже (френдли фаер); affects = others | enemies | allies сужает.
+Удар оружием - способность САМОГО оружия (item.attack): меч и топор бьют
+дугой (area + arc) всех впереди, копьё и лук - одну цель, посох - взрыв по
+площади; без оружия - weapon_attack (одна цель).
 Дальность удара и обзора - статы (attack_range, vision_range): лук даёт
 дальность, стелс - это area-мод vision_range с toward = "source" (в круге
 заклинателя видят хуже). can_see(observer, target) - единственная проверка
@@ -145,6 +148,7 @@ class EntityState:
         self.periodic: list[dict] = []             # DoT/HoT на этой сущности
         self.zones: dict[str, bool] = {}           # hp_cross
         self.vision_vs: dict[Any, tuple[float, str, float]] = {}  # ключ -> (до, id цели, вклад в обзор на неё)
+        self.weapon_ability: Optional[str] = None  # удар надетого оружия (item.attack)
         self.runtime = EffectRuntime(self.unit, [], enemy=Unit("nobody"))
         if not hasattr(entity, "lifesteal"):
             entity.lifesteal = 0.0
@@ -310,6 +314,8 @@ class EffectManager:
         if st is None:
             return
         st.items = list(items)
+        st.weapon_ability = next((getattr(it, "attack", None) for it in st.items
+                                  if getattr(it, "slot", None) == "weapon" and getattr(it, "attack", None)), None)
         st.item_effects = [dict(ef) for it in st.items for ef in getattr(it, "effects", ())]
         st.equipment_stats = {}
         for it in st.items:
@@ -391,7 +397,17 @@ class EffectManager:
             return 1.0 / max(0.1, float(getattr(st.entity, "attack_speed", 1.0) or 1.0))
         return float(cd or 0.0)
 
+    def resolve(self, caster, ability):
+        """weapon_attack -> удар надетого оружия (меч дугой, лук в цель); иначе как есть."""
+        if ability == "weapon_attack":
+            st = self.state(caster)
+            own = (st.weapon_ability if st is not None else None) or getattr(caster, "weapon_ability", None)
+            if own and own in self.abilities:
+                return own
+        return ability
+
     def can_cast(self, caster, ability, target=None) -> tuple[bool, str]:
+        ability = self.resolve(caster, ability)
         st, ab = self.state(caster), self.ability(ability)
         if st is None or ab is None:
             return False, "unknown"
@@ -420,7 +436,7 @@ class EffectManager:
     def range_of(self, caster, ability) -> float:
         """Дальность способности: число, имя стата ("attack_range") или value
         ({ pct = 110, of = "attack_range" }) - удар оружием бьёт на дальность оружия."""
-        ab, st = self.ability(ability), self.state(caster)
+        ab, st = self.ability(self.resolve(caster, ability)), self.state(caster)
         r = (ab or {}).get("range", 2.0)
         if isinstance(r, (int, float)):
             return float(r)
@@ -452,7 +468,7 @@ class EffectManager:
     def area_preview(self, caster, ability, target=None) -> list:
         """Кого заденет способность (все её area-операции) - ИИ проверяет френдли фаер
         до применения: не бить по кругу, в котором стоит сам или свои."""
-        st, ab = self.state(caster), self.ability(ability)
+        st, ab = self.state(caster), self.ability(self.resolve(caster, ability))
         if st is None or ab is None:
             return []
         out: list = []
@@ -464,6 +480,7 @@ class EffectManager:
         return out
 
     def cast(self, caster, ability, target=None) -> CastResult:
+        ability = self.resolve(caster, ability)
         st = self.state(caster)
         if st is not None:
             st.refresh(self.now)  # прокачка/реген игры могли поменять поля с прошлого кадра
@@ -579,7 +596,9 @@ class EffectManager:
         if tgt in ("enemy", "source"):
             return [primary] if primary is not None else []
         if tgt == "area":
-            r = float(o.get("radius", radius) or radius or 3.0)
+            r = o.get("radius", radius) or radius or 3.0
+            r = float(st.unit.stat(r)) if isinstance(r, str) else float(r)   # radius = "attack_range"
+            arc = float(o.get("arc", 0.0) or 0.0)       # конус к цели (взмах меча), 0 - полный круг
             cx, cy = center or (position(primary) if primary is not None and o.get("center", "target") == "target"
                                 else position(st.entity))
             affects = o.get("affects", "all")      # френдли фаер: по умолчанию все в круге
@@ -589,6 +608,8 @@ class EffectManager:
                     continue
                 if (affects == "others" and s is st) or (affects == "enemies" and s.faction == st.faction) \
                         or (affects == "allies" and s.faction != st.faction):
+                    continue
+                if arc and s is not st and not _in_arc(st.entity, primary, s.entity, arc):
                     continue
                 out.append(s.entity)
             return out
@@ -870,6 +891,19 @@ class EffectManager:
                 "debuffs": len([1 for until, _l in st.external.values() if until > self.now]),
                 "periodic": len(st.periodic),
                 "cooldowns": {k: round(v - self.now, 1) for k, v in st.cooldowns.items() if v > self.now}}
+
+
+def _in_arc(caster, primary, other, arc_deg: float) -> bool:
+    """other в конусе arc_deg от caster в сторону primary (без цели - во все стороны)."""
+    if primary is None:
+        return True
+    cx, cy = position(caster)
+    px, py = position(primary)
+    ox, oy = position(other)
+    a = math.atan2(py - cy, px - cx)
+    b = math.atan2(oy - cy, ox - cx)
+    diff = abs((b - a + math.pi) % (2 * math.pi) - math.pi)
+    return diff <= math.radians(arc_deg) / 2 + 1e-9 or math.dist((cx, cy), (ox, oy)) < 0.3
 
 
 def _needs_target(ab: dict) -> bool:

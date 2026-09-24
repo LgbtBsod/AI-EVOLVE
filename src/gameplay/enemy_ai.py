@@ -12,6 +12,10 @@
     pack        - сначала собирается с 2+ своими, потом нападает
     hit_and_run - ударил - отошёл на секунду
 
+Слоты атаки (AttackSlots): бить героя одновременно могут 3 врага ближнего боя
+и 2 дальнего, остальные кружат рядом и ждут очереди; жетон ходит по кругу.
+Боссы бьют без очереди. Так рой из десяти опасен, но не мгновенно смертелен.
+
 Видит героя только через EffectManager.can_see (обзор и стелс); потеряв из
 виду, идёт к последнему месту, где видел, и через несколько секунд бросает.
 Любой враг выходит из круга телеграфа (даже круга своего босса). Круг бьёт
@@ -33,15 +37,49 @@ AMBUSH_RANGE = 9.0
 KITE_MIN, KITE_MAX = 5.0, 7.0
 
 
+class AttackSlots:
+    """Очередь на удар по герою: cap жетонов на вид атаки, жетон на turn секунд,
+    после него rest секунд отдыха - чтобы ударили и другие."""
+
+    def __init__(self, melee: int = 3, ranged: int = 2, turn: float = 3.0, rest: float = 1.0):
+        self.cap = {"melee": melee, "ranged": ranged}
+        self.turn, self.rest = turn, rest
+        self.holders: dict = {}      # brain -> (вид, до)
+        self.resting: dict = {}      # brain -> когда снова можно просить
+
+    def request(self, brain, kind: str, now: float) -> bool:
+        for b, (_k, until) in list(self.holders.items()):
+            if until <= now or not is_alive(b.enemy):
+                del self.holders[b]
+                self.resting[b] = now + self.rest
+        self.resting = {b: t for b, t in self.resting.items() if t > now}
+        if brain in self.holders:
+            return True
+        if brain in self.resting:
+            return False
+        if sum(1 for k, _u in self.holders.values() if k == kind) < self.cap.get(kind, 1):
+            self.holders[brain] = (kind, now + self.turn)
+            return True
+        return False
+
+    def release(self, brain) -> None:
+        self.holders.pop(brain, None)
+        self.resting.pop(brain, None)
+
+    def busy(self) -> int:
+        return len(self.holders)
+
+
 class EnemyBrain:
     def __init__(self, enemy, manager, memory=None, rng=None,
-                 others: Optional[Callable[[], list]] = None):
+                 others: Optional[Callable[[], list]] = None, slots: Optional[AttackSlots] = None):
         import random
         self.enemy = enemy
         self.manager = manager
         self.memory = memory
         self.rng = rng or random
         self.others = others or (lambda: [])
+        self.slots = slots
         self.side = 1.0 if zlib.crc32(str(getattr(enemy, "entity_id", "")).encode()) & 1 else -1.0
         self.tactic = "rush"
         self.rewards: list[float] = []
@@ -80,6 +118,8 @@ class EnemyBrain:
             reward = self.memory.report(self.enemy, self.tactic, self.dealt, self.taken, hero_died)
             self.rewards.append(reward)
         self._reset()
+        if self.slots is not None:
+            self.slots.release(self)
         if is_alive(self.enemy):
             self.choose()
         return reward
@@ -115,25 +155,46 @@ class EnemyBrain:
             if not getattr(e, "rooted", False) and math.dist(position(e), self.last_seen) > 1.0:
                 e.move_towards(*self.last_seen, dt)
             return
+        turn = self._my_turn(now)
         self.skill_timer -= dt
-        if self.skill_timer <= 0:
+        if turn and self.skill_timer <= 0:
             self.skill_timer = SKILL_EVERY
             if self._use_skill(hero):
                 return
-        if self._in_reach(hero, d):
+        if turn and self._in_reach(hero, d):
             e.state = "attacking"
             res = m.cast(e, "weapon_attack", hero)
             if res.ok and self.tactic in ("hit_and_run", "kite"):
                 self.retreat_until = now + 1.0
         if getattr(e, "rooted", False):
             return
-        goal = self._goal(hero, d)
+        goal = self._goal(hero, d) if turn else self._wait_spot(hero, d)
         if goal is not None:
             if e.state != "attacking":
                 e.state = "chasing"
             e.move_towards(goal[0], goal[1], dt)
 
     # ---------------------------------------------------------------- pieces
+    def _my_turn(self, now: float) -> bool:
+        """Есть ли жетон на удар (боссы и враги без очереди - всегда)."""
+        if self.slots is None or getattr(self.enemy, "role", None):
+            return True
+        return self.slots.request(self, "ranged" if self._ranged() else "melee", now)
+
+    def _wait_spot(self, hero, d: float) -> Optional[tuple[float, float]]:
+        """Ждёт очереди: кружит на шаг дальше своей дальности удара."""
+        e = self.enemy
+        e.state = "waiting"
+        ring = self._reach() + 2.5
+        ex, ey = position(e)
+        hx, hy = position(hero)
+        ux, uy = ((ex - hx) / d, (ey - hy) / d) if d > 1e-6 else (1.0, 0.0)
+        if d > ring + 3.0:
+            return hx + ux * ring, hy + uy * ring
+        a = 0.5 * self.side                                  # шаг по кругу вокруг героя
+        rx, ry = ux * math.cos(a) - uy * math.sin(a), ux * math.sin(a) + uy * math.cos(a)
+        return hx + rx * ring, hy + ry * ring
+
     def _idle(self, dt: float) -> None:
         e = self.enemy
         e.state = "idle"

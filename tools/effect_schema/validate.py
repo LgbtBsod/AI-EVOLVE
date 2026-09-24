@@ -127,6 +127,10 @@ def validate_op(o: dict, path: str, item_effects=()) -> list[str]:
         err(f"kind=move requires mode in {sorted(MOVE_MODES)}")
     if o.get("target") == "area" and o.get("center", "target") not in ("target", "self"):
         err("area center must be 'target' or 'self'")
+    if o.get("arc") is not None and (o.get("target") != "area" or not 0 < float(o["arc"]) <= 360):
+        err("arc (degrees, 0 < arc <= 360) is for target=area")
+    if isinstance(o.get("radius"), str) and not is_stat(o["radius"]):
+        err(f"radius {o['radius']!r} is neither a number nor a stat")
     if o.get("affects") is not None and (o.get("target") != "area" or o["affects"] not in AREA_AFFECTS):
         err(f"affects is for target=area, one of {sorted(AREA_AFFECTS)}")
     if o.get("toward") is not None and (o["toward"] not in TOWARD or kind != "mod" or st not in TOWARD_STATS):

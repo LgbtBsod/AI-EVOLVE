@@ -49,6 +49,8 @@ MOVE_MODES = {"charge", "knockback", "pull", "blink", "strafe"}
 #   all (по умолчанию) | others (все, кроме заклинателя) | enemies | allies
 TARGETS = {"self", "enemy", "ally", "allies", "source", "area"}
 AREA_AFFECTS = {"all", "others", "enemies", "allies"}
+# arc (градусы, 0 < arc <= 360) - конус от заклинателя к цели: взмах меча/топора.
+# radius - число или имя стата ("attack_range": дуга на длину клинка)
 
 # toward (только mod стата vision_range): мод действует лишь на обзор В СТОРОНУ
 # источника - стелс: «в круге тебя видят на 70% хуже», остальных - как прежде

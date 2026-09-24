@@ -103,6 +103,7 @@ class EnhancedGameScene:
         # Враги учатся против героя: общая память тактик (бандит rust_core) и мозги врагов
         self.tactics = None
         self.combat_brains = {}         # entity_id врага -> EnemyBrain
+        self.attack_slots = None        # очередь на удар по герою (3 ближних + 2 дальних)
         
     def enter(self):
         """Вход в игровую сцену"""
@@ -115,6 +116,9 @@ class EnhancedGameScene:
         self.effects.register_event_handler(self._on_hit)
         from src.gameplay.tactics import TacticsMemory, memory_path
         self.tactics = TacticsMemory(memory_path())
+        from src.gameplay.enemy_ai import AttackSlots
+        from src.gameplay.progression import progression
+        self.attack_slots = AttackSlots(**(progression().get("attack_slots") or {}))
 
         # Создаем игровой мир
         self._create_world()
@@ -423,7 +427,8 @@ class EnhancedGameScene:
         from src.gameplay.progression import HeroGrowth
         self.hero_growth = HeroGrowth(player.character_class)
         cat = catalog()
-        for item_id in ("rusty_sword", "leather_armor", "health_potion", "health_potion"):
+        weapon = {"mage": "apprentice_staff", "rogue": "worn_dagger"}.get(player.character_class, "rusty_sword")
+        for item_id in (weapon, "leather_armor", "health_potion", "health_potion"):
             item = cat.get(item_id)
             if item is not None:
                 self.hero_inventory.add(item)
@@ -473,7 +478,8 @@ class EnhancedGameScene:
         from src.gameplay.progression import perk_effects
         self.effects.register(enemy, "monsters")
         from src.gameplay.enemy_ai import EnemyBrain
-        enemy.brain = EnemyBrain(enemy, self.effects, self.tactics, self.rng, others=lambda: self.enemies)
+        enemy.brain = EnemyBrain(enemy, self.effects, self.tactics, self.rng, others=lambda: self.enemies,
+                                 slots=self.attack_slots)
         self.combat_brains[str(enemy.entity_id)] = enemy.brain
         inv = Inventory(enemy, capacity=8,
                         on_change=lambda inv, e=enemy: self.effects.equip(e, inv.equipped.values()))
@@ -965,7 +971,8 @@ class EnhancedGameScene:
             x, y = self.clamp_position(px + dist * math.cos(ang), py + dist * math.sin(ang))
             
             # Тип врага - из акта текущего уровня (lua_content/world.lua)
-            self._spawn_enemy(self._plan().pick_enemy(self.current_level, self.rng), x, y)
+            self._spawn_enemy(self._plan().pick_enemy(self.current_level, self.rng,
+                                                     elite_chance=self._plan().elite_chance(self.enemy_level())), x, y)
 
             self.last_enemy_spawn = current_time
 
@@ -1352,7 +1359,7 @@ class EnhancedGameScene:
     
     def _create_enemy_at(self, x, y, z):
         """Создание врага в указанной позиции (игрок-режиссёр: враги текущего акта)"""
-        self._spawn_enemy(self._plan().pick_enemy(self.current_level, self.rng, elite_chance=0.25), x, y,
+        self._spawn_enemy(self._plan().pick_enemy(self.current_level, self.rng, elite_chance=self._plan().elite_chance(self.enemy_level())), x, y,
                           player_created=True)
 
     def _create_boss_at(self, x, y, z):

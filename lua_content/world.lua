@@ -21,6 +21,9 @@ return {
   -- (выше 1-го): герой 5 (распределяет сам), обычный враг 10, элита 15, босс +10 к
   -- каждой характеристике. Опыт герой получает только за активности (xp).
   progression = {
+    -- очередь на удар по герою (src/gameplay/enemy_ai.AttackSlots): сколько врагов бьют
+    -- одновременно; остальные кружат рядом. Баланс роя: qa.py sweep "spawn enemy x10; wait 45"
+    attack_slots = { melee = 4, ranged = 2, turn = 4.0, rest = 0.25 },
     hero_points_per_level = 5,
     enemy_points_per_level = { normal = 10, elite = 15 },
     boss_points_per_attribute = 10,

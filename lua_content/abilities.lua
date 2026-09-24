@@ -21,8 +21,33 @@ end
 return {
   abilities = {
     -- ------------------------------------------------------------ общее
+    -- удар без оружия (и у зверей): одна цель. Оружие подменяет его своим ударом (item.attack):
+    -- меч и топор бьют дугой всех впереди (arc, френдли фаер), копьё и лук - одну цель,
+    -- посох - взрыв по площади вокруг цели. Навыки при этом могут быть какими угодно.
     { id = "weapon_attack", name = "Удар оружием", tags = { "attack", "weapon" }, range = "attack_range", cooldown = "attack",
       ops = { { kind = "deal", target = "enemy", stat = "hp", op = "sub", value = { ref = "ctx.attack_damage" } } } },
+    { id = "sword_swing", name = "Взмах меча", tags = { "attack", "weapon" }, range = "attack_range", cooldown = "attack",
+      needs_target = true,
+      ops = { { kind = "deal", target = "area", center = "self", radius = "attack_range", arc = 110, affects = "others",
+                stat = "hp", op = "sub", value = { ref = "ctx.attack_damage" } } } },
+    { id = "axe_swing", name = "Размах топора", tags = { "attack", "weapon" }, range = "attack_range", cooldown = "attack",
+      needs_target = true,
+      ops = { { kind = "deal", target = "area", center = "self", radius = "attack_range", arc = 180, affects = "others",
+                stat = "hp", op = "sub", value = { ref = "ctx.attack_damage" } } } },
+    { id = "spear_thrust", name = "Укол копьём", tags = { "attack", "weapon" }, range = "attack_range", cooldown = "attack",
+      ops = { { kind = "deal", target = "enemy", stat = "hp", op = "sub", value = { ref = "ctx.attack_damage" } } } },
+    { id = "bow_shot", name = "Выстрел", tags = { "attack", "weapon", "ranged" }, range = "attack_range", cooldown = "attack",
+      ops = { { kind = "deal", target = "enemy", stat = "hp", op = "sub", value = { ref = "ctx.attack_damage" } } } },
+    { id = "staff_blast", name = "Заряд посоха", tags = { "attack", "weapon", "spell" }, range = "attack_range",
+      cooldown = "attack", radius = 1.8,
+      ops = { { kind = "deal", target = "area", radius = 1.8, affects = "others", stat = "hp", op = "sub",
+                value = { pct = 70, of = "spell_power" } } } },
+    -- навык копья по площади: удар древком по кругу
+    { id = "spear_sweep", name = "Круговой удар древком", tags = { "attack", "skill" }, range = "attack_range",
+      cooldown = 7, cost = { stamina = 20 }, needs_target = true,
+      ops = { { kind = "deal", target = "area", center = "self", radius = "attack_range", affects = "others",
+                stat = "hp", op = "sub", value = { pct = 80, of = "attack_damage" } },
+              { kind = "move", target = "enemy", mode = "knockback", distance = 2 } } },
 
     -- ------------------------------------------------------------ воин
     { id = "power_strike", name = "Мощный удар", tags = { "attack", "skill" }, range = { pct = 110, of = "attack_range" },
