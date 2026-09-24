@@ -1,19 +1,26 @@
 -- Sorrow of Berserk
 -- Lost My Self below 40% HP; Blood Price attacks; Last Will shield (5 s iframe, 30 s cooldown, +5 s per kill).
--- Сгенерировано CAS Item Builder (effect-schema v1) : 2026-09-24 07:02:26
+-- Сгенерировано CAS Item Builder (effect-schema v1) : 2026-09-24 07:19:07
+local PRED_MT = { __call = function(p, ctx) return p.fn(ctx) end }
+local function pred(src, fn) return setmetatable({ src = src, fn = fn }, PRED_MT) end
 
 return {
   name = "Sorrow of Berserk",
   description = "Lost My Self below 40% HP; Blood Price attacks; Last Will shield (5 s iframe, 30 s cooldown, +5 s per kill).",
   effects = {
-{
+    {
       id = "lost_my_self",
       tags = {
         "berserk",
         "passive",
       },
-      trigger = { kind = "condition", when = function(ctx) return (ctx.hp_pct < 40) end },
-      amplify = { when = "ctx.hp <= 1", every = 10, of = "hp_missing_below_40", factor = 2 },
+      trigger = { kind = "condition", when = pred("ctx.hp_pct < 40", function(ctx) return (ctx.hp_pct < 40) end) },
+      amplify = {
+        when = pred("ctx.hp <= 1", function(ctx) return (ctx.hp <= 1) end),
+        every = 10,
+        of = "hp_missing_below_40",
+        factor = 2
+      },
       meta = {
         name = "Lost My Self",
         description = "Below 40% HP: berserk power scaling with missing HP; at exactly 1 HP every bonus x2 per missing 10%."
@@ -70,7 +77,7 @@ return {
         }
       },
     },
-{
+    {
       id = "lost_my_self.attack",
       tags = {
         "berserk",

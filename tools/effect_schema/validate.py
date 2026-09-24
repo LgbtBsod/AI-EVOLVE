@@ -13,6 +13,10 @@ def _validate_pred(pred, path: str) -> list[str]:
     from .sim import eval_pred, PREDICATES  # лениво: sim импортирует только stdlib
     if pred.strip() in PREDICATES:
         return []
+    from .pred_lua import check_boolean  # то же условие обязано работать и в Lua
+    bool_errs = check_boolean(pred)
+    if bool_errs:
+        return [f"{path}: {e}" for e in bool_errs]
     try:
         # фиктивный ctx покрывает стандартные поля Unit.ctx + enemy_*/ally_*
         smoke_ctx = {k: 50.0 for k in (

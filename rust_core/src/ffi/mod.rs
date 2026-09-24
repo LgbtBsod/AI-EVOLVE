@@ -10,6 +10,7 @@ use crate::probe::{ProbeConfig, analyze_frame, compute_ssim};
 use crate::semantic_core::{LogCompressor as RustLogCompressor, StateDiffCalculator as RustStateDiffCalculator, EventCorrelator as RustEventCorrelator};
 use crate::analytics;
 use crate::qa;
+use crate::lua_content;
 use image::DynamicImage;
 
 /// Python module for rust_core
@@ -23,6 +24,7 @@ fn rust_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyEventCorrelator>()?;
     m.add_class::<PyRunAnalytics>()?;
     m.add_class::<PyQaKernels>()?;
+    m.add_class::<PyLuaContent>()?;
     // Aliases for cleaner Python API
     m.add("WorldGenerator", m.getattr("PyWorldGenerator")?)?;
     m.add("SimulationEnv", m.getattr("PySimulationEnv")?)?;
@@ -32,6 +34,7 @@ fn rust_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("EventCorrelator", m.getattr("PyEventCorrelator")?)?;
     m.add("RunAnalytics", m.getattr("PyRunAnalytics")?)?;
     m.add("QaKernels", m.getattr("PyQaKernels")?)?;
+    m.add("LuaContent", m.getattr("PyLuaContent")?)?;
     m.add("VERSION", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }
@@ -507,5 +510,47 @@ impl PyQaKernels {
     fn fnv1a64_lines(py: Python<'_>, data: &Bound<'_, PyAny>, offsets: &Bound<'_, PyAny>) -> PyResult<Vec<u64>> {
         let (data, offsets) = (buf::<u8>(py, data)?, buf::<u64>(py, offsets)?);
         Ok(py.detach(|| qa::fnv1a64_lines(&data, &offsets)))
+    }
+}
+
+// ============================================================================
+// Lua content FFI (tools/lua_bridge.py)
+// ============================================================================
+
+/// Sandboxed Lua 5.5 -> one JSON string (json.loads on the Python side).
+#[pyclass]
+struct PyLuaContent;
+
+fn lua_limits(memory_mb: usize, max_instructions: u64) -> lua_content::Limits {
+    lua_content::Limits { memory_bytes: memory_mb << 20, instructions: max_instructions }
+}
+
+#[pymethods]
+impl PyLuaContent {
+    /// Lua helpers shared with the lupa fallback (export.lua).
+    #[classattr]
+    const EXPORT_LUA: &'static str = lua_content::EXPORT_LUA;
+
+    /// Execute `source` and return its data as JSON. `globals`: names of global
+    /// tables to return instead of the chunk's return value (settings files).
+    #[staticmethod]
+    #[pyo3(signature = (source, chunk_name="content", globals=None, memory_mb=1024, max_instructions=2_000_000_000))]
+    fn load_json(py: Python<'_>, source: &str, chunk_name: &str, globals: Option<Vec<String>>,
+                 memory_mb: usize, max_instructions: u64) -> PyResult<String> {
+        let globals = globals.unwrap_or_default();
+        let limits = lua_limits(memory_mb, max_instructions);
+        py.detach(|| lua_content::export_json(source, chunk_name, &globals, limits))
+            .map_err(pyo3::exceptions::PyValueError::new_err)
+    }
+
+    /// Evaluate every pred() condition of `source` on each context of `ctxs_json`
+    /// (JSON array) -> JSON array of {condition source: result}.
+    #[staticmethod]
+    #[pyo3(signature = (source, ctxs_json, chunk_name="content", memory_mb=1024, max_instructions=2_000_000_000))]
+    fn eval_preds_json(py: Python<'_>, source: &str, ctxs_json: &str, chunk_name: &str,
+                       memory_mb: usize, max_instructions: u64) -> PyResult<String> {
+        let limits = lua_limits(memory_mb, max_instructions);
+        py.detach(|| lua_content::eval_preds_json(source, chunk_name, ctxs_json, limits))
+            .map_err(pyo3::exceptions::PyValueError::new_err)
     }
 }

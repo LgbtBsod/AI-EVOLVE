@@ -93,11 +93,11 @@ def cmd_doctor(args):
             check(mod, True)
         except ImportError:
             check(mod, False, fix)
-    try:
-        import lupa.lua55  # noqa: F401
-        check("Lua 5.5 (lupa.lua55)", True)
-    except ImportError:
-        check("Lua 5.5 (lupa.lua55)", False, "uv pip install 'lupa>=2.8'")
+    import lua_bridge
+    backends = lua_bridge.available_backends()
+    check("Lua 5.5 fallback (lupa.lua55)", "lupa" in backends, "uv pip install 'lupa>=2.8'")
+    check("Lua 5.5 content -> one JSON (rust_core.LuaContent)", "rust" in backends,
+          "uv pip install ./rust_core   (tools fall back to lupa)")
     check(f"rust_core kernels ({kernels.BACKEND})", kernels.BACKEND == "rust" and kernels._rust_qa is not None,
           "uv pip install ./rust_core   (needs cargo; tools fall back to Python, ~13-170x slower)")
     check("cargo (to build rust_core)", shutil.which("cargo") is not None, "https://rustup.rs")

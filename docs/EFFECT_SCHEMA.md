@@ -5,7 +5,8 @@
 объект; различаются только `kind` и набором заполненных полей. Остальные поля — `nil`.
 
 Реализация: `tools/effect_schema/` (`schema.py` — типы, `validate.py`, `lua_gen.py` / `lua_parse.py`
-— JSON ↔ Lua, `sim.py` — тренировочная комната, `catalog.py` — шаблоны). Контент предметов лежит
+— JSON ↔ Lua, `pred_lua.py` — условия Python → Lua, `sim.py` — тренировочная комната, `catalog.py` —
+шаблоны, `digest.py` — сжатый вид для агентов). Контент предметов лежит
 в Lua (`lua_content/items/*.lua`). Механики проверяют исполняемые спеки, например
 `tests/test_lost_my_self_spec.py`: она прогоняется и по каталогу, и по Lua-файлу предмета.
 
@@ -48,6 +49,22 @@ scale = { every = 10, of = "hp_missing_below_40", value = Value, factor = 1, cap
 trigger = { kind = "passive" } | { kind = "condition", when = pred } | { kind = "event", event = "attack", filter = pred, owner_has = "effect_id" }
 ```
 
+## Условия (pred) и загрузка Lua
+
+Условие пишется на Python-подмножестве: числа, `ctx.<поле>`, `+ - * / % **`, сравнения (и цепочки),
+`and`/`or`, `max/min/floor/ceil/abs`. Оно обязано быть булевым: сравнение или `and`/`or` сравнений
+(в Lua 0 — истина, в Python — ложь; валидатор это проверяет). В Lua генератор пишет
+
+```lua
+when = pred("ctx.hp_pct < 40", function(ctx) return (ctx.hp_pct < 40) end)
+```
+
+Движок вызывает объект как функцию (`p(ctx)` через `__call`). Инструменты читают файл через
+`tools/lua_bridge.py`: Lua исполняется в песочнице (Rust/mlua, фолбэк lupa), `pred` превращается
+в исходную строку, данные приходят одной JSON-строкой. Своего парсера Lua больше нет.
+`lua_bridge.eval_preds(file, ctxs)` считает все условия файла в Lua на списке ctx — так тесты
+проверяют, что Lua и Python считают одинаково.
+
 ## Уточнения по итогам проверки (исходный черновик их не учитывал)
 
 Каждый пункт найден, когда описание геймдизайнера прогнали как исполняемую спеку на симуляции.
@@ -76,7 +93,7 @@ trigger = { kind = "passive" } | { kind = "condition", when = pred } | { kind = 
 
 ```lua
 { id = "lost_my_self", tags = {"berserk", "passive"},
-  trigger = { kind = "condition", when = function(ctx) return ctx.hp_pct < 40 end },
+  trigger = { kind = "condition", when = pred("ctx.hp_pct < 40", function(ctx) return (ctx.hp_pct < 40) end) },
   amplify = { when = "ctx.hp <= 1", every = 10, of = "hp_missing_below_40", factor = 2 },  -- при 1 HP: x8
   ops = {
     { kind = "mod", target = "self", stat = "strength",    op = "add", value = { pct = 20 } },

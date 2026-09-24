@@ -673,18 +673,18 @@ _rust_probe = {"analyzer": None}
 
 def _rust_analyzer():
     """rust_core.ProbeAnalyzer, настроенный из lua_content/probe_config.lua
-    (слой контента; без lupa - дефолты Rust). Один экземпляр на прогон:
+    (слой контента; без Lua-бэкенда - дефолты Rust). Один экземпляр на прогон:
     он помнит предыдущий кадр для motion-метрик."""
     if not RUST_PROBE_AVAILABLE:
         return None
     if _rust_probe["analyzer"] is None:
         config = {}
         try:
-            import lupa.lua55 as lua
-            table = lua.LuaRuntime().execute((ROOT / "lua_content" / "probe_config.lua").read_text(encoding="utf-8"))
+            import lua_bridge
+            table = lua_bridge.load(ROOT / "lua_content" / "probe_config.lua")
             for key in ("blank_frame_stddev_threshold", "visual_hash_bits", "hamming_threshold",
                         "motion_detection_threshold", "brightness_anomaly_threshold"):
-                if table[key] is not None:
+                if table.get(key) is not None:
                     config[key] = table[key]
         except Exception:
             pass

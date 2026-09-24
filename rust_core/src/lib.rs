@@ -7,6 +7,7 @@
 //! - L8: Probe Analytics (visual analysis, frame hashing, motion detection)
 //! - L8b: Run analytics (agent dev tools: fits, sparklines, anomaly windows, log digest)
 //! - L8c: QA kernels (graph reachability, bootstrap stats, trajectory fingerprints)
+//! - L10: Lua content bridge (sandboxed Lua 5.5 -> one JSON string for Python)
 //! - L9: Semantic Core (log compression, state diffs, event correlation)
 //! 
 //! # Principles
@@ -22,6 +23,7 @@ pub mod ffi;
 pub mod probe;
 pub mod analytics;
 pub mod qa;
+pub mod lua_content;
 pub mod semantic_core;
 pub mod training_room;
 

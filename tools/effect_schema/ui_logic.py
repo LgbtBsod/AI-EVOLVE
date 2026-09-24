@@ -2,7 +2,7 @@
 UI-логика билдера (без Flet) — общий слой для web_builder/app.py и тестов.
 
 Цикл:  форма(dict) -> build_item_json -> validate -> render Lua
-       -> lupa load (опционально) -> sim.EffectRuntime (тренировочная комната).
+       -> исполнение Lua (tools/lua_bridge.py, опционально) -> sim.EffectRuntime.
 
 Форма повторяет чек-лист полей схемы Effect Schema v1:
   Effect: id, tags, trigger{kind,event,when,filter,owner_has}, ops[]
@@ -18,7 +18,7 @@ from typing import Any, Optional
 from .schema import Effect, Op, Trigger, Value, Scale
 from .validate import validate_item
 from .lua_gen import render_item
-from .lua_parse import parse_lua
+from .. import lua_bridge
 from .sim import EffectRuntime, Unit
 
 
@@ -172,31 +172,8 @@ def to_lua(item: dict) -> str:
 
 
 def lua_load(lua_text: str) -> dict:
-    """Загрузка Lua через lupa (syntax-check + round-trip в python-таблицу)."""
-    import lupa
-    rt = lupa.LuaRuntime()
-    tbl = rt.execute(lua_text)                       # `return {...}`
-    py = _lua_to_py(rt, tbl)
-    # sanity: собственный парсер должен дать тот же набор id/ops
-    parsed = parse_lua(lua_text)
-    assert [e.get("id") for e in parsed.get("effects", [])] == \
-           [e.get("id") for e in py.get("effects", [])], "parser/lupa mismatch"
-    return py
-
-
-def _is_lua_table(obj) -> bool:
-    return hasattr(obj, "keys") and callable(getattr(obj, "keys", None))
-
-
-def _lua_to_py(rt, obj):
-    if _is_lua_table(obj):
-        keys = list(obj.keys())
-        if keys and all(isinstance(k, int) for k in keys):
-            return [_lua_to_py(rt, obj[k]) for k in sorted(keys)]
-        return {str(k): _lua_to_py(rt, obj[k]) for k in keys}
-    if isinstance(obj, bytes):
-        return obj.decode("utf-8")
-    return obj
+    """Исполнить сгенерированный Lua (проверка синтаксиса и семантики) -> dict."""
+    return lua_bridge.load(lua_text)
 
 
 def run_training_room(item: dict, scenario: Optional[dict] = None) -> dict:
@@ -262,19 +239,19 @@ def run_training_room(item: dict, scenario: Optional[dict] = None) -> dict:
 
 
 def full_cycle(form: dict, scenario: Optional[dict] = None,
-               with_lupa: bool = True) -> dict:
-    """Весь UI-цикл: форма -> JSON -> validate -> Lua -> lupa -> sim."""
+               with_lua: bool = True) -> dict:
+    """Весь UI-цикл: форма -> JSON -> validate -> Lua -> исполнение -> sim."""
     item = build_item_json(form)
     errs = validate(item)
     out: dict[str, Any] = {"item": item, "errors": errs}
     if errs:
         return out
     out["lua"] = to_lua(item)
-    if with_lupa:
+    if with_lua:
         try:
-            out["lupa_ok"] = True
+            out["lua_ok"] = True
             lua_load(out["lua"])
-        except ImportError:
-            out["lupa_ok"] = None
+        except RuntimeError:  # ни rust_core, ни lupa не установлены
+            out["lua_ok"] = None
     out["room"] = run_training_room(item, scenario)
     return out

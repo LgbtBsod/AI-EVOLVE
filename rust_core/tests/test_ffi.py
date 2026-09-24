@@ -132,3 +132,28 @@ def test_qa_kernels_reach_describe_fnv():
                                                                   0xAF63DF4C8601F1A5]
     with pytest.raises(ValueError):
         qa.reach(array("Q", [0, 5]), array("Q", [1]), array("Q", [0]))
+
+
+# ---------------------------------------------------------------- LuaContent (tools/lua_bridge.py)
+
+def test_lua_content_load_json_and_eval_preds():
+    import json
+    lc = rust_core.LuaContent
+    src = ("local MT = { __call = function(p, ctx) return p.fn(ctx) end }\n"
+           "local function pred(s, f) return setmetatable({ src = s, fn = f }, MT) end\n"
+           "return { n = 1.5, list = { 1, 2 }, when = pred('ctx.x > 1', function(ctx) return ctx.x > 1 end) }")
+    assert json.loads(lc.load_json(src)) == {"n": 1.5, "list": [1, 2], "when": "ctx.x > 1"}
+    assert json.loads(lc.eval_preds_json(src, '[{"x": 2}, {"x": 0}]')) == [{"ctx.x > 1": True}, {"ctx.x > 1": False}]
+    assert json.loads(lc.load_json("g = { a = 1 }", globals=["g"])) == {"g": {"a": 1}}
+    assert "export" in lc.EXPORT_LUA
+
+
+def test_lua_content_errors_are_value_errors():
+    lc = rust_core.LuaContent
+    for src in ("return {", "return os.time()", "error('boom')"):
+        with pytest.raises(ValueError):
+            lc.load_json(src)
+    with pytest.raises(ValueError, match="instruction budget"):
+        lc.load_json("while true do end", max_instructions=100_000)
+    with pytest.raises(ValueError, match="not enough memory|memory"):
+        lc.load_json("local t = {} for i = 1, 1e8 do t[i] = i end", memory_mb=8)

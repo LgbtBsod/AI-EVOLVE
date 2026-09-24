@@ -11,7 +11,7 @@ Training-room test for Effect Schema v1 (Effect -> Ops[]).
     total = value + floor(ctx[scale.of]/scale.every) * scale.value * factor
 
 Дополнительно проверяется полный цикл UI-логики (tools.effect_schema.ui_logic):
-    форма -> build_item_json -> validate -> render Lua -> lupa load
+    форма -> build_item_json -> validate -> render Lua -> исполнение Lua
           -> round-trip парсер -> sim (тренировочная комната).
 
 Запуск:  pytest tests/test_training_room_effectschema.py -v
@@ -31,6 +31,7 @@ from tools.effect_schema.catalog import CATALOG, get_template, template_names  #
 from tools.effect_schema.lua_gen import render_item  # noqa: E402
 from tools.effect_schema.lua_parse import parse_lua  # noqa: E402
 from tools.effect_schema import sim, ui_logic  # noqa: E402
+from tools import lua_bridge  # noqa: E402
 from tools.effect_schema.sim import EffectRuntime, Unit  # noqa: E402
 from tools.effect_schema.validate import validate_item  # noqa: E402
 
@@ -227,18 +228,10 @@ class TestBloodPriceAttackRoom(unittest.TestCase):
 
 
 class TestLuaPipelineRoom(unittest.TestCase):
-    """Полный цикл: catalog -> render_item(Lua) -> lupa load -> sim-прогон."""
-
-    @classmethod
-    def setUpClass(cls):
-        try:
-            import lupa
-            cls.lupa = lupa
-        except ImportError:
-            cls.lupa = None
+    """Полный цикл: catalog -> render_item(Lua) -> исполнение Lua -> sim-прогон."""
 
     def _load_lua_effects(self, lua_text: str) -> list[dict]:
-        data = parse_lua(lua_text)                   # собственный парсер round-trip
+        data = parse_lua(lua_text)                   # Lua исполняется мостом, round-trip
         self.assertIsInstance(data, dict)
         return data["effects"]
 
@@ -266,29 +259,27 @@ class TestLuaPipelineRoom(unittest.TestCase):
                 if a.get("extend"):
                     self.assertEqual(b.get("extend"), a["extend"], tid)
 
-    def test_lupa_load_validates_syntax(self):
-        if self.lupa is None:
-            self.skipTest("lupa not installed")
+    def test_lua_executes_in_every_backend_with_same_data(self):
+        """Сгенерированный Lua исполняется каждым бэкендом моста, данные совпадают,
+        условие приходит исходной строкой, а его Lua-функция считает так же, как sim."""
+        backends = lua_bridge.available_backends()
+        if not backends:
+            self.skipTest("no Lua backend (lupa / rust_core)")
         item = {"name": "Sorrow of Berserk", "slot": "amulet"}
-        effs = [get_template("lost_my_self"), get_template("lost_my_self.attack")]
-        lua = render_item(item, effs)
-        rt = self.lupa.LuaRuntime()
-        tbl = rt.execute(lua)                        # синтаксис Lua 5.x валиден
-        py = ui_logic._lua_to_py(rt, tbl)
+        lua = render_item(item, [get_template("lost_my_self"), get_template("lost_my_self.attack")])
+        loaded = {b: lua_bridge.load(lua, backend=b) for b in backends}
+        py = loaded[backends[0]]
+        for b in backends[1:]:
+            self.assertEqual(loaded[b], py, f"{b} != {backends[0]}")
         self.assertEqual(py["name"], "Sorrow of Berserk")
-        self.assertEqual(len(py["effects"]), 2)
-        self.assertEqual(py["effects"][0]["id"], "lost_my_self")
+        self.assertEqual([e["id"] for e in py["effects"]], ["lost_my_self", "lost_my_self.attack"])
         self.assertEqual(len(py["effects"][1]["ops"]), 2)
-        # предикат из Lua: строка вида "ctx.hp_pct < 40" (round-trip) или
-        # callable, если lupa-таблица была materialized с функцией
-        when = parse_lua(lua)["effects"][0]["trigger"]["when"]
-        self.assertTrue(callable(when) or isinstance(when, str))
-        if isinstance(when, str):
-            self.assertTrue(sim.eval_pred(when, {"hp_pct": 50.0}) is False)
-            self.assertTrue(sim.eval_pred(when, {"hp_pct": 39.0}))
-        else:
-            self.assertFalse(when({"hp_pct": 50.0}))
-            self.assertTrue(when({"hp_pct": 39.0}))
+        when = py["effects"][0]["trigger"]["when"]
+        self.assertEqual(when, "ctx.hp_pct < 40")
+        ctxs = [{"hp_pct": 50.0, "hp": 500.0}, {"hp_pct": 39.0, "hp": 390.0}]
+        for b in backends:
+            rows = lua_bridge.eval_preds(lua, ctxs, backend=b)
+            self.assertEqual([r[when] for r in rows], [sim.eval_pred(when, c) for c in ctxs], b)
 
     def test_sim_runs_on_roundtripped_lua_effects(self):
         """Манекены вооружаем эффектами, загруженными ИЗ Lua, а не из Python-JSON."""
@@ -309,7 +300,7 @@ class TestLuaPipelineRoom(unittest.TestCase):
 
 
 class TestUiLogicFullCycle(unittest.TestCase):
-    """Цикл UI-логики: форма -> JSON -> validate -> Lua -> lupa -> sim."""
+    """Цикл UI-логики: форма -> JSON -> validate -> Lua -> исполнение -> sim."""
 
     def _form_from_template(self, tid: str) -> dict:
         """Форма билдера из шаблона каталога (как если бы юзер всё набрал руками)."""
@@ -350,7 +341,7 @@ class TestUiLogicFullCycle(unittest.TestCase):
         out = ui_logic.full_cycle(form, scenario={"hero_hp": 500.0,
                                                   "events": ["use"]})
         self.assertEqual(out["errors"], [])
-        self.assertTrue(out.get("lupa_ok") in (True, None))
+        self.assertTrue(out.get("lua_ok") in (True, None))
         step = out["room"]["steps"][0]
         self.assertAlmostEqual(step["hero_hp"], 540.0, delta=TOL)
 
@@ -362,7 +353,7 @@ class TestUiLogicFullCycle(unittest.TestCase):
             "hero_hp": 100.0, "base_stats": {"strength": 100.0},
             "events": ["attack"]})
         self.assertEqual(out["errors"], [])
-        self.assertTrue(out.get("lupa_ok") in (True, None))
+        self.assertTrue(out.get("lua_ok") in (True, None))
         # аналитика: drain 20, deal 60
         self.assertAlmostEqual(out["room"]["steps"][0]["hero_hp"], 80.0, delta=TOL)
         self.assertAlmostEqual(out["room"]["steps"][0]["dummy_hp"], 4940.0, delta=TOL)
@@ -387,7 +378,7 @@ class TestUiLogicFullCycle(unittest.TestCase):
                 out = ui_logic.full_cycle(form,
                                           scenario={"events": ["use", "attack"]})
                 self.assertEqual(out["errors"], [], tid)
-                self.assertTrue(out.get("lupa_ok") in (True, None), tid)
+                self.assertTrue(out.get("lua_ok") in (True, None), tid)
                 self.assertIn("room", out)
 
     # -- новые предметы каталога: полный цикл + аналитика -------------------
@@ -398,7 +389,7 @@ class TestUiLogicFullCycle(unittest.TestCase):
                 "effects": [get_template(tid).to_json()]}
         out = ui_logic.full_cycle(form, scenario=scenario)
         self.assertEqual(out["errors"], [], f"{tid}: {out['errors']}")
-        self.assertTrue(out.get("lupa_ok") in (True, None), tid)
+        self.assertTrue(out.get("lua_ok") in (True, None), tid)
         return out
 
     def test_vampires_fang_full_cycle(self):
