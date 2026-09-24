@@ -1,0 +1,67 @@
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	﻿2026-09-24T09:39:16.3930573Z ##[group]Run python -m pytest -q tests/test_agent_tools.py tests/test_qa_tools.py
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:16.3931409Z ^[[36;1mpython -m pytest -q tests/test_agent_tools.py tests/test_qa_tools.py^[[0m
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:16.3996960Z shell: /usr/bin/bash -e {0}
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:16.3997289Z env:
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:16.3997558Z   pythonLocation: /opt/hostedtoolcache/Python/3.14.7/x64
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:16.3998019Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.14.7/x64/lib/pkgconfig
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:16.3998469Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.7/x64
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:16.3998875Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.7/x64
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:16.3999322Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.14.7/x64
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:16.3999728Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.14.7/x64/lib
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:16.4000068Z ##[endgroup]
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2222945Z ..ss.....................F........s.............                         [100%]
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2223882Z =================================== FAILURES ===================================
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2224797Z ________________ TestRealGame.test_agent_play_is_deterministic _________________
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2225117Z 
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2225304Z self = <test_agent_tools.TestRealGame object at 0x7f525fdf9450>
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2225822Z tmp_path = PosixPath('/tmp/pytest-of-runner/pytest-0/test_agent_play_is_determinist0')
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2226179Z 
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2226342Z     def test_agent_play_is_deterministic(self, tmp_path):
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2226666Z         finals = []
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2226884Z         for i in range(2):
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2227130Z             out = tmp_path / f"run{i}"
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2227581Z             proc = _run(["tools/agent_play.py", "--seed", "5", "--out", str(out), self.SCRIPT], tmp_path)
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2228089Z             assert proc.returncode == 0, proc.stdout + proc.stderr
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2228464Z             assert "RESULT status=OK" in proc.stdout
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2229120Z             assert len(proc.stdout.splitlines()) < 25  # компактный вывод
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2229607Z             session = json.loads((out / "session.json").read_text(encoding="utf-8"))
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2230062Z             finals.append((session["final"], session["kills_list"]))
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2230571Z >       assert finals[0] == finals[1]  # побитово одинаковые прогоны при одном seed
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2231137Z         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2231537Z E       AssertionError: assert ({'t': 8.07, ...', 'goblin']]) == ({'t': 8.07, ...', 'goblin']])
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2231939Z E         
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2233662Z E         At index 0 diff: {'t': 8.07, 'hp': 116.1, 'max_hp': 140.0, 'hp_pct': 82.9, 'lvl': 1, 'xp': 37, 'alive': True, 'dead': False, 'kills': 1, 'despawns': 0, 'enemies': 10, 'nearest': 32.1, 'dealt': 118.6, 'taken': 11.8, 'attacks': 12, 'hits': 12, 'crits': 0, 'dodges': 0, 'traps': 0, 'chests': 0, 'ai': 'seeking_hint', 'pos': [10.5, 3.3]} != {'t': 8.07, 'hp': 116.1, 'max_hp': 140.0, 'hp_pct': 82.9, 'lvl': 1, 'xp': 37, 'alive': True, 'dead': False, 'kills': 1, 'despawns': 0, 'enemies': 10, 'nearest': 31.9, 'dealt': 118.6, 'taken': 11.8, 'attacks': 12, 'hits': 12, 'crits': 0, 'dodges': 0, 'traps': 0, 'chests': 0, 'ai': 'seeking_hint', 'pos': [9.8, 3.1]}
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2235442Z E         
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2235627Z E         Full diff:
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2235839Z E           (
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2236026Z E               {
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2236236Z E                   't': 8.07,
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2236477Z E                   'hp': 116.1,
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2236733Z E                   'max_hp': 140.0,
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2236991Z E                   'hp_pct': 82.9,
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2237238Z E                   'lvl': 1,
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2237471Z E                   'xp': 37,
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2237713Z E                   'alive': True,
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2237960Z E                   'dead': False,
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2238207Z E                   'kills': 1,
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2238690Z E                   'despawns': 0,
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2238944Z E                   'enemies': 10,
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2239197Z E         -         'nearest': 31.9,
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2246933Z tests/test_agent_tools.py:232: AssertionError
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2247494Z =========================== short test summary info ============================
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2248765Z FAILED tests/test_agent_tools.py::TestRealGame::test_agent_play_is_deterministic - AssertionError: assert ({'t': 8.07, ...', 'goblin']]) == ({'t': 8.07, ...', 'goblin']])
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2249438Z   
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2251479Z   At index 0 diff: {'t': 8.07, 'hp': 116.1, 'max_hp': 140.0, 'hp_pct': 82.9, 'lvl': 1, 'xp': 37, 'alive': True, 'dead': False, 'kills': 1, 'despawns': 0, 'enemies': 10, 'nearest': 32.1, 'dealt': 118.6, 'taken': 11.8, 'attacks': 12, 'hits': 12, 'crits': 0, 'dodges': 0, 'traps': 0, 'chests': 0, 'ai': 'seeking_hint', 'pos': [10.5, 3.3]} != {'t': 8.07, 'hp': 116.1, 'max_hp': 140.0, 'hp_pct': 82.9, 'lvl': 1, 'xp': 37, 'alive': True, 'dead': False, 'kills': 1, 'despawns': 0, 'enemies': 10, 'nearest': 31.9, 'dealt': 118.6, 'taken': 11.8, 'attacks': 12, 'hits': 12, 'crits': 0, 'dodges': 0, 'traps': 0, 'chests': 0, 'ai': 'seeking_hint', 'pos': [9.8, 3.1]}
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2253247Z   
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2253428Z   Full diff:
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2253627Z     (
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2253809Z         {
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2253999Z             't': 8.07,
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2254217Z             'hp': 116.1,
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2254444Z             'max_hp': 140.0,
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2254788Z             'hp_pct': 82.9,
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2255184Z             'lvl': 1,
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2255536Z             'xp': 37,
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2255878Z             'alive': True,
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2264637Z 1 failed, 44 passed, 3 skipped in 9.02s
+Game (ubuntu-latest)	Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)	2026-09-24T09:39:26.2608783Z ##[error]Process completed with exit code 1.

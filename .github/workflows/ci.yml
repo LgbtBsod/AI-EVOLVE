@@ -48,6 +48,10 @@ jobs:
       - name: Boot test (GameCore -> menu/world -> plugins, offscreen)
         if: runner.os == 'Linux'
         run: xvfb-run -a python tools/boot_smoke_test.py
+      # One line per check + a `QA verdict` header (lua_content/qa.lua, tools/qa_report.py);
+      # `python tools/qa.py ci` extracts these lines from the log of a failed run.
+      - name: QA verdict (qa.py check --ci)
+        run: python tools/qa.py check --ci --no-cache
 
   rust:
     name: rust_core (${{ matrix.os }})

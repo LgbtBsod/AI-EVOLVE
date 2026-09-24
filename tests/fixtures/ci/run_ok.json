@@ -1,0 +1,130 @@
+{
+ "conclusion": "success",
+ "createdAt": "2026-09-24T10:55:48Z",
+ "databaseId": 35990063693,
+ "displayTitle": "Rust grid pathfinding: A*, Jump Point Search, Dijkstra flow field + P\u2026",
+ "event": "push",
+ "headBranch": "main",
+ "headSha": "1d147e1e324b7341a9367707f174318986ff2991",
+ "jobs": [
+  {
+   "completedAt": "2026-09-24T10:56:45Z",
+   "conclusion": "success",
+   "databaseId": 107601752478,
+   "name": "Game (windows-latest)",
+   "startedAt": "2026-09-24T10:55:51Z",
+   "status": "completed",
+   "steps": [
+    {
+     "completedAt": "2026-09-24T10:55:53Z",
+     "conclusion": "success",
+     "name": "Set up job",
+     "number": 1,
+     "startedAt": "2026-09-24T10:55:52Z",
+     "status": "completed"
+    }
+   ],
+   "url": "https://github.com/LgbtBsod/AI-EVOLVE/actions/runs/35990063693/job/107601752478"
+  },
+  {
+   "completedAt": "2026-09-24T10:56:44Z",
+   "conclusion": "success",
+   "databaseId": 107601752619,
+   "name": "Game (ubuntu-latest)",
+   "startedAt": "2026-09-24T10:55:53Z",
+   "status": "completed",
+   "steps": [
+    {
+     "completedAt": "2026-09-24T10:55:54Z",
+     "conclusion": "success",
+     "name": "Set up job",
+     "number": 1,
+     "startedAt": "2026-09-24T10:55:54Z",
+     "status": "completed"
+    }
+   ],
+   "url": "https://github.com/LgbtBsod/AI-EVOLVE/actions/runs/35990063693/job/107601752619"
+  },
+  {
+   "completedAt": "2026-09-24T10:59:36Z",
+   "conclusion": "success",
+   "databaseId": 107601752653,
+   "name": "rust_core (windows-latest)",
+   "startedAt": "2026-09-24T10:55:51Z",
+   "status": "completed",
+   "steps": [
+    {
+     "completedAt": "2026-09-24T10:55:53Z",
+     "conclusion": "success",
+     "name": "Set up job",
+     "number": 1,
+     "startedAt": "2026-09-24T10:55:52Z",
+     "status": "completed"
+    }
+   ],
+   "url": "https://github.com/LgbtBsod/AI-EVOLVE/actions/runs/35990063693/job/107601752653"
+  },
+  {
+   "completedAt": "2026-09-24T10:56:24Z",
+   "conclusion": "success",
+   "databaseId": 107601752731,
+   "name": "Game (macos-latest)",
+   "startedAt": "2026-09-24T10:55:56Z",
+   "status": "completed",
+   "steps": [
+    {
+     "completedAt": "2026-09-24T10:55:57Z",
+     "conclusion": "success",
+     "name": "Set up job",
+     "number": 1,
+     "startedAt": "2026-09-24T10:55:56Z",
+     "status": "completed"
+    }
+   ],
+   "url": "https://github.com/LgbtBsod/AI-EVOLVE/actions/runs/35990063693/job/107601752731"
+  },
+  {
+   "completedAt": "2026-09-24T10:56:52Z",
+   "conclusion": "success",
+   "databaseId": 107601752754,
+   "name": "rust_core (macos-latest)",
+   "startedAt": "2026-09-24T10:55:56Z",
+   "status": "completed",
+   "steps": [
+    {
+     "completedAt": "2026-09-24T10:55:59Z",
+     "conclusion": "success",
+     "name": "Set up job",
+     "number": 1,
+     "startedAt": "2026-09-24T10:55:57Z",
+     "status": "completed"
+    }
+   ],
+   "url": "https://github.com/LgbtBsod/AI-EVOLVE/actions/runs/35990063693/job/107601752754"
+  },
+  {
+   "completedAt": "2026-09-24T10:56:32Z",
+   "conclusion": "success",
+   "databaseId": 107601752908,
+   "name": "rust_core (ubuntu-latest)",
+   "startedAt": "2026-09-24T10:55:52Z",
+   "status": "completed",
+   "steps": [
+    {
+     "completedAt": "2026-09-24T10:55:54Z",
+     "conclusion": "success",
+     "name": "Set up job",
+     "number": 1,
+     "startedAt": "2026-09-24T10:55:53Z",
+     "status": "completed"
+    }
+   ],
+   "url": "https://github.com/LgbtBsod/AI-EVOLVE/actions/runs/35990063693/job/107601752908"
+  }
+ ],
+ "startedAt": "2026-09-24T10:55:48Z",
+ "status": "completed",
+ "updatedAt": "2026-09-24T10:59:37Z",
+ "url": "https://github.com/LgbtBsod/AI-EVOLVE/actions/runs/35990063693",
+ "workflowName": "CI"
+}

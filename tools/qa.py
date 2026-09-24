@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """QA front door: одна команда вместо чтения документации и сырого вывода.
 
+    python tools/qa.py check                 # ВСЕ проверки в одном формате: затронутые диффом (--all | --fast | --name a,b | --explain X)
+    python tools/qa.py ci [--latest|--run ID|--sha S] [--wait]   # GitHub Actions через gh: только то, что нужно агенту
+    python tools/qa.py changed [REV]         # семантический diff: символы +/-/~, LOC, риски, какие проверки гонять
     python tools/qa.py brief                 # 10 строк: окружение, изменения, что гонять, последние прогоны
     python tools/qa.py doctor                # чего не хватает в окружении + точная команда починки
     python tools/qa.py affected [FILES]      # какие тесты/скрипты задевает правка (граф импортов)
@@ -140,7 +143,7 @@ def cmd_brief(args):
         pass
     if GOLDEN_FILE.exists():
         print(f"golden scenarios: {len(json.loads(GOLDEN_FILE.read_text(encoding='utf-8'))['scenarios'])} recorded - `qa.py golden`")
-    print("next: `qa.py test --changed` | `qa.py golden` | `qa.py fuzz` | CLAUDE.md for the tool table")
+    print("next: `qa.py check` (one line per check) | `qa.py changed` | `qa.py ci` | CLAUDE.md for the tool table")
     return 0
 
 

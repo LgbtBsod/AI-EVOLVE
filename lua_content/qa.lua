@@ -13,7 +13,8 @@ return {
     { name = "trap_and_chest", seed = 2, script = "spawn trap; spawn chest; wait 15; expect alive" },
     { name = "swarm",         seed = 3, script = "spawn enemy x10; wait 45" },
     { name = "idle_explore",  seed = 4, script = "wait 90" },
-    { name = "forced_attacks", seed = 5, script = "spawn enemy x2; attack x5; wait 20; expect kills>=1" },
+    -- ci = false: не входит в `qa.py check --ci` (kills>=1 держится без запаса на эталонной Linux-записи)
+    { name = "forced_attacks", seed = 5, script = "spawn enemy x2; attack x5; wait 20; expect kills>=1", ci = false },
   },
   -- Поля итогового состояния, которые сравнивает golden (плюс отпечаток траектории)
   golden_fields = { "t", "hp", "max_hp", "lvl", "xp", "kills", "despawns", "enemies",
@@ -122,6 +123,78 @@ return {
         cause = "a few stable trajectories, picked by the environment (CPU/libm dispatch, memory layout)",
         look = "which variant/pair lands in which class (report.json fp_a/fp_b); on CI diff the env fingerprints" },
     },
+  },
+
+  -- ===== qa.py check: ОДИН формат вывода для всех проверок (tools/qa_report.py) =====
+  -- Бюджет вывода и пороги дельт. Дельта метрики против прошлого прогона той же проверки
+  -- печатается (`dealt=484.2(-22%)`), только если сдвиг >= delta_pct % И >= delta_abs (по метрике - в `delta`).
+  report = {
+    max_lines = 30,         -- потолок строк вывода вместе с заголовком; остальное - в файл + `(+N more lines: PATH)`
+    detail_lines = 3,       -- строк деталей у упавшей проверки (первая - в её строке)
+    line_width = 150,       -- деталь в строке обрезается до стольких символов
+    delta_pct = 15, delta_abs = 1,
+    delta = { dealt = { pct = 10, abs = 5 }, taken = { pct = 10, abs = 5 }, hp = { pct = 10, abs = 5 }, kills = { pct = 0, abs = 1 } },
+    delta_ignore = { "dur", "wall", "t" },
+    history_keep = 400,     -- строк в dev_probe_output/qa/history.jsonl
+    cache_hours = 24,       -- кэш результатов старше - не используется
+    jobs = 4,               -- параллельных проверок (qa_pool)
+    timeout = 600,          -- секунд на проверку, если не задано своё
+  },
+
+  -- Каждый элемент `scenarios` (они же golden) и `plays` (только проверки, без golden) - проверка `play:NAME`.
+  -- Поля сценария: name, seed, script, [expects = "kills>=1" | {..}], [cost, watches, tags, ci].
+  scenario_check = {
+    cost = "low", tags = { "play" }, timeout = 120,
+    watches = { "src/**/*.py", "lua_content/**/*.lua", "tools/agent_play.py", "tools/probe_*.py", "config.prc", "rust_core/src/**/*.rs" },
+    keep = { "hp", "lvl", "kills", "dealt", "taken", "expects" },   -- метрики строки; остальное RESULT-строки не печатается
+    hide_zero = { "errors", "invariants", "expects" },   -- "expects" = "0/0": в сценарии нет expect
+  },
+  plays = {
+    { name = "trap_only", seed = 6, script = "spawn trap; wait 20", expects = "alive" },
+  },
+  -- Проверка = ДАННЫЕ: python не нужен. cmd - команда (python = текущий интерпретатор); cmd_diff - вместо неё в режиме
+  -- `qa.py check` по диффу; parse = result_line | pytest | counts | regex (pattern с именованными группами) | exit;
+  -- watches - globs, при правке которых (или их импортёров) проверка выбирается и сбрасывается кэш; cost = low|medium|high;
+  -- always - выбирается даже без правок; ci=false - не входит в `check --ci`; solo - гоняется одна (сама параллелит);
+  -- soft / soft_if - падение считается warn (известная проблема / регэксп по выводу); warn_over = { метрика = предел };
+  -- keep / hide_zero - какие метрики печатать; detail - регэксп строк деталей; requires = "display"; needs = { модули }.
+  checks = {
+    { name = "combat_smoke", cmd = "python tools/combat_smoke_test.py", parse = "counts", cost = "low", always = true,
+      tags = { "combat", "unit" }, what = "combat/effects/leveling formulas (no window)",
+      watches = { "src/**/*.py", "lua_content/**/*.lua", "tools/combat_smoke_test.py" } },
+    { name = "tests", cmd = "python tools/qa.py test", cmd_diff = "python tools/qa.py test --changed", parse = "pytest",
+      cost = "medium", solo = true, ci = false, tags = { "pytest" }, hide_zero = { "skipped", "flaky" },
+      what = "pytest in parallel shards (only affected files in diff mode; known failures do not count as NEW)",
+      watches = { "src/**/*.py", "tools/**/*.py", "tests/**/*.py", "lua_content/**/*.lua", "tests/*.json", "pytest.ini" } },
+    { name = "golden", cmd = "python tools/qa.py golden", parse = "regex", pattern = [[golden: (?P<identical>\d+)/(?P<total>\d+) scenario]],
+      detail = "CHANGED|NEW scenario|definition changed|run failed", soft_if = [[golden recorded on [\w.-]+, this is [\w.-]+]],
+      cost = "medium", ci = false, tags = { "play", "golden" }, what = "deterministic scenarios vs tests/golden/ (warn, not fail, on another platform than the recording)",
+      watches = { "src/**/*.py", "lua_content/**/*.lua", "tools/agent_play.py", "tools/probe_*.py", "tests/golden/**", "rust_core/src/**/*.rs" } },
+    { name = "lua", cmd = "python tools/qa.py lua check", parse = "regex", pattern = [[lua: (?P<loaded>\d+)/(?P<files>\d+) files ok]],
+      cost = "low", tags = { "lua" }, what = "every lua_content file loads with every backend, same data",
+      watches = { "lua_content/**/*.lua", "tools/lua_bridge.py", "rust_core/src/lua_content/**" } },
+    { name = "items", cmd = "python tools/qa.py item all", parse = "regex", pattern = [[items: (?P<pass>\d+)/(?P<items>\d+) pass]],
+      cost = "low", tags = { "lua", "items" }, what = "every item schema -> Lua -> conditions -> combat (itemcheck)",
+      watches = { "lua_content/items/**", "tools/effect_schema/**", "src/**/*.py", "tools/lua_bridge.py" } },
+    { name = "pathfinding", cmd = "python -m pytest -q tests/test_pathfinding.py", parse = "pytest", cost = "low",
+      hide_zero = { "failed", "skipped", "error" },
+      tags = { "pytest", "rust" }, what = "A*/JPS/flow field: Rust kernel vs the Python twin on seeded grids",
+      watches = { "src/gameplay/pathfinding.py", "rust_core/src/simulation/pathfinding.rs", "tests/test_pathfinding.py", "tools/probe_kernels.py" } },
+    { name = "boot_smoke", cmd = "python tools/boot_smoke_test.py", parse = "result_line", requires = "display", cost = "medium",
+      ci = false, tags = { "boot" }, what = "GameCore -> menu -> world -> plugins, offscreen buffer (skip without OpenGL/xvfb)",
+      watches = { "src/**/*.py", "main.py", "config.prc", "lua_content/**/*.lua", "tools/boot_smoke_test.py", "tools/probe_runtime.py" } },
+    { name = "determinism-quick", cmd = [[python tools/qa.py determinism "wait 5" --pairs 2]], parse = "result_line",
+      soft = true, soft_note = "same-seed residual is a known xfail (frame-0 RNG); see docs/LANGUAGE_SPLIT.md",
+      keep = { "pairs", "diverged", "classes" }, cost = "medium", ci = false, tags = { "play", "determinism" },
+      what = "two same-seed pairs must produce identical trajectories",
+      watches = { "src/**/*.py", "tools/probe_runtime.py", "tools/agent_play.py", "tools/qa_plugins/determinism.py", "lua_content/**/*.lua" } },
+    { name = "dead-code", cmd = "python tools/qa.py dead", parse = "regex", pattern = [[dead=(?P<dead>\d+) \((?P<loc>\d+) LOC]],
+      warn_over = { dead = 100 }, cost = "low", ci = false, tags = { "hygiene" }, what = "modules nobody imports (informational count)",
+      watches = { "**/*.py" } },
+    { name = "docs-stale", cmd = "python tools/qa.py docs --top 0", parse = "regex",
+      pattern = { [[(?P<md>\d+) markdown files]], [[STALE=(?P<stale>\d+)]], [[CHECK=(?P<review>\d+)]] },
+      cost = "low", ci = false, tags = { "hygiene" }, what = "markdown files whose references point at missing/dead code (informational count)",
+      watches = { "**/*.md", "**/*.py" } },
   },
 
   -- Выбор тестов по графу импортов (qa.py affected / test --changed)

@@ -1,0 +1,81 @@
+{
+ "conclusion": "failure",
+ "createdAt": "2026-09-24T10:43:22Z",
+ "databaseId": 35988866453,
+ "displayTitle": "Determinism probe",
+ "event": "workflow_dispatch",
+ "headBranch": "main",
+ "headSha": "16aa2e73ab11458c9a8a035bdc45b4aba775df41",
+ "jobs": [
+  {
+   "completedAt": "2026-09-24T10:45:56Z",
+   "conclusion": "failure",
+   "databaseId": 107597899858,
+   "name": "determinism (windows-latest)",
+   "startedAt": "2026-09-24T10:43:26Z",
+   "status": "completed",
+   "steps": [
+    {
+     "completedAt": "2026-09-24T10:45:50Z",
+     "conclusion": "failure",
+     "name": "Same-seed pairs (normal, ASLR off where available, hash seed 0)",
+     "number": 5,
+     "startedAt": "2026-09-24T10:44:17Z",
+     "status": "completed"
+    },
+    {
+     "completedAt": "2026-09-24T10:45:53Z",
+     "conclusion": "skipped",
+     "name": "Post Run actions/setup-python@v7",
+     "number": 11,
+     "startedAt": "2026-09-24T10:45:53Z",
+     "status": "completed"
+    }
+   ],
+   "url": "https://github.com/LgbtBsod/AI-EVOLVE/actions/runs/35988866453/job/107597899858"
+  },
+  {
+   "completedAt": "2026-09-24T10:44:53Z",
+   "conclusion": "success",
+   "databaseId": 107597900136,
+   "name": "determinism (ubuntu-latest)",
+   "startedAt": "2026-09-24T10:43:26Z",
+   "status": "completed",
+   "steps": [
+    {
+     "completedAt": "2026-09-24T10:43:28Z",
+     "conclusion": "success",
+     "name": "Set up job",
+     "number": 1,
+     "startedAt": "2026-09-24T10:43:27Z",
+     "status": "completed"
+    }
+   ],
+   "url": "https://github.com/LgbtBsod/AI-EVOLVE/actions/runs/35988866453/job/107597900136"
+  },
+  {
+   "completedAt": "2026-09-24T10:44:36Z",
+   "conclusion": "success",
+   "databaseId": 107597900170,
+   "name": "determinism (macos-latest)",
+   "startedAt": "2026-09-24T10:43:31Z",
+   "status": "completed",
+   "steps": [
+    {
+     "completedAt": "2026-09-24T10:43:32Z",
+     "conclusion": "success",
+     "name": "Set up job",
+     "number": 1,
+     "startedAt": "2026-09-24T10:43:31Z",
+     "status": "completed"
+    }
+   ],
+   "url": "https://github.com/LgbtBsod/AI-EVOLVE/actions/runs/35988866453/job/107597900170"
+  }
+ ],
+ "startedAt": "2026-09-24T10:43:22Z",
+ "status": "completed",
+ "updatedAt": "2026-09-24T10:45:57Z",
+ "url": "https://github.com/LgbtBsod/AI-EVOLVE/actions/runs/35988866453",
+ "workflowName": "Determinism probe"
+}

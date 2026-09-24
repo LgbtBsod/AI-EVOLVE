@@ -1,0 +1,16 @@
+Game (macos-latest)	Boot test (GameCore -> menu/world -> plugins, offscreen)	﻿2026-09-24T09:50:00.0000000Z ##[group]Run python tools/boot_smoke_test.py
+Game (macos-latest)	Boot test (GameCore -> menu/world -> plugins, offscreen)	2026-09-24T09:50:01.0001234Z python tools/boot_smoke_test.py
+Game (macos-latest)	Boot test (GameCore -> menu/world -> plugins, offscreen)	2026-09-24T09:50:02.0002468Z shell: /bin/bash -e {0}
+Game (macos-latest)	Boot test (GameCore -> menu/world -> plugins, offscreen)	2026-09-24T09:50:03.0003702Z ##[endgroup]
+Game (macos-latest)	Boot test (GameCore -> menu/world -> plugins, offscreen)	2026-09-24T09:50:04.0004936Z Known pipe types:
+Game (macos-latest)	Boot test (GameCore -> menu/world -> plugins, offscreen)	2026-09-24T09:50:05.0006170Z   CocoaGraphicsPipe
+Game (macos-latest)	Boot test (GameCore -> menu/world -> plugins, offscreen)	2026-09-24T09:50:06.0007404Z Traceback (most recent call last):
+Game (macos-latest)	Boot test (GameCore -> menu/world -> plugins, offscreen)	2026-09-24T09:50:07.0008638Z   File "/Users/runner/work/AI-EVOLVE/AI-EVOLVE/tools/boot_smoke_test.py", line 90, in <module>
+Game (macos-latest)	Boot test (GameCore -> menu/world -> plugins, offscreen)	2026-09-24T09:50:08.0009872Z     sys.exit(main())
+Game (macos-latest)	Boot test (GameCore -> menu/world -> plugins, offscreen)	2026-09-24T09:50:09.0011106Z   File "/Users/runner/work/AI-EVOLVE/AI-EVOLVE/tools/boot_smoke_test.py", line 61, in main
+Game (macos-latest)	Boot test (GameCore -> menu/world -> plugins, offscreen)	2026-09-24T09:50:10.0012340Z     game = boot()
+Game (macos-latest)	Boot test (GameCore -> menu/world -> plugins, offscreen)	2026-09-24T09:50:11.0013574Z   File "/Users/runner/work/AI-EVOLVE/AI-EVOLVE/src/core/game_core.py", line 204, in boot
+Game (macos-latest)	Boot test (GameCore -> menu/world -> plugins, offscreen)	2026-09-24T09:50:12.0014808Z     self.scene_manager.switch('game_world')
+Game (macos-latest)	Boot test (GameCore -> menu/world -> plugins, offscreen)	2026-09-24T09:50:13.0016042Z KeyError: 'game_world'
+Game (macos-latest)	Boot test (GameCore -> menu/world -> plugins, offscreen)	2026-09-24T09:50:14.0017276Z RESULT status=FAIL scene=None enemies=0->0 errors=1
+Game (macos-latest)	Boot test (GameCore -> menu/world -> plugins, offscreen)	2026-09-24T09:50:15.0018510Z ##[error]Process completed with exit code 1.

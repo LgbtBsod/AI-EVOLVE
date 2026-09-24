@@ -1,0 +1,21 @@
+rust_core (ubuntu-latest)	cargo test	﻿2026-09-24T09:50:00.0000000Z ##[group]Run cargo test
+rust_core (ubuntu-latest)	cargo test	2026-09-24T09:50:01.0001234Z [36;1mcargo test[0m
+rust_core (ubuntu-latest)	cargo test	2026-09-24T09:50:02.0002468Z shell: /usr/bin/bash -e {0}
+rust_core (ubuntu-latest)	cargo test	2026-09-24T09:50:03.0003702Z env:
+rust_core (ubuntu-latest)	cargo test	2026-09-24T09:50:04.0004936Z   CARGO_TERM_COLOR: always
+rust_core (ubuntu-latest)	cargo test	2026-09-24T09:50:05.0006170Z ##[endgroup]
+rust_core (ubuntu-latest)	cargo test	2026-09-24T09:50:06.0007404Z [1m[92m   Compiling[0m rust_core v0.1.0 (/home/runner/work/AI-EVOLVE/AI-EVOLVE/rust_core)
+rust_core (ubuntu-latest)	cargo test	2026-09-24T09:50:07.0008638Z [1m[91merror[E0432][0m[1m: unresolved import `crate::simulation::flowfield`[0m
+rust_core (ubuntu-latest)	cargo test	2026-09-24T09:50:08.0009872Z [1m[94m --> [0msrc/simulation/pathfinding.rs:14:5
+rust_core (ubuntu-latest)	cargo test	2026-09-24T09:50:09.0011106Z    |
+rust_core (ubuntu-latest)	cargo test	2026-09-24T09:50:10.0012340Z 14 | use crate::simulation::flowfield::Field;
+rust_core (ubuntu-latest)	cargo test	2026-09-24T09:50:11.0013574Z    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ no `flowfield` in `simulation`
+rust_core (ubuntu-latest)	cargo test	2026-09-24T09:50:12.0014808Z 
+rust_core (ubuntu-latest)	cargo test	2026-09-24T09:50:13.0016042Z [1m[91merror[E0308][0m[1m: mismatched types[0m
+rust_core (ubuntu-latest)	cargo test	2026-09-24T09:50:14.0017276Z [1m[94m   --> [0msrc/analytics/mod.rs:88:22
+rust_core (ubuntu-latest)	cargo test	2026-09-24T09:50:15.0018510Z     |
+rust_core (ubuntu-latest)	cargo test	2026-09-24T09:50:16.0019744Z 88  |     let n: usize = count as i32;
+rust_core (ubuntu-latest)	cargo test	2026-09-24T09:50:17.0020978Z     |                    ^^^^^^^^^^^^ expected `usize`, found `i32`
+rust_core (ubuntu-latest)	cargo test	2026-09-24T09:50:18.0022212Z 
+rust_core (ubuntu-latest)	cargo test	2026-09-24T09:50:19.0023446Z [1m[91merror[0m[1m:[0m could not compile `rust_core` (lib) due to 2 previous errors
+rust_core (ubuntu-latest)	cargo test	2026-09-24T09:50:20.0024680Z ##[error]Process completed with exit code 101.

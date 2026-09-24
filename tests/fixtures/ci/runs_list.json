@@ -1,0 +1,57 @@
+[
+ {
+  "conclusion": "success",
+  "createdAt": "2026-09-24T10:55:48Z",
+  "databaseId": 35990063693,
+  "event": "push",
+  "headBranch": "main",
+  "headSha": "1d147e1e324b7341a9367707f174318986ff2991",
+  "status": "completed",
+  "updatedAt": "2026-09-24T10:59:37Z",
+  "workflowName": "CI"
+ },
+ {
+  "conclusion": "success",
+  "createdAt": "2026-09-24T10:46:44Z",
+  "databaseId": 35989192825,
+  "event": "push",
+  "headBranch": "main",
+  "headSha": "ecfa93d1a3d3503f38ed458f8e190e72fe84dfa0",
+  "status": "completed",
+  "updatedAt": "2026-09-24T10:49:29Z",
+  "workflowName": "CI"
+ },
+ {
+  "conclusion": "failure",
+  "createdAt": "2026-09-24T10:43:22Z",
+  "databaseId": 35988866453,
+  "event": "workflow_dispatch",
+  "headBranch": "main",
+  "headSha": "16aa2e73ab11458c9a8a035bdc45b4aba775df41",
+  "status": "completed",
+  "updatedAt": "2026-09-24T10:45:57Z",
+  "workflowName": "Determinism probe"
+ },
+ {
+  "conclusion": "success",
+  "createdAt": "2026-09-24T10:43:10Z",
+  "databaseId": 35988846003,
+  "event": "push",
+  "headBranch": "main",
+  "headSha": "16aa2e73ab11458c9a8a035bdc45b4aba775df41",
+  "status": "completed",
+  "updatedAt": "2026-09-24T10:45:00Z",
+  "workflowName": "CI"
+ },
+ {
+  "conclusion": "failure",
+  "createdAt": "2026-09-24T10:39:14Z",
+  "databaseId": 35988470586,
+  "event": "workflow_dispatch",
+  "headBranch": "main",
+  "headSha": "b65d2f7d6c6d81fcb9f3e539520f4db56880e0aa",
+  "status": "completed",
+  "updatedAt": "2026-09-24T10:40:48Z",
+  "workflowName": "Determinism probe"
+ }
+]

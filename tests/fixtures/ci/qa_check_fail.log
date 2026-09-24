@@ -1,0 +1,10 @@
+Game (ubuntu-latest)	QA verdict (one line per check; qa.py ci reads this)	﻿2026-09-24T09:50:00.0000000Z ##[group]Run python tools/qa.py check --ci --no-cache
+Game (ubuntu-latest)	QA verdict (one line per check; qa.py ci reads this)	2026-09-24T09:50:01.0001234Z python tools/qa.py check --ci --no-cache
+Game (ubuntu-latest)	QA verdict (one line per check; qa.py ci reads this)	2026-09-24T09:50:02.0002468Z shell: /usr/bin/bash -e {0}
+Game (ubuntu-latest)	QA verdict (one line per check; qa.py ci reads this)	2026-09-24T09:50:03.0003702Z ##[endgroup]
+Game (ubuntu-latest)	QA verdict (one line per check; qa.py ci reads this)	2026-09-24T09:50:04.0004936Z QA verdict=FAIL checks=8 ok=7 fail=1 warn=0 cached=0 dur=9s head=1d147e1 dirty=0 selected=8/16 by=all
+Game (ubuntu-latest)	QA verdict (one line per check; qa.py ci reads this)	2026-09-24T09:50:05.0006170Z FAIL   play:melee_three hp=0.0/140.0 lvl=1 kills=1(-67%) dealt=52.4(-70%) taken=140 expects=0/1 dur=2.0s | FAIL expect alive at t=31.2 (hp=0) | repro: python tools/agent_play.py --seed 1 'spawn enemy x3; until kills>=3 or dead max 90; expect alive'
+Game (ubuntu-latest)	QA verdict (one line per check; qa.py ci reads this)	2026-09-24T09:50:06.0007404Z   | expect alive: hero died at t=31.2
+Game (ubuntu-latest)	QA verdict (one line per check; qa.py ci reads this)	2026-09-24T09:50:07.0008638Z ok     combat_smoke        passed=53 failed=0 dur=0.6s
+Game (ubuntu-latest)	QA verdict (one line per check; qa.py ci reads this)	2026-09-24T09:50:08.0009872Z ok     lua                 loaded=19 files=19 dur=0.4s
+Game (ubuntu-latest)	QA verdict (one line per check; qa.py ci reads this)	2026-09-24T09:50:09.0011106Z ##[error]Process completed with exit code 1.
