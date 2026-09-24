@@ -17,6 +17,8 @@ return {
     crit_chance = 0, crit_dmg = 50, aspd = 1.0,
     lifesteal = 0, move_speed = 5, attack_damage = 0,
     spell_power = 0, dodge = 0,     -- dodge в пунктах (%), в игре dodge_chance 0..1
+    attack_range = 2,               -- как далеко бьёт удар оружием (лук, копьё - больше)
+    vision_range = 20,              -- как далеко сущность замечает других (стелс снижает)
   },
 
   -- ресурсы как у Character в игре: текущее значение меняют heal/drain/deal/set,
@@ -35,7 +37,7 @@ return {
     agility      = { crit_chance = 0.15, aspd = 0.008, dodge = 0.1 },
     intelligence = { spell_power = 0.8, max_mana = 3 },
     vitality     = { max_hp = 6, hp_regen = 0.04 },
-    wisdom       = { mana_regen = 0.08, spell_power = 0.2 },
+    wisdom       = { mana_regen = 0.08, spell_power = 0.2, vision_range = 0.05 },
     endurance    = { max_stamina = 3, stamina_regen = 0.05, defense = 0.3 },
     luck         = { crit_chance = 0.1, dodge = 0.05 },
     charisma     = {},   -- цены у торговцев и отношение NPC (социальная часть)
@@ -57,5 +59,7 @@ return {
     tenacity    = { min = 0, max = 100 },
     dodge       = { min = 0, max = 75 },
     aspd        = { min = 0.1, max = 4 },  -- больше 4 ударов в секунду не бывает
+    attack_range = { min = 0.5, max = 30 },
+    vision_range = { min = 0, max = 80 },
   },
 }

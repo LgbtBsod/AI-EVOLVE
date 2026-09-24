@@ -4,6 +4,8 @@
 -- менеджером эффектов, как удар оружием героя. Телеграф: cast_time > 0 -
 -- на земле появляется круг radius, через cast_time секунд удар по кругу
 -- (герой может выйти из него). Фазы: навыки с when = "ctx.hp_pct < N".
+-- Круги бьют всех (френдли фаер): удар по земле заденет и призванных слуг, и
+-- самого босса, если он стоит в круге; нова вокруг себя - affects = "others".
 -- Хелперы ниже собирают типовые навыки; prefix делает id уникальными.
 
 local P = ""  -- префикс текущего босса (id навыков: "<босс>.<навык>")
@@ -13,7 +15,8 @@ local function dmg(pct) return { pct = pct, of = "attack_damage" } end
 local function strike(n, name, pct, cd, extra)
   local ops = { { kind = "deal", target = "enemy", stat = "hp", op = "sub", value = dmg(pct) } }
   for _, o in ipairs(extra or {}) do ops[#ops + 1] = o end
-  return { id = id(n), name = name, tags = { "attack", "skill" }, range = 2.6, cooldown = cd, ops = ops }
+  return { id = id(n), name = name, tags = { "attack", "skill" }, range = { pct = 120, of = "attack_range" },
+           cooldown = cd, ops = ops }
 end
 local function slam(n, name, pct, radius, cast, cd, when)   -- удар по кругу у цели, с телеграфом
   return { id = id(n), name = name, tags = { "skill", "aoe" }, range = 9, cooldown = cd, cast_time = cast,
@@ -23,7 +26,8 @@ end
 local function nova(n, name, pct, radius, cast, cd, when)   -- волна вокруг себя
   return { id = id(n), name = name, tags = { "skill", "aoe" }, cooldown = cd, cast_time = cast, radius = radius,
            needs_target = true, range = radius + 2, when = when,
-           ops = { { kind = "deal", target = "area", center = "self", radius = radius, stat = "hp", op = "sub", value = dmg(pct) } } }
+           ops = { { kind = "deal", target = "area", center = "self", radius = radius, affects = "others",
+                     stat = "hp", op = "sub", value = dmg(pct) } } }
 end
 local function bolt(n, name, pct, range, cd, dot)            -- снаряд (+ урон со временем)
   local ops = { { kind = "deal", target = "enemy", stat = "hp", op = "sub", value = dmg(pct) } }

@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from .schema import (OP_KINDS, TARGETS, OPS, TRIGGER_KINDS, EVENTS, FLAGS, MOVE_MODES,
-                     CONTEXT_ONLY_STATS, RESOURCE_STATS, is_stat)
+from .schema import (OP_KINDS, TARGETS, OPS, TRIGGER_KINDS, EVENTS, FLAGS, MOVE_MODES, AREA_AFFECTS,
+                     TOWARD, TOWARD_STATS, CONTEXT_ONLY_STATS, RESOURCE_STATS, is_stat)
 
 
 def _validate_pred(pred, path: str, effects=()) -> list[str]:
@@ -127,6 +127,10 @@ def validate_op(o: dict, path: str, item_effects=()) -> list[str]:
         err(f"kind=move requires mode in {sorted(MOVE_MODES)}")
     if o.get("target") == "area" and o.get("center", "target") not in ("target", "self"):
         err("area center must be 'target' or 'self'")
+    if o.get("affects") is not None and (o.get("target") != "area" or o["affects"] not in AREA_AFFECTS):
+        err(f"affects is for target=area, one of {sorted(AREA_AFFECTS)}")
+    if o.get("toward") is not None and (o["toward"] not in TOWARD or kind != "mod" or st not in TOWARD_STATS):
+        err(f"toward={o['toward']!r} is for mod of {sorted(TOWARD_STATS)} (toward='source': stealth)")
     if o.get("every") is not None:
         if kind not in ("deal", "heal") or o.get("duration") is None:
             err("every (periodic op) is for deal/heal and needs duration")

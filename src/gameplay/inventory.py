@@ -135,6 +135,8 @@ class InventoryBrain:
             hp_frac = float(getattr(e, "health", 0)) / max(1.0, float(getattr(e, "max_health", 1)))
             if hp_frac <= self.heal_at and self._drink("hp", use_item):
                 return "potion:hp"
+            if hp_frac <= self.heal_at and self._vanish(use_item):
+                return "stealth"
             for res in ("mana", "stamina"):
                 cap = float(getattr(e, f"max_{res}", 0) or 0)
                 if cap > 0 and float(getattr(e, res, cap)) / cap <= self.resource_at and self._drink(res, use_item):
@@ -167,6 +169,17 @@ class InventoryBrain:
             self.inv.log.append(f"выпил {potion.name}")
             self._potion_ready_at = self.now + self.potion_cooldown
             return True
+        return False
+
+    def _vanish(self, use_item) -> bool:
+        """Зелий нет - дымовая шашка: уйти из виду (mod vision_range toward source)."""
+        for it in self.inv.bag:
+            if it.usable and any(o.get("toward") == "source" for ef in it.effects for o in ef.get("ops") or []):
+                if use_item(it):
+                    self.inv.remove(it)
+                    self.inv.log.append(f"использовал {it.name}")
+                    self._potion_ready_at = self.now + self.potion_cooldown
+                    return True
         return False
 
     def best_upgrade(self) -> Optional[ItemDef]:

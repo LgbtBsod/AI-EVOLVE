@@ -3,11 +3,14 @@
 -- вид (shape, size, color), навыки (lua_content/abilities.lua / bosses.lua),
 -- класс добычи (loot.lua -> enemies.<loot>) и тактики, которые враг умеет.
 --   shape: humanoid | beast | blob | spirit | giant | spider | serpent
+--   attack_range - дальность удара (стрелки бьют издалека), vision - дальность обзора:
+--   враг замечает героя только ближе неё (стелс героя её снижает)
 local function foe(name, shape, size, color, hp, dmg, def, speed, exp, opts)
   opts = opts or {}
   return { name = name, shape = shape, size = size, color = color,
            health = hp, damage = dmg, defense = def, speed = speed, exp_reward = exp,
            skills = opts.skills or {}, loot = opts.loot or "basic", ranged = opts.ranged or false,
+           attack_range = opts.attack_range or (opts.ranged and 7 or 2), vision = opts.vision or 20,
            tactics = opts.tactics }
 end
 

@@ -43,6 +43,11 @@ return {
                     flags = { "true_damage" } },
                   { kind = "mod", target = "enemy", stat = "defense", op = "sub", value = { flat = 2 } } } },
       } },
+    -- дальность атаки: лук бьёт издалека, копьё - дальше меча
+    { id = "hunting_bow", name = "Охотничий лук", kind = "equipment", slot = "weapon", rarity = "common", value = 35,
+      stats = { attack_damage = 6, attack_range = 7, aspd = -0.1 } },
+    { id = "ash_spear", name = "Ясеневое копьё", kind = "equipment", slot = "weapon", rarity = "common", value = 30,
+      stats = { attack_damage = 7, attack_range = 1.5 } },
     { id = "stormcaller", name = "Зов бури", kind = "equipment", slot = "weapon", rarity = "epic", value = 150,
       stats = { attack_damage = 9, agility = 6 },
       effects = {
@@ -121,5 +126,14 @@ return {
       knowledge = { reveals = "exit_region" } },
     { id = "treasure_map", name = "Карта сокровищ", kind = "map", rarity = "common", value = 25,
       knowledge = { reveals = "chests" } },
+
+    -- ------------------------------------------------------------ стелс
+    { id = "smoke_bomb", name = "Дымовая шашка", kind = "consumable", rarity = "rare", value = 30,
+      effects = { { id = "smoke_bomb.cloud", trigger = { kind = "event", event = "use" },
+                    ops = { { kind = "mod", target = "area", center = "self", radius = 10, affects = "others",
+                              stat = "vision_range", op = "add", value = { pct = -80 }, toward = "source",
+                              duration = { flat = 5 } } } } } },
+    { id = "hunters_lens", name = "Линза охотника", kind = "equipment", slot = "trinket", rarity = "rare", value = 70,
+      stats = { vision_range = 12 } },
   },
 }

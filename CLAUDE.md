@@ -64,8 +64,11 @@ Rules of thumb:
   effects only) instead of reading the Lua. Conditions in Lua are `pred("ctx.hp_pct < 40", function…)`:
   tools get the source string, the engine calls the function.
 - After an intended gameplay change: `qa.py golden` shows what moved, then `qa.py golden --record`.
-- Default dev map: enemies spawn ~160u from the hero and rarely reach him — a run without
-  `spawn enemy` usually has no combat at all (hypothesis `NO_COMBAT`).
+- Periodic spawns appear 30-50u from the hero, outside his 30u vision; an idle run gets a fight
+  now and then, `spawn enemy` guarantees one. Enemies see the hero only via
+  `EffectManager.can_see` (vision_range, stealth) and fight with a learned tactic
+  (`src/gameplay/enemy_ai.py`, memory = Rust bandit in `src/gameplay/tactics.py`; tools run it
+  in-process only via `AI_EVOLVE_TACTICS_MEMORY=off`, so seeded runs stay reproducible).
 
 ## Where things live
 

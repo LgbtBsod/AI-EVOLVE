@@ -164,7 +164,7 @@ def test_poison_ticks_over_time(setup):
     assert enemy.health == pytest.approx(after_hit - 5 * 4)        # 4 урона x 5 тиков
 
 
-def test_area_hits_hostiles_only_and_summon_uses_world(setup):
+def test_area_is_friendly_fire_and_summon_uses_world(setup):
     mgr, hero, enemy = setup(atk=20.0)
     ally = Fighter(x=0.5)
     far = Fighter(x=30.0)
@@ -172,8 +172,12 @@ def test_area_hits_hostiles_only_and_summon_uses_world(setup):
     mgr.register(ally, "hero")
     mgr.register(far, "monsters")
     mgr.register(enemy2, "monsters")
-    assert mgr.cast(hero, "cleave", enemy).ok
-    assert enemy.health < 200 and enemy2.health < 200 and far.health == 100 and ally.health == 100
+    assert mgr.cast(hero, "cleave", enemy).ok                      # affects = others: всех, кроме себя
+    assert enemy.health < 200 and enemy2.health < 200 and far.health == 100
+    assert ally.health < 100 and hero.health == 100                # по-честному: свой тоже получил
+    assert set(mgr.area_preview(hero, "fireball", enemy)) == {hero, ally, enemy, enemy2}
+    mgr.cast(hero, "fireball", enemy)                              # огненный шар под ноги - и себе
+    assert hero.health < 100
     mgr.cast(hero, {"id": "raise", "ops": [{"kind": "summon", "target": "self", "summon": "skeleton", "count": 2}]})
     assert mgr.world.summons == [("skeleton", "hero"), ("skeleton", "hero")]
 

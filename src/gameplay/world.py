@@ -142,9 +142,11 @@ def make_enemy(game, enemy_type: str, level: int, x: float, y: float, plan: Opti
     enemy.ranged = bool(spec.get("ranged"))
     enemy.role = spec.get("role")                     # miniboss / boss / final
     enemy.rooted = bool(spec.get("rooted"))
+    enemy.attack_range = float(spec.get("attack_range", 2.0))
+    enemy.vision_range = float(spec.get("vision", 20.0))
     if enemy.role:
-        enemy.detection_range = 30.0
-        enemy.attack_range = 3.0 + enemy.size * 0.4
+        enemy.vision_range = float(spec.get("vision", 30.0))
+        enemy.attack_range = float(spec.get("attack_range", 3.0 + enemy.size * 0.4))
     hc = getattr(enemy, "_health_component", None)
     if hc is not None and hasattr(hc, "sync"):
         hc.sync(enemy.health, enemy.max_health)

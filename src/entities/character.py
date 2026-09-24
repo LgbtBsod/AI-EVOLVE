@@ -177,6 +177,7 @@ class Character(BaseEntity):
         self.defense = class_stats.defense
         self.attack_speed = class_stats.attack_speed
         self.attack_range = class_stats.attack_range
+        self.vision_range = 30.0    # как далеко герой замечает врагов и маяк (стат схемы эффектов)
         self.critical_chance = class_stats.critical_chance
         self.critical_damage = class_stats.critical_damage
         self.dodge_chance = class_stats.dodge_chance
@@ -1069,19 +1070,24 @@ class Character(BaseEntity):
     CLASS_SKILLS = {
         "warrior": ("second_wind", "cleave", "power_strike"),
         "mage": ("self_heal", "fireball", "magic_bolt"),
-        "rogue": ("second_wind", "stealth_strike"),
+        "rogue": ("shadow_veil", "second_wind", "stealth_strike"),
     }
 
     def _use_skills_via_manager(self, manager, enemies) -> bool:
-        """Первый доступный навык класса. AoE - только если рядом 2+ врага."""
+        """Первый доступный навык класса. Круг (area) бьёт всех - френдли фаер:
+        не бить, если в круге сам герой или союзник; чистый AoE - только по 2+ врагам."""
         target = self._find_nearest_enemy(enemies)
         for skill in self.CLASS_SKILLS.get(self.character_class, ()):
             ab = manager.ability(skill)
             if ab is None:
                 continue
-            if skill == "cleave":
-                near = sum(1 for e in enemies if e.is_alive() and self.get_distance_to(e) <= 3.5)
-                if near < 2:
+            caught = manager.area_preview(self, skill, target)
+            if caught:
+                mine = manager.state(self).faction
+                if any(manager.state(e) is not None and manager.state(e).faction == mine for e in caught):
+                    continue
+                single = any(o.get("target") == "enemy" for o in ab.get("ops") or [])
+                if len(caught) < (1 if single else 2):
                     continue
             if manager.cast(self, skill, target).ok:
                 self.set_animation_state("attacking")

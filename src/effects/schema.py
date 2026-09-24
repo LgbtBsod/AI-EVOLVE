@@ -44,8 +44,16 @@ OP_KINDS = {
 
 MOVE_MODES = {"charge", "knockback", "pull", "blink", "strafe"}
 
-# area - все враждебные в радиусе (radius; center = "target" | "self")
+# area - ВСЕ живые в радиусе (radius; center = "target" | "self"): френдли фаер,
+# заклинатель тоже попадает под свой круг. affects сужает круг:
+#   all (по умолчанию) | others (все, кроме заклинателя) | enemies | allies
 TARGETS = {"self", "enemy", "ally", "allies", "source", "area"}
+AREA_AFFECTS = {"all", "others", "enemies", "allies"}
+
+# toward (только mod стата vision_range): мод действует лишь на обзор В СТОРОНУ
+# источника - стелс: «в круге тебя видят на 70% хуже», остальных - как прежде
+TOWARD = {"source"}
+TOWARD_STATS = {"vision_range"}
 
 OPS = {"add", "sub", "mul", "div", "set", "min", "max"}
 
@@ -70,6 +78,8 @@ KNOWN_STATS = {
     # боевые статы
     "defense", "aspd", "crit_chance", "crit_dmg", "lifesteal", "tenacity", "move_speed",
     "attack_damage", "spell_power", "dodge", "kills",
+    # дальность удара оружием и обзора (как далеко сущность замечает других)
+    "attack_range", "vision_range",
     # псевдо-стат runtime: фактический урон последнего удара героя
     # (ctx.last_damage в sim; источник для heal {"pct": N, "of": "last_damage"})
     "last_damage",

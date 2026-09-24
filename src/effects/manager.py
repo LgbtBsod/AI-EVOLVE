@@ -24,6 +24,13 @@
 Операции со временем: deal/heal с every + duration - это DoT/HoT; mod с
 duration (или на чужую цель) - временный бафф/дебафф. Урон от реакций на
 take_damage (шипы) помечается reflect и сам реакций не вызывает.
+
+Всё по-честному: area бьёт ВСЕХ живых в круге - союзников и самого
+заклинателя тоже (френдли фаер); affects = others | enemies | allies сужает.
+Дальность удара и обзора - статы (attack_range, vision_range): лук даёт
+дальность, стелс - это area-мод vision_range с toward = "source" (в круге
+заклинателя видят хуже). can_see(observer, target) - единственная проверка
+«заметил ли», её спрашивают ИИ героя и врагов.
 """
 from __future__ import annotations
 
@@ -53,6 +60,8 @@ STAT_MAP: dict[str, tuple[str, float, float]] = {
     "crit_dmg": ("critical_damage", 100.0, -100.0),      # x1.5 -> 50 пунктов
     "dodge": ("dodge_chance", 100.0, 0.0),
     "lifesteal": ("lifesteal", 1.0, 0.0),
+    "attack_range": ("attack_range", 1.0, 0.0),
+    "vision_range": ("vision_range", 1.0, 0.0),
 }
 POOLS = ("mana", "stamina")
 DEFAULT_DEBUFF_SECONDS = 5.0
@@ -135,6 +144,7 @@ class EntityState:
         self.buff_granted_at: dict[str, float] = {}
         self.periodic: list[dict] = []             # DoT/HoT на этой сущности
         self.zones: dict[str, bool] = {}           # hp_cross
+        self.vision_vs: dict[Any, tuple[float, str, float]] = {}  # ключ -> (до, id цели, вклад в обзор на неё)
         self.runtime = EffectRuntime(self.unit, [], enemy=Unit("nobody"))
         if not hasattr(entity, "lifesteal"):
             entity.lifesteal = 0.0
@@ -178,10 +188,15 @@ class EntityState:
         """Поля сущности -> Unit (база без вклада эффектов + ресурсы)."""
         base = self.base_game() if base is None else base
         u = self.unit
+        # стат без поля у сущности (attack_range у манекена, custom:*) - каждый раз с
+        # умолчания: иначе бонус предмета прибавлялся бы к базе на каждом refresh
+        defaults = rules()["defaults"]
+        for k in list(u.base):
+            u.base[k] = float(defaults.get(k, 0.0))
         for stat, (attr, scale, shift) in STAT_MAP.items():
             if attr in base:
                 u.base[stat] = base[attr] * scale + shift
-        u.base["move_speed"] = base.get(self._speed_attr(), u.base.get("move_speed", 5.0))
+        u.base["move_speed"] = base.get(self._speed_attr(), float(defaults.get("move_speed", 5.0)))
         allocated = getattr(self.entity, "attributes", None) or {}
         for attr in rules()["attributes"]:
             u.base[attr] = float(allocated.get(attr, 0.0))   # очки уровня; предметы/эффекты - поверх
@@ -324,6 +339,8 @@ class EffectManager:
                 continue
             for k in [k for k, (until, _l) in st.external.items() if until <= now]:
                 del st.external[k]
+            for k in [k for k, (until, _t, _v) in st.vision_vs.items() if until <= now]:
+                del st.vision_vs[k]
             for bid in [b for b, d in st.unit.buffs.items() if d.get("until", 1e18) <= now]:
                 st.unit.buffs.pop(bid)
             self._run_periodic(st)
@@ -388,7 +405,7 @@ class EffectManager:
         if ab.get("needs_target", _needs_target(ab)):
             if target is None or not is_alive(target):
                 return False, "no target"
-            rng = float(ab.get("range", 2.0)) + float(getattr(target, "size", 0.0)) * 0.3
+            rng = self.range_of(caster, ab) + float(getattr(target, "size", 0.0)) * 0.3
             if math.dist(position(caster), position(target)) > rng:
                 return False, "out of range"
         when = ab.get("when")
@@ -399,6 +416,52 @@ class EffectManager:
             except Exception as exc:  # условие ссылается на поле, которого сейчас нет
                 return False, f"condition error: {exc}"
         return True, ""
+
+    def range_of(self, caster, ability) -> float:
+        """Дальность способности: число, имя стата ("attack_range") или value
+        ({ pct = 110, of = "attack_range" }) - удар оружием бьёт на дальность оружия."""
+        ab, st = self.ability(ability), self.state(caster)
+        r = (ab or {}).get("range", 2.0)
+        if isinstance(r, (int, float)):
+            return float(r)
+        if st is None:
+            return float(getattr(caster, "attack_range", 2.0) or 2.0)
+        if isinstance(r, str):
+            return float(st.unit.stat(r))
+        return float(resolve_value(r, self._ctx(st, None)))
+
+    # ---------------------------------------------------------------- perception
+    def vision_toward(self, observer, target) -> float:
+        """Как далеко observer видит именно target: его vision_range плюс моды
+        с toward = "source" от target (стелс в круге)."""
+        st = self.state(observer)
+        base = float(getattr(observer, "vision_range", None) or rules()["defaults"].get("vision_range", 20.0))
+        if st is None or not st.vision_vs:
+            return base
+        tid = entity_id(target)
+        delta = sum(v for until, t, v in st.vision_vs.values() if t == tid and until > self.now)
+        return max(0.0, base + delta)
+
+    def can_see(self, observer, target) -> bool:
+        """Заметил ли observer цель: дистанция до края цели <= обзор на неё."""
+        if target is None or not is_alive(target):
+            return False
+        d = math.dist(position(observer), position(target)) - float(getattr(target, "size", 0.0) or 0.0) * 0.5
+        return d <= self.vision_toward(observer, target)
+
+    def area_preview(self, caster, ability, target=None) -> list:
+        """Кого заденет способность (все её area-операции) - ИИ проверяет френдли фаер
+        до применения: не бить по кругу, в котором стоит сам или свои."""
+        st, ab = self.state(caster), self.ability(ability)
+        if st is None or ab is None:
+            return []
+        out: list = []
+        for o in ab.get("ops") or []:
+            if o.get("target") == "area":
+                for e in self._targets(st, o, target, None, float(ab.get("radius", 0.0))):
+                    if e not in out:
+                        out.append(e)
+        return out
 
     def cast(self, caster, ability, target=None) -> CastResult:
         st = self.state(caster)
@@ -519,8 +582,16 @@ class EffectManager:
             r = float(o.get("radius", radius) or radius or 3.0)
             cx, cy = center or (position(primary) if primary is not None and o.get("center", "target") == "target"
                                 else position(st.entity))
-            return [s.entity for s in self.states.values()
-                    if s.faction != st.faction and is_alive(s.entity) and math.dist((cx, cy), position(s.entity)) <= r]
+            affects = o.get("affects", "all")      # френдли фаер: по умолчанию все в круге
+            out = []
+            for s in self.states.values():
+                if not is_alive(s.entity) or math.dist((cx, cy), position(s.entity)) > r:
+                    continue
+                if (affects == "others" and s is st) or (affects == "enemies" and s.faction == st.faction) \
+                        or (affects == "allies" and s.faction != st.faction):
+                    continue
+                out.append(s.entity)
+            return out
         return []
 
     def _run_ops(self, st: EntityState, ops: list, primary, src: str, tags: tuple, hits=None,
@@ -608,6 +679,16 @@ class EffectManager:
 
     def _mod(self, st, tgt_st, o, ctx, src, idx) -> None:
         stat = o.get("stat")
+        if o.get("toward") == "source":
+            # обзор цели в сторону заклинателя (стелс); на себя смысла не имеет
+            if tgt_st is not st:
+                scratch: dict[str, float] = {}
+                st.runtime._apply_mod(o, ctx, tgt_st.unit, sink=scratch)
+                until = self.now + (self._duration(o["duration"], ctx) if o.get("duration") is not None
+                                    else DEFAULT_DEBUFF_SECONDS)
+                tgt_st.vision_vs[(entity_id(st.entity), src, idx)] = (until, entity_id(st.entity),
+                                                                     scratch.get(stat, 0.0))
+            return
         timed = o.get("duration") is not None or tgt_st is not st
         if not timed:
             # событийный мод на себя: вклад операции заменяет прошлый (семантика схемы)

@@ -30,6 +30,7 @@ import importlib
 import importlib.abc
 import importlib.machinery
 import math
+import os
 import random
 import sys
 import time as _real_time
@@ -257,6 +258,8 @@ def boot_game(render="none", fast=True, fps=DEFAULT_FPS, seed=None, notify_log=N
         game_kwargs = {"dev_mode": True, "skip_menu": True}
         if entry_module == "main" and game_class == "Game":
             game_kwargs["db_url"] = "sqlite:///:memory:"
+            # память тактик врагов - только в процессе: seed = тот же прогон
+            os.environ.setdefault("AI_EVOLVE_TACTICS_MEMORY", "off")
     module = importlib.import_module(entry_module)
     game = getattr(module, game_class)(**game_kwargs)
 

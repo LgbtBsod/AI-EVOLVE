@@ -99,6 +99,10 @@ class EnhancedGameScene:
         self._close_call = False
         self._telegraph_watch = {}
         self._exit_block_logged = False
+
+        # Враги учатся против героя: общая память тактик (бандит rust_core) и мозги врагов
+        self.tactics = None
+        self.combat_brains = {}         # entity_id врага -> EnemyBrain
         
     def enter(self):
         """Вход в игровую сцену"""
@@ -108,6 +112,9 @@ class EnhancedGameScene:
         from src.effects.manager import EffectManager
         self.effects = EffectManager(world=self, abilities=load_abilities())
         self.game.effect_manager = self.effects
+        self.effects.register_event_handler(self._on_hit)
+        from src.gameplay.tactics import TacticsMemory, memory_path
+        self.tactics = TacticsMemory(memory_path())
 
         # Создаем игровой мир
         self._create_world()
@@ -434,6 +441,12 @@ class EnhancedGameScene:
         out = [self.player] if self.player is not None else []
         return out + list(self.enemies) + list(self.allies)
 
+    def visible_enemies(self, observer):
+        """Враги, которых observer замечает (обзор и стелс - менеджер эффектов)."""
+        if self.effects is None or self.effects.state(observer) is None:
+            return list(self.enemies)
+        return [e for e in self.enemies if self.effects.can_see(observer, e)]
+
     def spawn_summon(self, kind, x, y, faction, level, owner):
         """Призыв (операция summon): враг на стороне призвавшего."""
         from src.gameplay.world import make_enemy
@@ -459,6 +472,9 @@ class EnhancedGameScene:
         from src.gameplay.loot import outfit
         from src.gameplay.progression import perk_effects
         self.effects.register(enemy, "monsters")
+        from src.gameplay.enemy_ai import EnemyBrain
+        enemy.brain = EnemyBrain(enemy, self.effects, self.tactics, self.rng, others=lambda: self.enemies)
+        self.combat_brains[str(enemy.entity_id)] = enemy.brain
         inv = Inventory(enemy, capacity=8,
                         on_change=lambda inv, e=enemy: self.effects.equip(e, inv.equipped.values()))
         outfit(inv, getattr(enemy, "loot_class", enemy.enemy_type), self.rng)
@@ -468,6 +484,24 @@ class EnhancedGameScene:
         self.enemy_inventories[id(enemy)] = inv
         if inv.bag or inv.equipped:
             self.enemy_brains[id(enemy)] = InventoryBrain(inv, role="monster", heal_at=0.3)
+
+    def _on_hit(self, info):
+        """Каждое попадание менеджера -> счёт схватки у мозга врага (для памяти тактик)."""
+        if self.player is None:
+            return
+        hero_id = str(self.player.entity_id)
+        for key in (info.source, info.target):
+            brain = self.combat_brains.get(key)
+            if brain is not None:
+                brain.note_hit(info, hero_id)
+
+    def _forget_enemy(self, enemy, hero_died=False):
+        """Враг покидает мир: итог его схватки - в память тактик, снять с менеджера."""
+        brain = self.combat_brains.pop(str(getattr(enemy, "entity_id", "")), None)
+        if brain is not None:
+            brain.finish(hero_died=hero_died)
+        if self.effects is not None:
+            self.effects.unregister(enemy)
 
     def log_message(self, text):
         self.messages.append((self.game_time, text))
@@ -764,17 +798,17 @@ class EnhancedGameScene:
             self._consume_reached_echo_points()
             ai_known_exits = list(self.known_exit_positions) + list(self.echo_trail_points)
             self.player.update_ai(
-                self.enemies,
+                self.visible_enemies(self.player),
                 self._get_interactive_items(),
                 dt,
                 exit_position=self.exit_beacon_position,
-                vision_range=self.player_vision_range,
+                vision_range=getattr(self.player, "vision_range", self.player_vision_range),
                 known_exit_positions=ai_known_exits,
                 hint_positions=self._get_hint_positions()
             )
 
             # Автоматическое использование скилов
-            self.player.use_skill_automatically(self.enemies, dt)
+            self.player.use_skill_automatically(self.visible_enemies(self.player), dt)
         elif self.player and self.player.health_bar:
             self.player.health_bar.update(0.0)
 
@@ -794,8 +828,7 @@ class EnhancedGameScene:
                 self._drop_enemy_loot(enemy)
                 if getattr(enemy, "is_boss", False):
                     self._on_boss_death(enemy)
-                if self.effects is not None:
-                    self.effects.unregister(enemy)
+                self._forget_enemy(enemy)
                 enemy.destroy()
                 # смерть последнего босса могла уже пересобрать мир (новый уровень/цикл)
                 if enemy in self.enemies:
@@ -924,20 +957,12 @@ class EnhancedGameScene:
         if (current_time - self.last_enemy_spawn >= self.enemy_spawn_interval and 
             len(self.enemies) < self.max_enemies):
             
-            # Выбираем случайную позицию на краю карты
-            side = random.randint(0, 3)
-            if side == 0:  # Север
-                x = random.uniform(-self.world_size/2 + 2, self.world_size/2 - 2)
-                y = self.world_size/2 - 2
-            elif side == 1:  # Юг
-                x = random.uniform(-self.world_size/2 + 2, self.world_size/2 - 2)
-                y = -self.world_size/2 + 2
-            elif side == 2:  # Запад
-                x = -self.world_size/2 + 2
-                y = random.uniform(-self.world_size/2 + 2, self.world_size/2 - 2)
-            else:  # Восток
-                x = self.world_size/2 - 2
-                y = random.uniform(-self.world_size/2 + 2, self.world_size/2 - 2)
+            # Кольцо 30-50 от героя (за краем его обзора): раньше враги появлялись
+            # у стен карты в ~160 и почти никогда не встречали героя
+            px, py = (self.player.x, self.player.y) if self.player is not None else (0.0, 0.0)
+            ang = random.uniform(0.0, 2 * math.pi)
+            dist = random.uniform(30.0, 50.0)
+            x, y = self.clamp_position(px + dist * math.cos(ang), py + dist * math.sin(ang))
             
             # Тип врага - из акта текущего уровня (lua_content/world.lua)
             self._spawn_enemy(self._plan().pick_enemy(self.current_level, self.rng), x, y)
@@ -1178,7 +1203,10 @@ class EnhancedGameScene:
             if id(enemy) in player_created_enemy_ids:
                 remaining_enemies.append(enemy)
                 continue
+            self._forget_enemy(enemy)
             enemy.destroy()
+        if self.tactics is not None:
+            self.tactics.save()
 
         self.enemies = remaining_enemies
         self.active_bosses = [b for b in self.active_bosses if b in remaining_enemies]
@@ -1252,6 +1280,8 @@ class EnhancedGameScene:
         
     def exit(self):
         """Выход из игровой сцены"""
+        if self.tactics is not None:
+            self.tactics.save()
         if getattr(self.game, "effect_manager", None) is self.effects:
             self.game.effect_manager = None
         for bag in self.loot_bags:
@@ -1464,6 +1494,12 @@ class EnhancedGameScene:
     def _handle_player_death(self):
         """Обработка смерти персонажа"""
         if not self.death_beacon and self.player:
+            # Враги, что были в схватке, запоминают: эта тактика убила героя
+            for brain in list(self.combat_brains.values()):
+                if brain.engaged_at is not None:
+                    brain.finish(hero_died=True)
+            if self.tactics is not None:
+                self.tactics.save()
             # Сохраняем позицию смерти
             self.death_position = (self.player.x, self.player.y, self.player.z)
             

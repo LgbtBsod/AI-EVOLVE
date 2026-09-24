@@ -29,8 +29,12 @@
 
 ```lua
 {
-  kind   = "mod" | "heal" | "drain" | "deal" | "set" | "buff" | "extend" | "remove_buff" | "apply_effect" | "kill",
-  target = "self" | "enemy" | "ally" | "source" | "allies",
+  kind   = "mod" | "heal" | "drain" | "deal" | "set" | "buff" | "extend" | "remove_buff" | "apply_effect" | "kill"
+         | "summon" | "move",
+  target = "self" | "enemy" | "ally" | "source" | "allies" | "area",
+  radius = 3, center = "target" | "self",            -- для area
+  affects = "all" | "others" | "enemies" | "allies", -- для area; по умолчанию all (френдли фаер)
+  toward = "source",                                  -- только mod vision_range: стелс
   stat   = "hp" | "strength" | "crit_chance" | ... | nil,
   op     = "add" | "sub" | "mul" | "div" | "set" | "min" | "max",
   value  = Value,  scale = Scale,  when = pred,  fail = { op, ... },
@@ -120,6 +124,25 @@ when = pred("ctx.hp_pct < 40", function(ctx) return (ctx.hp_pct < 40) end)
     `floor/ceil` дают float. Контекст движок передаёт float-ами. Деление на литерал 0 —
     ошибка валидации. После этих правок 40 «враждебных» сидов (≈20 тыс. условий × 300 ctx)
     дают ноль расхождений между Python, mlua и lupa.
+
+## Дальность, обзор, стелс и френдли фаер
+
+18. **`area` бьёт всех живых в круге** — союзников и самого заклинателя тоже (френдли фаер, всё
+    по-честному). `affects` сужает круг: `others` (все, кроме заклинателя — рассекающий удар, нова
+    босса вокруг себя), `enemies`, `allies`. ИИ сам решает, стоит ли бить по кругу:
+    `EffectManager.area_preview(caster, ability, target)` возвращает, кого заденет. Герой не
+    бросает огненный шар себе под ноги, а обычный враг не бьёт по кругу со своими, если героя
+    в нём нет. Босс бьёт и по своим слугам, но не по себе.
+19. **`attack_range` — стат**: дальность удара оружием (`weapon_attack.range = "attack_range"`).
+    Лук даёт +7, копьё +1.5. `range` способности может быть числом, именем стата или Value
+    (`{ pct = 110, of = "attack_range" }` — ближний навык бьёт на дальность оружия).
+20. **`vision_range` — стат**: как далеко сущность замечает других. Единственная проверка —
+    `EffectManager.can_see(observer, target)`, её спрашивают ИИ героя (видимые враги) и мозг врага.
+21. **Стелс = `mod vision_range` по `area` с `toward = "source"`**: в круге обзор снижается
+    только В СТОРОНУ заклинателя; остальных наблюдатель видит как прежде. Пример — «Покров тени»
+    (`abilities.lua`) и «Дымовая шашка» (`game_items.lua`): круг 10–14, −75…80% на 5–6 с.
+    Видимость считает математика менеджера, а не картинка: графика (полупрозрачность) рисуется
+    из тех же чисел, так что проверять стелс компьютерным зрением не нужно.
 
 ## Проверка предмета: itemcheck
 
