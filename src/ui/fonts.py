@@ -40,7 +40,10 @@ def load_ui_font(loader, bold: bool = False):
         filename = Filename.fromOsSpecific(str(path))
         filename.makeTrueCase()
         font = loader.loadFont(filename.getFullpath())  # FontPool берёт только str
-        font.setPixelsPerUnit(60)
+        # Шрифт общий (FontPool кеширует по пути): меню уже могло нарисовать текст, а
+        # setPixelsPerUnit разрешён только пока нет страниц глифов ("get_num_pages() == 0")
+        if font.getNumPages() == 0:
+            font.setPixelsPerUnit(60)
         return font
     except Exception as exc:  # шрифт - украшение, не причина падать
         logger.warning("UI font not loaded: %s", exc)
