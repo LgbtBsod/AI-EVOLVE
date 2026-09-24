@@ -10,7 +10,7 @@ pub mod batch;
 pub use grid::Grid;
 pub use entities::{Entity, Component, Position, Health, AI, EntityKind};
 pub use tick::TickSystem;
-pub use pathfinding::{AStar, FlowField};
+pub use pathfinding::{Algorithm, AStar, CostGrid, FlowField, Jps};
 pub use batch::BatchStepper;
 
 use serde::{Serialize, Deserialize};

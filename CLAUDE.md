@@ -37,6 +37,7 @@ modules nobody imports (~18k LOC) and `qa.py docs` marks stale .md reports — d
 | Visual regression between two probe runs | `python tools/dev_probe_diff.py --before A --after B --frames` (image only for changed frames) | s |
 | Why did the hero AI do that | `agent_play "...; story"` (compressed ai_state transitions) | <1 s |
 | Performance hot spots | `python tools/qa.py perf "spawn enemy x10; wait 60"` | 2 s |
+| Grid pathfinding (A*/JPS/flow field; not wired into gameplay yet) | `python tools/bench_pathfinding.py` (Rust vs Python table) · `pytest tests/test_pathfinding.py` (parity; `AI_EVOLVE_PATHFINDING=python` forces the twin) · API in `src/gameplay/pathfinding.py`, kernels in `rust_core/src/simulation/pathfinding.rs` | ~6 s / 2 s |
 | Can the hero beat the bosses / a whole session | `python tools/qa.py gauntlet` (hero at each boss's level) · `gauntlet --campaign --lives 5 --trace` (from level 1, XP only from kills, hero mind learns across lives) · `--boss-points N` to try balance | ~10 s per life |
 | Build/edit an item like a designer, no window | `tools/web_builder/headless.py` (`UI().pick("Шаблон из каталога", "venom_bite")…click("Проверить предмет (itemcheck)")`) | <1 s |
 | What does a Lua file contain (no reading Lua) | `python tools/qa.py lua show FILE --keys` / `--key a.b` · `qa.py lua check` (all files, both backends) | ms |

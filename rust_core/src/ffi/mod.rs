@@ -12,6 +12,7 @@ use crate::analytics;
 use crate::qa;
 use crate::lua_content;
 use crate::tactics;
+use crate::simulation::pathfinding::{self as pathing, Algorithm, CostGrid};
 use image::DynamicImage;
 
 /// Python module for rust_core
@@ -27,6 +28,9 @@ fn rust_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyQaKernels>()?;
     m.add_class::<PyLuaContent>()?;
     m.add_class::<PyTacticsBandit>()?;
+    m.add_class::<PyFlowField>()?;
+    m.add_function(wrap_pyfunction!(py_find_path, m)?)?;
+    m.add_function(wrap_pyfunction!(py_flow_field, m)?)?;
     // Aliases for cleaner Python API
     m.add("WorldGenerator", m.getattr("PyWorldGenerator")?)?;
     m.add("SimulationEnv", m.getattr("PySimulationEnv")?)?;
@@ -38,6 +42,7 @@ fn rust_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("QaKernels", m.getattr("PyQaKernels")?)?;
     m.add("LuaContent", m.getattr("PyLuaContent")?)?;
     m.add("TacticsBandit", m.getattr("PyTacticsBandit")?)?;
+    m.add("FlowField", m.getattr("PyFlowField")?)?;
     m.add("VERSION", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }
@@ -617,5 +622,89 @@ impl PyTacticsBandit {
             return Err(pyo3::exceptions::PyIndexError::new_err("context or arm out of range"));
         }
         Ok(())
+    }
+}
+
+// ============================================================================
+// Grid pathfinding FFI (src/gameplay/pathfinding.py)
+// ============================================================================
+
+/// Coordinates from Python ints: anything outside i32 is "off the grid".
+fn py_cell(p: (i64, i64)) -> (i32, i32) {
+    (i32::try_from(p.0).unwrap_or(-1), i32::try_from(p.1).unwrap_or(-1))
+}
+
+/// Optimal path [(x, y), ...] over a row-major cost grid (0 = wall, 1..255 = cost of entering).
+/// `algorithm`: "auto" | "astar" | "jps" (ValueError for jps on a non-uniform grid).
+#[pyfunction]
+#[pyo3(name = "find_path", signature = (width, height, costs, start, goal, algorithm="auto"))]
+fn py_find_path(
+    py: Python<'_>,
+    width: usize,
+    height: usize,
+    costs: &[u8],
+    start: (i64, i64),
+    goal: (i64, i64),
+    algorithm: &str,
+) -> PyResult<Vec<(i32, i32)>> {
+    let algorithm = Algorithm::parse(algorithm).map_err(pyo3::exceptions::PyValueError::new_err)?;
+    let grid = CostGrid::new(width, height, costs).map_err(pyo3::exceptions::PyValueError::new_err)?;
+    let (start, goal) = (py_cell(start), py_cell(goal));
+    py.detach(|| pathing::find_path(&grid, start, goal, algorithm))
+        .map_err(pyo3::exceptions::PyValueError::new_err)
+}
+
+/// Dijkstra flow field toward `target`: `.distance(x, y)`, `.direction(x, y)`, `.directions()`.
+#[pyfunction]
+#[pyo3(name = "flow_field")]
+fn py_flow_field(py: Python<'_>, width: usize, height: usize, costs: &[u8], target: (i64, i64)) -> PyResult<PyFlowField> {
+    let grid = CostGrid::new(width, height, costs).map_err(pyo3::exceptions::PyValueError::new_err)?;
+    let target = py_cell(target);
+    let inner = py.detach(|| pathing::FlowField::compute(&grid, target));
+    Ok(PyFlowField { inner })
+}
+
+#[pyclass]
+struct PyFlowField {
+    inner: pathing::FlowField,
+}
+
+#[pymethods]
+impl PyFlowField {
+    #[getter]
+    fn width(&self) -> i32 {
+        self.inner.width()
+    }
+
+    #[getter]
+    fn height(&self) -> i32 {
+        self.inner.height()
+    }
+
+    #[getter]
+    fn target(&self) -> (i32, i32) {
+        self.inner.target()
+    }
+
+    /// Cost of the cheapest path from (x, y) to the target; None if unreachable/blocked/outside.
+    fn distance(&self, x: i64, y: i64) -> Option<f64> {
+        let (x, y) = py_cell((x, y));
+        self.inner.distance(x, y)
+    }
+
+    /// The step (dx, dy) toward the target; None at the target or when there is no path.
+    fn direction(&self, x: i64, y: i64) -> Option<(i32, i32)> {
+        let (x, y) = py_cell((x, y));
+        self.inner.direction(x, y)
+    }
+
+    /// Distances by rows, inf = no path.
+    fn distances(&self) -> Vec<f64> {
+        self.inner.distances().to_vec()
+    }
+
+    /// Flat [dx0, dy0, dx1, dy1, ...] by rows; (0, 0) = no step.
+    fn directions(&self, py: Python<'_>) -> Vec<i32> {
+        py.detach(|| self.inner.directions())
     }
 }

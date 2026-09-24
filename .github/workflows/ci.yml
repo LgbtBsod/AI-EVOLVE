@@ -36,6 +36,8 @@ jobs:
       # runs on every OS. Includes a byte-for-byte determinism check on the real game.
       - name: Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)
         run: python -m pytest -q tests/test_agent_tools.py tests/test_qa_tools.py
+      - name: Pathfinding (Python twin; Rust parity runs in the rust_core job)
+        run: python -m pytest -q tests/test_pathfinding.py
       - name: Item effects (schema, Lua bridge via lupa, Lost My Self spec, item forge, builder UI)
         run: python -m pytest -q tests/test_lua_bridge.py tests/test_lost_my_self_spec.py tests/test_training_room_effectschema.py tests/test_item_forge.py tests/test_web_builder.py
       # The boot test renders into an offscreen buffer and needs OpenGL:
@@ -74,6 +76,9 @@ jobs:
         run: python -m pip install ./rust_core pytest "lupa>=2.8"
       - name: FFI tests
         run: python -m pytest -q rust_core/tests/test_ffi.py
+      # A*/JPS/flow field: Rust kernel must match the Python twin on seeded random grids
+      - name: Pathfinding parity (Rust vs Python twin)
+        run: python -m pytest -q tests/test_pathfinding.py
       # rust_core.LuaContent and the lupa fallback must give the same data on every Lua file
       - name: Lua bridge parity (mlua vs lupa)
         run: python -m pytest -q tests/test_lua_bridge.py
