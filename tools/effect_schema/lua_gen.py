@@ -284,9 +284,38 @@ def render_item(item: dict, effects: list) -> str:
         if v is None or v == "" or v == [] or v == {}:
             continue
         out.extend(_render_kv(k, v, "  "))
-    out.append("  effects = {")
-    for ef in eff_dicts:
-        out.append("    " + render_effect(ef, indent=2) + ",")
-    out.append("  },")
+    if len(eff_dicts) <= EFFECTS_PER_BLOCK:
+        out.append("  effects = {")
+        for ef in eff_dicts:
+            out.append("    " + render_effect(ef, indent=2) + ",")
+        out.append("  },")
+    else:
+        out.extend(_render_blocks(eff_dicts))
     out.append("}")
     return "\n".join(out) + "\n"
+
+
+# В одной Lua-функции не больше 131071 вложенных функций (OP_CLOSURE, поле Bx),
+# а каждое условие - это function(ctx). Предмет на 100 тыс. эффектов (~150 тыс.
+# условий) не загружался: "too many functions". Большие предметы пишутся блоками:
+# каждый блок - своя функция, главный чанк держит лишь их число.
+EFFECTS_PER_BLOCK = 2000
+
+
+def _render_blocks(effects: list) -> list[str]:
+    out = ["  -- эффекты блоками по %d: лимит Lua 131071 функций на одну функцию" % EFFECTS_PER_BLOCK,
+           "  effects = (function(...)",
+           "    local all = {}",
+           "    for _, block in ipairs({ ... }) do",
+           "      for _, ef in ipairs(block) do all[#all + 1] = ef end",
+           "    end",
+           "    return all",
+           "  end)("]
+    for start in range(0, len(effects), EFFECTS_PER_BLOCK):
+        out.append("    (function() return {")
+        for ef in effects[start:start + EFFECTS_PER_BLOCK]:
+            out.append("      " + render_effect(ef, indent=3) + ",")
+        last = start + EFFECTS_PER_BLOCK >= len(effects)
+        out.append("    } end)()" + ("" if last else ","))
+    out.append("  ),")
+    return out

@@ -203,3 +203,24 @@ def test_all_numbers_in_conditions_are_float_in_both_languages():
         "(math.min(40.0, ctx.x) % (math.floor(ctx.y) + 0.0)) > 1.0"
     assert eval_pred("min(40, ctx.x) % floor(ctx.y) > 1", {"x": 50.0, "y": 0.0}) is False  # nan, не ошибка
     assert not math.isnan(compile_pred("ctx.x ** 2")({"x": 3.0}) - 9.0)
+
+
+@needs_lua
+@pytest.mark.parametrize("backend", BACKENDS)
+def test_huge_items_render_in_blocks(monkeypatch, backend):
+    """Lua: не больше 131071 функций в одной функции; предмет на 100 тыс. эффектов
+    упирался в этот лимит. Большие предметы пишутся блоками (здесь блок = 3 эффекта)."""
+    from tools.effect_schema import lua_gen
+    monkeypatch.setattr(lua_gen, "EFFECTS_PER_BLOCK", 3)
+    item = forge_item(0, seed=2)
+    lua = render_item({"name": "blocks"}, item["effects"])
+    assert "лимит Lua 131071" in lua
+    data = lua_bridge.load(lua, backend=backend)
+    assert itemcheck._norm(data["effects"]) == itemcheck._norm(item["effects"])
+
+
+def test_mod_without_op_adds():
+    hero, _d, rt = _rt([{"id": "x", "trigger": {"kind": "passive"},
+                         "ops": [{"kind": "mod", "target": "self", "stat": "strength", "op": None,
+                                  "value": {"flat": 7}}]}])
+    assert hero._eff("strength") == 7.0

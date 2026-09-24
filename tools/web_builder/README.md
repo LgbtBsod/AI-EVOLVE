@@ -1,170 +1,57 @@
-# 🎨 CAS Web Item Builder
+# Effect Schema Item Builder (Flet)
 
-Визуальный конструктор предметов с CAS эффектами на базе Flet.
+Визуальный конструктор предметов по схеме **Effect → Ops[]** (`docs/EFFECT_SCHEMA.md`).
+Вся логика — в `tools/effect_schema/ui_logic.py`, та же, что в тестах; UI только собирает форму.
 
-## 🚀 Запуск
+## Запуск
 
 ```bash
-pip install -r tools/requirements-dev.txt   # flet + flet-web (не входят в зависимости игры)
-python tools/web_builder/app.py --web       # браузер: http://localhost:8550
-python tools/web_builder/app.py             # десктопное окно Flet
+uv pip install -r tools/requirements-dev.txt          # flet + flet-web (не входят в зависимости игры)
+python tools/web_builder/app.py                       # окно Flet
+python tools/web_builder/app.py --web                 # браузер: http://localhost:8550
+python tools/web_builder/app.py --web --renderer canvaskit   # если CDN Flutter недоступен
 ```
 
-Без флага `--web` приложение запускается как десктопное окно Flet, а не в браузере.
+## Что умеет
 
-## 📋 Возможности
+- **Предмет = список эффектов.** «+ эффект», «удалить эффект», переключение между эффектами
+  (правки сохраняются). Шаблон из каталога добавляется **вместе с зависимостями**
+  (`owner_has`, `apply_effect`): Blood Price приносит Lost My Self, Venom Bite — Poison Stack.
+- **Поля эффекта:** id, теги, meta.name, trigger (kind / event / when / filter / owner_has / cross),
+  cooldown, threshold (зона hp_cross), amplify (when / while_buff / every / of / factor).
+- **Поля операции:** kind, target, stat, op, value (flat / pct / of / ref), scale (every / of /
+  value.flat / value.pct / value.of / factor / cap / floor), when, buff_id, duration, cooldown,
+  extend, флаги (iframe, no_crit, silent, true_damage), fail-ветка.
+- **Кнопки:** «Валидировать» (digest + JSON справа), «Собрать Lua» (Lua исполняется мостом
+  `tools/lua_bridge.py`), «Тест в тренировочной комнате» (сценарий — шаги через `;`:
+  `attack [DMG] | enemy_attack N | kill | tick T DT | hp PCT | set_dummy HP | <событие>`),
+  «Проверить предмет (itemcheck)», «Открыть .lua» / «Сохранить .lua» (`lua_content/items/`).
 
-### 1. **Шаблоны предметов**
-- Sorrow of Berserk
-- Bane's Scar Necklace  
-- Apocalypse Bringer
-- Пустой предмет (создание с нуля)
+## Без окна (агенты, тесты)
 
-### 2. **Редактирование базовых статов**
-- Max HP (%)
-- Defense (%)
-- Life Steal (%)
-- Attack Speed (%)
-- Attack Damage (%)
-- Crit Chance (%)
-- Strength (flat)
-- Intelligence (flat)
+`tools/web_builder/headless.py` — тот же `BuilderApp` на подставной странице. Поля ищутся по
+подписи, кнопки — по тексту, вызываются настоящие обработчики:
 
-### 3. **CAS Эффекты**
-Добавляйте эффекты с условиями:
-
-**Типы условий:**
-- `hp_percent_lt/gt/lte/gte` - HP меньше/больше %
-- `stat_gte/lte/eq` - Стат >=/<=/== значения
-- `has_buff/debuff` - Наличие баффа/дебаффа
-- `equipped_item` - Надетый предмет
-- `on_kill` - При убийстве
-- `on_spell_cast` - При касте скилла
-- `hp_would_die` - При смертельном уроне
-- `and/or` - Комбинированные условия
-
-**Операции над статами:**
-- `add_flat` - Добавить плоское значение (+100 AD)
-- `add_percent` - Добавить процент (+50% AD)
-- `multiply` - Умножить (x2 урон)
-- `set` - Установить значение (HP = 1)
-- `reset_cooldowns` - Сбросить КД
-
-### 4. **Экспорт**
-- 💾 **Lua** - сохранение в `lua_content/items/custom/`
-- 📋 **JSON** - экспорт для агентов/тестов
-- 🧪 **Тестирование** - валидация через CAS Engine
-
-## 📁 Структура проекта
-
-```
-tools/web_builder/
-├── app.py                 # Основное приложение Flet
-├── exports/              # JSON экспорты
-└── README.md            # Эта документация
-
-lua_content/items/custom/ # Lua файлы предметов
-```
-
-## 🎯 Пример использования
-
-1. Выберите шаблон "Sorrow of Berserk"
-2. Отрегулируйте базовые статы
-3. Добавьте CAS эффект:
-   - Условие: `hp_percent_lt` = 40
-   - Действие: `add_percent` → `attack_damage` = 50
-4. Нажмите "💾 Сохранить в Lua"
-5. Файл сохранится в `lua_content/items/custom/sorrow_of_berserk.lua`
-
-## 🔗 Интеграция
-
-### С CAS Engine
 ```python
-from python_layer.l9_semantic.cas_engine_v2 import CASSolver
-
-solver = CASSolver()
-item_data = {...}  # Из JSON экспорта
-result = solver.validate(item_data)
+from tools.web_builder.headless import UI
+ui = UI()
+ui.pick("Шаблон из каталога", "lost_my_self.attack")
+ui.click("+ эффект").fill("effect.id *", "second_wind")
+ui.pick("trigger.kind", "event").pick("trigger.event", "take_damage")
+ui.pick("kind *", "drain").pick("stat", "stamina").fill("value.flat", "20")
+ui.click("Проверить предмет (itemcheck)"); print(ui.status)
 ```
 
-### С Training Room
-```python
-from features.training_room import TrainingRoom, Mannequin
-
-room = TrainingRoom()
-room.load_item_from_lua("lua_content/items/custom/my_item.lua")
-room.test_dps(mannequin_type="Tank")
-```
-
-### С Dev Probe
-Автоматическое тестирование предметов при изменениях:
 ```bash
-dev_probe --test-items --auto-balance
+python tools/web_builder/headless.py --template lost_my_self.attack --check --room "hp 30; attack"
 ```
 
-## 🎨 UI Компоненты
+Живой веб-интерфейс через браузер (Playwright; CanvasKit и шрифт отдаются локально):
 
-- **Левая панель**: Настройки предмета, базовые статы, кнопки экспорта
-- **Центральная панель**: Редактор CAS эффектов
-- **Правая панель**: Предпросмотр и лог операций
-
-## 📝 Генерируемый Lua код
-
-```lua
--- Sorrow of Berserk
--- Легендарный амулет берсерка. Сила растёт с потерей HP.
--- Сгенерировано в CAS Item Builder: 2026-09-23 14:30:00
-
-return {
-    name = "Sorrow of Berserk",
-    description = "Легендарный амулет берсерка. Сила растёт с потерей HP.",
-    
-    base_stats = {
-        max_hp_percent = 2000,
-        defense_percent = -80,
-        life_steal_percent = 20,
-        attack_speed_percent = 50,
-    },
-    
-    cas_effects = {
-        {
-            name = "Passive Buffs (Low HP)",
-            condition = { type = "hp_percent_lt", value = 40 },
-            effects = {
-                { op = "add_percent", stat = "attack_damage", value = 50 },
-                { op = "add_percent", stat = "move_speed", value = 30 },
-            }
-        },
-        -- Другие эффекты...
-    },
-}
+```bash
+python tools/web_builder/app.py --web --renderer canvaskit &
+python tools/web_builder/screenshot.py --out shot.png --template venom_bite --click "Проверить предмет (itemcheck)"
 ```
 
-## 🛠️ Расширение
-
-Для добавления новых шаблонов отредактируйте `load_templates()` в `app.py`:
-
-```python
-def load_templates(self):
-    return {
-        "My Custom Item": {
-            "description": "...",
-            "base_stats": {...},
-            "effects": [...]
-        }
-    }
-```
-
-## ⚠️ Требования
-
-- Python 3.8+
-- Flet (`pip install flet`)
-- CAS Engine (уже в проекте)
-
-## 📊 Статус
-
-✅ Работает базовый функционал
-✅ Шаблоны загружаются
-✅ Экспорт в Lua/JSON
-⏳ Полная валидация через CAS Engine (в разработке)
-⏳ Интеграция с Training Room (в разработке)
+Тесты: `tests/test_web_builder.py` (каждый шаблон каталога проходит через форму без потерь,
+предмет с нуля через поля билдера, открытие/сохранение .lua).

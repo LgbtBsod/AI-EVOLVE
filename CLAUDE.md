@@ -36,6 +36,7 @@ modules nobody imports (~18k LOC) and `qa.py docs` marks stale .md reports — d
 | Visual regression between two probe runs | `python tools/dev_probe_diff.py --before A --after B --frames` (image only for changed frames) | s |
 | Why did the hero AI do that | `agent_play "...; story"` (compressed ai_state transitions) | <1 s |
 | Performance hot spots | `python tools/qa.py perf "spawn enemy x10; wait 60"` | 2 s |
+| Build/edit an item like a designer, no window | `tools/web_builder/headless.py` (`UI().pick("Шаблон из каталога", "venom_bite")…click("Проверить предмет (itemcheck)")`) | <1 s |
 | Does an item work (schema → Lua → combat) | `python -m tools.effect_schema.itemcheck lua_content/items/X.lua` (`--forge N` stress item, `--hostile` Python/Lua parity hunt) | <1 s per 300 effects |
 
 Rules of thumb:

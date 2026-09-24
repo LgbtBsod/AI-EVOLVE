@@ -34,7 +34,7 @@ from .. import lua_bridge  # noqa: E402
 from .lua_gen import render_item  # noqa: E402
 from .schema import (CONTEXT_ONLY_STATS, EVENTS, FLAGS, KNOWN_STATS, OP_KINDS, OPS, RESOURCE_STATS,  # noqa: E402
                      TARGETS, TRIGGER_KINDS)
-from .sim import EffectRuntime, Unit, eval_pred, named_predicates, sample_context  # noqa: E402
+from .sim import EffectRuntime, Unit, compile_pred, named_predicates, run_step, sample_context  # noqa: E402
 from .validate import validate_item  # noqa: E402
 
 FINDINGS_SHOWN = 8
@@ -193,15 +193,14 @@ def check_preds(item: dict, lua: str, backends: list[str], samples: int, seed: i
     ctxs = random_contexts(samples, seed)
     findings: list[str] = []
     t0 = time.perf_counter()
-    py_rows = []
-    for ctx in ctxs:
-        row = {}
-        for src in srcs:
+    py_rows: list[dict] = [{} for _ in ctxs]
+    for src in srcs:  # условие компилируется один раз на все ctx
+        fn = compile_pred(named.get(src, src))
+        for row, ctx in zip(py_rows, ctxs):
             try:
-                row[src] = bool(eval_pred(src, ctx))
+                row[src] = bool(fn(ctx))
             except Exception as exc:  # noqa: BLE001 - любое исключение Python и есть находка
                 row[src] = f"error: {type(exc).__name__}"
-        py_rows.append(row)
     diverged: dict[str, str] = {}
     for b in backends:
         try:
@@ -256,8 +255,7 @@ def _invariants(rt: EffectRuntime, step: str, prev_kills: int) -> list[str]:
 
 
 def run_scenario(item: dict, scenario: list[str] = SCENARIO) -> tuple[list[str], list[str], dict]:
-    """(лог рантайма, нарушения инвариантов, итог). Шаги: событие | attack |
-    enemy_attack N | kill | tick T DT | hp PCT (выставить HP героя)."""
+    """(лог рантайма, нарушения инвариантов, итог). Шаги - язык sim.run_step."""
     hero = Unit("hero", max_hp=1000.0, strength=50, endurance=40, agility=30, intelligence=20,
                 defense=10, crit_chance=10, attack_damage=40)
     dummy = Unit("dummy", max_hp=5000.0, defense=5)
@@ -266,27 +264,8 @@ def run_scenario(item: dict, scenario: list[str] = SCENARIO) -> tuple[list[str],
     t, kills = 0.0, 0
     rt.refresh_passives(t)
     for step in scenario:
-        parts = step.split()
         try:
-            if parts[0] == "attack":
-                rt.attack(t, base_damage=40.0)
-            elif parts[0] == "enemy_attack":
-                rt.receive_damage(float(parts[1]), t)
-            elif parts[0] == "kill":
-                dummy.deal_damage(dummy.current_hp)
-                hero.kills += 1
-                rt.fire_event("kill", t)
-                rt.respawn_enemy()
-            elif parts[0] == "tick" and len(parts) == 3:
-                t += float(parts[1])
-                rt.tick(t, float(parts[2]))
-            elif parts[0] == "hp":
-                hero.alive = True
-                hero.set_resource("hp", hero._eff("max_hp") * float(parts[1]) / 100)
-                rt.refresh_passives(t)
-            else:
-                rt.fire_event(step, t)
-                rt.refresh_passives(t)
+            t = run_step(rt, step, t, base_damage=40.0)
         except RecursionError:
             violations.append(f"{step}: RecursionError (effect cascade does not terminate)")
             break

@@ -432,6 +432,7 @@ class EffectRuntime:
         # после истечения щит выдавался снова без кулдауна)
         self._buff_granted_at: dict[str, float] = {}
         self._effect_fired_at: dict[str, float] = {}   # Effect.cooldown
+        self._compiled: dict[str, Callable[[dict], Any]] = {}  # условие -> замыкание (_test)
         self._now = 0.0
         # --- hp_cross -----------------------------------------------------
         # Зоны пересечения порога HP (kind="condition", threshold=N):
@@ -442,6 +443,18 @@ class EffectRuntime:
         self.crossed: set[str] = set()
 
     # public API ------------------------------------------------------------
+    def _test(self, pred, ctx: dict) -> bool:
+        """eval_pred с кэшем рантайма: условия предмета компилируются один раз и
+        не вытесняются (у предмета на 100 тыс. эффектов условий больше, чем
+        вмещает общий LRU compile_pred, - он пересобирал всё на каждом событии)."""
+        if not isinstance(pred, str) or not pred:
+            return eval_pred(pred, ctx)
+        fn = self._compiled.get(pred)
+        if fn is None:
+            named = rules()["predicates"].get(pred.strip())
+            fn = self._compiled[pred] = compile_pred(named if named is not None else pred.strip())
+        return bool(fn(ctx))
+
     def context(self, extra: Optional[dict] = None) -> dict:
         """Контекст условий и значений: статы владельца, enemy_* цели,
         last_damage (фактический урон последнего удара героя)."""
@@ -467,7 +480,7 @@ class EffectRuntime:
         amp = ef.get("amplify")
         if not amp:
             return 1.0
-        if amp.get("when") and not eval_pred(amp["when"], ctx):
+        if amp.get("when") and not self._test(amp["when"], ctx):
             return 1.0
         if amp.get("while_buff") and not self._buff_active(amp["while_buff"]):
             return 1.0
@@ -491,7 +504,7 @@ class EffectRuntime:
             kind = tr.get("kind")
             if kind not in ("passive", "condition"):
                 continue
-            if kind == "condition" and not eval_pred(tr.get("when"), ctx):
+            if kind == "condition" and not self._test(tr.get("when"), ctx):
                 continue
             mult = self._amplify(ef, ctx)
             for o in ef.get("ops", []):
@@ -672,7 +685,7 @@ class EffectRuntime:
             # trigger {"kind":"event","event":"hp_cross","cross":"Lost My Self"}
             if tr.get("cross") and tr["cross"] not in self.crossed:
                 continue
-            if tr.get("filter") and not eval_pred(tr["filter"], ctx):
+            if tr.get("filter") and not self._test(tr["filter"], ctx):
                 continue
             # Effect.cooldown: событийный эффект срабатывает не чаще раза в N с
             # (раньше поле объявлялось в схеме, но рантайм его не читал)
@@ -711,7 +724,7 @@ class EffectRuntime:
     def run_op(self, o: dict, ctx: dict, t: float, src: str,
                event: Optional[str] = None, op_key: Optional[tuple] = None):
         kind = o.get("kind")
-        if o.get("when") and not eval_pred(o["when"], ctx):
+        if o.get("when") and not self._test(o["when"], ctx):
             return
         target = self._resolve_target(o.get("target", "self"))
         if target is None:
@@ -857,7 +870,7 @@ class EffectRuntime:
         sink=dict -> накопление в отдельный слой (пассивный)."""
         stat = o.get("stat")
         amount = compute_amount(o, ctx, self._default_stat(o, unit))
-        mo = o.get("op", "add")
+        mo = o.get("op") or "add"  # op не задан (или null из формы) - add; раньше мод молча не применялся
         if mo in ("add", "sub"):
             amount *= mult  # Effect.amplify (Lost My Self при 1 HP)
         dst = unit.mods if sink is None else sink
@@ -913,11 +926,48 @@ class EffectRuntime:
             return False
         ptr = parent.get("trigger", {})
         if ptr.get("kind") == "condition":
-            return eval_pred(ptr.get("when"), self.context())
+            return self._test(ptr.get("when"), self.context())
         return True
 
     def _dmg_log(self, target):
         return None  # урон уже логируется в deal/kill
+
+
+STEP_HELP = ("attack [DMG] | enemy_attack N | kill | tick T DT | hp PCT (HP героя в % от максимума) | "
+             "set_dummy HP | <событие> (use, cast, crit, ...)")
+
+
+def run_step(rt: EffectRuntime, step: str, t: float, base_damage: float = 0.0) -> float:
+    """Один шаг сценария тренировочной комнаты (единый язык для билдера,
+    ui_logic.run_training_room и itemcheck). Возвращает новое время."""
+    parts = step.split()
+    kind = parts[0] if parts else ""
+    hero, dummy = rt.owner, rt.enemy
+    if kind == "attack":
+        rt.attack(t, base_damage=float(parts[1]) if len(parts) > 1 else base_damage)
+    elif kind == "enemy_attack" and len(parts) > 1:
+        rt.receive_damage(float(parts[1]), t)
+    elif kind == "kill" and dummy is not None:
+        # убить текущего манекена, послать kill и возродить его же (тот же объект,
+        # полное HP). kills считает шаг: dummy.deal_damage не трогает hero.kills
+        dummy.deal_damage(dummy.current_hp)
+        hero.kills += 1
+        rt.fire_event("kill", t)
+        rt.respawn_enemy()
+    elif kind == "tick" and len(parts) > 2:
+        t += float(parts[1])
+        rt.tick(t, float(parts[2]))
+    elif kind == "hp" and len(parts) > 1:
+        hero.alive = True
+        hero.set_resource("hp", hero._eff("max_hp") * float(parts[1]) / 100.0)
+        rt.refresh_passives(t)
+    elif kind == "set_dummy" and len(parts) > 1 and dummy is not None:
+        dummy.current_hp = float(parts[1])
+        dummy.alive = dummy.current_hp > 0
+    else:
+        rt.fire_event(step, t)
+        rt.refresh_passives(t)  # условия эффектов следят за новым состоянием
+    return t
 
 
 def sample_context() -> dict:
