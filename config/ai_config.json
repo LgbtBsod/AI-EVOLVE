@@ -1,0 +1,7 @@
+{
+  "learning_rate": 0.1,
+  "exploration_rate": 0.1,
+  "memory_size": 1000,
+  "enable_adaptive_difficulty": true,
+  "ai_update_frequency": 0.1
+}

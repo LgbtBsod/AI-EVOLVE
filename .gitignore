@@ -1,0 +1,29 @@
+# Python compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage/
+
+# Virtual environments (venvs made by Python < 3.13 don't ignore themselves)
+.venv/
+.venv-*/
+venv/
+
+# Build output
+target/
+build/
+dist/
+*.so
+*.pyd
+*.egg-info/
+
+# Runtime / dev-tool output
+saves/*.db
+dev_probe_output/
+tools/dev_probe_baseline.json
+*.bak

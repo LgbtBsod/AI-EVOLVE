@@ -1,0 +1,42 @@
+[package]
+name = "rust_core"
+version = "0.1.0"
+edition = "2021"
+description = "Rust core layer for AI Evolve: simulation, world generation, storage, probe analytics"
+authors = ["AI Evolve Team"]
+
+[lib]
+name = "rust_core"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# PyO3 для Python интеграции. В pyo3 0.29 фича `extension-module` устарела:
+# maturin >= 1.9.4 сам выставляет PYO3_BUILD_EXTENSION_MODULE при сборке модуля,
+# а `cargo test` линкуется с libpython. Фича крейта ниже оставлена только для
+# старых сборочных скриптов и по умолчанию выключена.
+pyo3 = "0.29.2"
+
+# Lua для контента. Стандарт проекта — Lua 5.5 (Python-сторона: lupa.lua55).
+# vendored: Lua собирается из исходников (cc + MSVC/gcc), без pkg-config.
+mlua = { version = "0.12.1", features = ["lua55", "vendored"] }
+
+# SQLite для хранения. fallible_uint: ToSql для u64 (seed), как было в 0.30
+# (ошибка, если значение > i64::MAX).
+rusqlite = { version = "0.40.2", features = ["bundled", "fallible_uint"] }
+
+# PRNG для детерминизма
+rand_chacha = "0.10.0"
+rand = "0.10.3"
+
+# Сериализация
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Image processing for probe analytics
+image = "0.25.10"
+num-complex = "0.4"
+rustfft = "6.4.1"
+
+[features]
+default = []
+extension-module = ["pyo3/extension-module"]

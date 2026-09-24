@@ -1,0 +1,40 @@
+# Optional dependencies for tools/dev_probe.py only - the game itself
+# (requirements.txt at repo root) does not need any of this.
+#
+# Pillow unlocks two checks dev_probe.py otherwise skips gracefully:
+#   - blank/solid-color screenshot detection (catches a broken render even
+#     when game state looks perfectly healthy)
+#   - a timelapse.gif stitched from all captured screenshots
+#
+# OpenCV enables advanced visual analysis:
+#   - UI element detection (HP bars, status icons, damage numbers)
+#   - Change detection between frames (delta encoding)
+#   - Visual clustering of similar frames (redundancy reduction)
+#   - Color-based event detection (flash effects, screen shake indicators)
+#   - Motion detection via optical flow
+#   - Entity tracking across frames
+#
+# scikit-image provides production-grade SSIM and structural analysis
+#
+# imagehash offers production-grade perceptual hashing (aHash, pHash, dHash)
+#   as a fallback/enhancement to our custom OpenCV implementation
+#
+# Install with:
+#   .venv/Scripts/python.exe -m pip install -r tools/requirements-dev.txt
+pillow
+opencv-python-headless>=4.8.0
+numpy>=1.24.0
+scikit-image>=0.21.0
+imagehash>=4.3.0
+
+# Optional ML-enhanced features (uncomment if needed):
+# mediapipe>=0.10.0      # Google's ML for UI element detection, OCR
+# plotly>=5.18.0         # Interactive charts for agent reports
+# supervision>=0.20.0    # Object detection helpers for entity tracking
+
+# Additional visual analysis libraries:
+# opencv-contrib-python-headless>=4.8.0  # Extra OpenCV modules (SIFT, SURF, advanced tracking)
+# torch>=2.0.0           # PyTorch for custom ML models (if mediapipe is not enough)
+# torchvision>=0.15.0    # Pre-trained models for object detection
+# easyocr>=1.7.0         # Ready-to-use OCR for damage numbers/UI text
+# segment-anything>=1.0  # Meta's SAM for precise UI/entity segmentation

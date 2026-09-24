@@ -1,0 +1,25 @@
+{
+    "logging": {
+        "level": "INFO",
+        "file_level": "DEBUG",
+        "console_level": "INFO",
+        "max_archive_files": 10,
+        "cleanup_on_startup": true,
+        "save_last_session": true,
+        "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        "date_format": "%Y-%m-%d %H:%M:%S",
+        "external_libraries": {
+            "panda3d": "WARNING",
+            "numpy": "WARNING",
+            "PIL": "WARNING",
+            "direct": "WARNING",
+            "panda3d.core": "WARNING"
+        },
+        "suppress_warnings": [
+            "setVerticalSync не поддерживается",
+            "setAntialias не поддерживается",
+            "LODManager недоступен",
+            "OcclusionCuller недоступен"
+        ]
+    }
+}

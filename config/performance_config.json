@@ -1,0 +1,9 @@
+{
+  "enable_vsync": true,
+  "max_fps": 120,
+  "enable_multithreading": true,
+  "texture_quality": "high",
+  "shadow_quality": "medium",
+  "enable_fps_logging": true,
+  "enable_event_metrics": true
+}

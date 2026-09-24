@@ -1,0 +1,747 @@
+#!/usr/bin/env python3
+"""Система эффектов - баффы, дебаффы и визуальные эффекты
+
+Refactored:
+- Убран wildcard import from typing import *
+- Добавлены type hints (Python 3.10+)
+- Заменён time.time() на time.perf_counter()
+- Внедрён RNGManager для воспроизводимости
+- @dataclass(slots=True) для оптимизации памяти
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
+
+from src.core.architecture import BaseComponent, ComponentType, LifecycleState, Priority
+from src.core.constants import EffectCategory, EffectType, EffectModifierType, EffectTag
+from src.core.rng_manager import RNGManager
+
+logger = logging.getLogger(__name__)
+
+# = ДОПОЛНИТЕЛЬНЫЕ ТИПЫ ЭФФЕКТОВ
+
+class EffectStackType(Enum):
+    """Типы стаков эффектов"""
+    NONE = "none"              # Без стаков
+    REFRESH = "refresh"        # Обновление длительности
+    STACK = "stack"            # Накопление силы
+    MULTIPLY = "multiply"      # Умножение силы
+
+# = СТРУКТУРЫ ДАННЫХ
+
+@dataclass(slots=True)
+class EffectModifier:
+    """Модификатор эффекта"""
+    stat_type: str
+    value: float
+    modifier_type: EffectModifierType = EffectModifierType.ADDITIVE
+    condition: str | None = None
+    modifier_id: str | None = None  # Уникальный ID для синергий (NEGATIVE, BREAK_RELATED)
+    tags: list[EffectTag] = field(default_factory=list)  # Теги эффекта
+
+@dataclass(slots=True)
+class EffectTrigger:
+    """Триггер эффекта"""
+    trigger_type: str
+    condition: str
+    chance: float = 1.0
+    cooldown: float = 0.0
+    last_trigger: float = field(default_factory=lambda: time.perf_counter())
+
+@dataclass(slots=True)
+class Effect:
+    """Эффект"""
+    effect_id: str
+    name: str
+    description: str
+    effect_type: EffectType
+    category: EffectCategory
+    duration: float = -1.0  # -1 для постоянных эффектов
+    stack_type: EffectStackType = EffectStackType.NONE
+    max_stacks: int = 1
+    current_stacks: int = 1
+    modifiers: list[EffectModifier] = field(default_factory=list)
+    triggers: list[EffectTrigger] = field(default_factory=list)
+    visual_effects: list[str] = field(default_factory=list)
+    sound_effects: list[str] = field(default_factory=list)
+    icon_path: str | None = None
+    created_at: float = field(default_factory=lambda: time.perf_counter())
+    source: str | None = None
+    removable: bool = True
+    dispellable: bool = True
+    tags: list[EffectTag] = field(default_factory=list)  # Теги эффекта
+    priority: int = 0  # Приоритет эффекта (важно для конфликтов)
+
+@dataclass(slots=True)
+class ActiveEffect:
+    """Активный эффект на сущности"""
+    effect: Effect
+    entity_id: str
+    applied_at: float = field(default_factory=lambda: time.perf_counter())
+    expires_at: float | None = None
+    current_stacks: int = 1
+    is_active: bool = True
+    last_tick: float = field(default_factory=lambda: time.perf_counter())
+    tick_interval: float = 1.0
+
+@dataclass(slots=True)
+class EffectTemplate:
+    """Шаблон эффекта"""
+    template_id: str
+    name: str
+    description: str
+    effect_type: EffectType
+    category: EffectCategory
+    base_duration: float
+    base_modifiers: list[EffectModifier]
+    base_triggers: list[EffectTrigger]
+    visual_effects: list[str]
+    sound_effects: list[str]
+    icon_path: str | None = None
+    requirements: dict[str, Any] = field(default_factory=dict)
+
+
+def apply_tick_to_entity(entity: Any, active_effect: ActiveEffect) -> None:
+    """Применяет health-тик эффекта (яд/регенерация) к сущности.
+
+    Урон идёт через entity.take_damage(), а не прямое entity.health -=
+    value, чтобы не обходить is_defeated/state="dead" защёлку (см. историю
+    починки death-oscillation бага в этом проекте - тот баг тоже был про
+    что-то, менявшее health в обход правильного пути). Вынесено в отдельную
+    функцию, а не только внутрь main.py.Game._on_effect_tick, чтобы её можно
+    было проверить headless-тестом (tools/combat_smoke_test.py) без
+    поднятия окна."""
+    for modifier in active_effect.effect.modifiers:
+        if modifier.stat_type != "health" or modifier.value == 0:
+            continue
+        if modifier.value < 0:
+            entity.take_damage(abs(modifier.value), "effect")
+        else:
+            entity.health = min(entity.max_health, entity.health + modifier.value)
+
+
+class EffectSystem(BaseComponent):
+    """Система эффектов"""
+    
+    __slots__ = (
+        '_rng',
+        'active_effects',
+        'effect_statistics',
+        'effect_templates',
+        'on_effect_applied',
+        'on_effect_removed',
+        'on_effect_tick',
+        'total_effects_applied',
+        'total_effects_removed'
+    )
+    
+    def __init__(self) -> None:
+        super().__init__(
+            component_id="effect_system",
+            component_type=ComponentType.SYSTEM,
+            priority=Priority.NORMAL
+        )
+        
+        # RNG для воспроизводимости
+        self._rng = RNGManager()
+        
+        # Эффекты
+        self.effect_templates: dict[str, EffectTemplate] = {}
+        self.active_effects: dict[str, list[ActiveEffect]] = {}  # entity_id -> effects
+        
+        # Статистика
+        self.total_effects_applied: int = 0
+        self.total_effects_removed: int = 0
+        self.effect_statistics: dict[str, int] = {}
+        
+        # Callbacks
+        self.on_effect_applied: Callable | None = None
+        self.on_effect_removed: Callable | None = None
+        self.on_effect_tick: Callable | None = None
+        
+        logger.info("Система эффектов инициализирована")
+    
+    def initialize(self) -> bool:
+        """Инициализация системы эффектов"""
+        try:
+            logger.info("Инициализация системы эффектов...")
+            
+            # Загрузка шаблонов эффектов
+            if not self._load_effect_templates():
+                return False
+            
+            # Создание базовых эффектов
+            if not self._create_base_effects():
+                return False
+            
+            self._state = LifecycleState.READY
+            logger.info("Система эффектов успешно инициализирована")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка инициализации системы эффектов: {e}")
+            self._state = LifecycleState.ERROR
+            return False
+    
+    def _load_effect_templates(self) -> bool:
+        """Загрузка шаблонов эффектов"""
+        try:
+            # Базовые шаблоны эффектов
+            templates = [
+                # Баффы
+                EffectTemplate(
+                    template_id="strength_buff",
+                    name="Усиление силы",
+                    description="Увеличивает физический урон на 20%",
+                    effect_type=EffectType.BUFF,
+                    category=EffectCategory.STAT_MODIFIER,
+                    base_duration=30.0,
+                    base_modifiers=[
+                        # stat_type должен совпадать с реальным атрибутом
+                        # Character/EnhancedEnemy (physical_damage), а не с
+                        # абстрактным "strength", которого у сущностей нет -
+                        # иначе get_modified_stat() никогда не найдёт этот
+                        # модификатор ни у одной боевой характеристики.
+                        EffectModifier("physical_damage", 0.2, "multiplicative")
+                    ],
+                    base_triggers=[],
+                    visual_effects=["glow_red"],
+                    sound_effects=["buff_apply"],
+                    icon_path="icons/strength_buff.png"
+                ),
+                
+                EffectTemplate(
+                    template_id="speed_buff",
+                    name="Ускорение",
+                    description="Увеличивает скорость на 30%",
+                    effect_type=EffectType.BUFF,
+                    category=EffectCategory.MOVEMENT,
+                    base_duration=20.0,
+                    base_modifiers=[
+                        EffectModifier("speed", 0.3, "multiplicative")
+                    ],
+                    base_triggers=[],
+                    visual_effects=["trail_blue"],
+                    sound_effects=["speed_buff"],
+                    icon_path="icons/speed_buff.png"
+                ),
+                
+                # Дебаффы
+                EffectTemplate(
+                    template_id="poison_debuff",
+                    name="Отравление",
+                    description="Наносит урон по времени",
+                    effect_type=EffectType.DEBUFF,
+                    category=EffectCategory.DAMAGE_OVER_TIME,
+                    base_duration=15.0,
+                    base_modifiers=[
+                        EffectModifier("health", -5, "additive")
+                    ],
+                    base_triggers=[
+                        EffectTrigger("tick", "every_second", 1.0, 1.0)
+                    ],
+                    visual_effects=["poison_green"],
+                    sound_effects=["poison_tick"],
+                    icon_path="icons/poison.png"
+                ),
+                
+                EffectTemplate(
+                    template_id="slow_debuff",
+                    name="Замедление",
+                    description="Уменьшает скорость на 50%",
+                    effect_type=EffectType.DEBUFF,
+                    category=EffectCategory.MOVEMENT,
+                    base_duration=10.0,
+                    base_modifiers=[
+                        EffectModifier("speed", -0.5, "multiplicative")
+                    ],
+                    base_triggers=[],
+                    visual_effects=["slow_purple"],
+                    sound_effects=["slow_apply"],
+                    icon_path="icons/slow.png"
+                ),
+                
+                # Лечение
+                EffectTemplate(
+                    template_id="heal_over_time",
+                    name="Регенерация",
+                    description="Восстанавливает здоровье по времени",
+                    effect_type=EffectType.BUFF,
+                    category=EffectCategory.HEAL_OVER_TIME,
+                    base_duration=12.0,
+                    base_modifiers=[
+                        EffectModifier("health", 3, "additive")
+                    ],
+                    base_triggers=[
+                        EffectTrigger("tick", "every_second", 1.0, 1.0)
+                    ],
+                    visual_effects=["heal_gold"],
+                    sound_effects=["heal_tick"],
+                    icon_path="icons/heal.png"
+                ),
+                
+                # Магические эффекты
+                EffectTemplate(
+                    template_id="magic_shield",
+                    name="Магический щит",
+                    description="Поглощает магический урон",
+                    effect_type=EffectType.BUFF,
+                    category=EffectCategory.COMBAT,
+                    base_duration=25.0,
+                    base_modifiers=[
+                        EffectModifier("magic_resistance", 0.5, "multiplicative")
+                    ],
+                    base_triggers=[],
+                    visual_effects=["shield_blue"],
+                    sound_effects=["shield_apply"],
+                    icon_path="icons/magic_shield.png"
+                )
+            ]
+            
+            for template in templates:
+                self.effect_templates[template.template_id] = template
+            
+            logger.info(f"Загружено {len(self.effect_templates)} шаблонов эффектов")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка загрузки шаблонов эффектов: {e}")
+            return False
+    
+    def _create_base_effects(self) -> bool:
+        """Создание базовых эффектов"""
+        try:
+            # Здесь можно создать дополнительные базовые эффекты
+            # которые не являются шаблонами
+            logger.info("Базовые эффекты созданы")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка создания базовых эффектов: {e}")
+            return False
+    
+    def apply_effect(self, entity_id: str, template_id: str, source: str | None = None, 
+                    duration: float | None = None, stacks: int = 1) -> str | None:
+        """Применение эффекта к сущности"""
+        try:
+            if template_id not in self.effect_templates:
+                logger.error("Шаблон эффекта %s не найден", template_id)
+                return None
+            
+            template = self.effect_templates[template_id]
+            
+            # Создание эффекта
+            current_time = time.perf_counter()
+            effect = Effect(
+                effect_id=f"{template_id}_{entity_id}_{int(current_time)}",
+                name=template.name,
+                description=template.description,
+                effect_type=template.effect_type,
+                category=template.category,
+                duration=duration if duration is not None else template.base_duration,
+                modifiers=template.base_modifiers.copy(),
+                triggers=template.base_triggers.copy(),
+                visual_effects=template.visual_effects.copy(),
+                sound_effects=template.sound_effects.copy(),
+                icon_path=template.icon_path,
+                source=source
+            )
+            
+            # Создание активного эффекта
+            active_effect = ActiveEffect(
+                effect=effect,
+                entity_id=entity_id,
+                current_stacks=stacks
+            )
+            
+            # Установка времени истечения
+            if effect.duration > 0:
+                active_effect.expires_at = current_time + effect.duration
+            
+            # Проверка стаков
+            if not self._can_apply_effect(entity_id, effect):
+                # Обычная ситуация (например второй elite-хит slow_debuff'ом,
+                # пока первый ещё активен, а шаблон не стакается) - не баг и
+                # не повод для WARNING в игровом логе на каждый такой момент.
+                logger.debug(f"Эффект {template_id} не может быть применен к {entity_id} (уже активен, не стакается)")
+                return None
+            
+            # Применение эффекта
+            if entity_id not in self.active_effects:
+                self.active_effects[entity_id] = []
+            
+            self.active_effects[entity_id].append(active_effect)
+            
+            # Обновление статистики
+            self.total_effects_applied += 1
+            self.effect_statistics[template_id] = self.effect_statistics.get(template_id, 0) + 1
+            
+            # Вызов callback
+            if self.on_effect_applied:
+                self.on_effect_applied(entity_id, active_effect)
+            
+            logger.info(f"Эффект {template_id} применен к {entity_id}")
+            return effect.effect_id
+            
+        except Exception as e:
+            logger.error(f"Ошибка применения эффекта: {e}")
+            return None
+    
+    def _can_apply_effect(self, entity_id: str, effect: Effect) -> bool:
+        """Проверка возможности применения эффекта"""
+        try:
+            if entity_id not in self.active_effects:
+                return True
+            
+            # Проверка конфликтующих эффектов
+            for active_effect in self.active_effects[entity_id]:
+                if active_effect.effect.name == effect.name:
+                    # Проверка стаков
+                    if effect.stack_type == EffectStackType.NONE:
+                        return False
+                    elif effect.stack_type == EffectStackType.STACK:
+                        if active_effect.current_stacks >= effect.max_stacks:
+                            return False
+                    # Для REFRESH и MULTIPLY всегда можно применить
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Ошибка проверки возможности применения эффекта: {e}")
+            return False
+    
+    def remove_effect(self, entity_id: str, effect_id: str) -> bool:
+        """Удаление эффекта"""
+        try:
+            if entity_id not in self.active_effects:
+                return False
+            
+            effects = self.active_effects[entity_id]
+            for i, active_effect in enumerate(effects):
+                if active_effect.effect.effect_id == effect_id:
+                    removed_effect = effects.pop(i)
+                    
+                    # Обновление статистики
+                    self.total_effects_removed += 1
+                    
+                    # Вызов callback
+                    if self.on_effect_removed:
+                        self.on_effect_removed(entity_id, removed_effect)
+                    
+                    logger.info(f"Эффект {effect_id} удален с {entity_id}")
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Ошибка удаления эффекта: {e}")
+            return False
+    
+    def remove_all_effects(self, entity_id: str, effect_type: EffectType | None = None) -> int:
+        """Удаление всех эффектов сущности"""
+        try:
+            if entity_id not in self.active_effects:
+                return 0
+            
+            effects = self.active_effects[entity_id]
+            removed_count = 0
+            
+            # Фильтрация эффектов для удаления
+            effects_to_remove = []
+            for active_effect in effects:
+                if effect_type is None or active_effect.effect.effect_type == effect_type:
+                    if active_effect.effect.removable:
+                        effects_to_remove.append(active_effect)
+            
+            # Удаление эффектов
+            for effect_to_remove in effects_to_remove:
+                if self.remove_effect(entity_id, effect_to_remove.effect.effect_id):
+                    removed_count += 1
+            
+            logger.info(f"Удалено {removed_count} эффектов с {entity_id}")
+            return removed_count
+            
+        except Exception as e:
+            logger.error(f"Ошибка удаления всех эффектов: {e}")
+            return 0
+    
+    def get_entity_effects(self, entity_id: str, effect_type: EffectType | None = None) -> list[ActiveEffect]:
+        """Получение эффектов сущности"""
+        try:
+            if entity_id not in self.active_effects:
+                return []
+            
+            effects = self.active_effects[entity_id]
+            
+            if effect_type is None:
+                return effects.copy()
+            
+            return [effect for effect in effects if effect.effect.effect_type == effect_type]
+            
+        except Exception as e:
+            logger.error(f"Ошибка получения эффектов сущности: {e}")
+            return []
+    
+    def has_effect(self, entity_id: str, template_id: str) -> bool:
+        """Проверка наличия эффекта у сущности"""
+        try:
+            if entity_id not in self.active_effects:
+                return False
+            
+            for active_effect in self.active_effects[entity_id]:
+                if active_effect.effect.name == self.effect_templates[template_id].name:
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Ошибка проверки наличия эффекта: {e}")
+            return False
+    
+    def get_effect_modifiers(self, entity_id: str, stat_type: str) -> list[EffectModifier]:
+        """Получение модификаторов эффектов для характеристики"""
+        try:
+            modifiers = []
+            
+            if entity_id not in self.active_effects:
+                return modifiers
+            
+            for active_effect in self.active_effects[entity_id]:
+                if not active_effect.is_active:
+                    continue
+                
+                for modifier in active_effect.effect.modifiers:
+                    if modifier.stat_type == stat_type:
+                        # Применение стаков
+                        if active_effect.current_stacks > 1:
+                            if active_effect.effect.stack_type == EffectStackType.STACK:
+                                modifier = EffectModifier(
+                                    stat_type=modifier.stat_type,
+                                    value=modifier.value * active_effect.current_stacks,
+                                    modifier_type=modifier.modifier_type
+                                )
+                        
+                        modifiers.append(modifier)
+            
+            return modifiers
+            
+        except Exception as e:
+            logger.error(f"Ошибка получения модификаторов эффектов: {e}")
+            return []
+    
+    def update(self, delta_time: float) -> None:
+        """Обновление системы эффектов - делегирует _on_update"""
+        super().update(delta_time)
+    
+    def _on_update(self, delta_time: float) -> None:
+        """Внутренняя логика обновления системы эффектов"""
+        try:
+            current_time = time.perf_counter()
+            
+            # Обновление всех активных эффектов
+            for entity_id, effects in list(self.active_effects.items()):
+                effects_to_remove = []
+                
+                for active_effect in effects:
+                    if not active_effect.is_active:
+                        continue
+                    
+                    # Проверка истечения
+                    if active_effect.expires_at and current_time >= active_effect.expires_at:
+                        effects_to_remove.append(active_effect)
+                        continue
+                    
+                    # Обработка триггеров
+                    self._process_effect_triggers(active_effect, current_time)
+                
+                # Удаление истекших эффектов
+                for effect_to_remove in effects_to_remove:
+                    self.remove_effect(entity_id, effect_to_remove.effect.effect_id)
+            
+        except Exception as e:
+            logger.exception("Ошибка обновления системы эффектов: %s", e)
+    
+    def _process_effect_triggers(self, active_effect: ActiveEffect, current_time: float):
+        """Обработка триггеров эффекта.
+
+        Раньше здесь были ветки "on_hit"/"on_damage", обращавшиеся к
+        trigger.effects/trigger.context - полей, которых нет на EffectTrigger
+        (только trigger_type/condition/chance/cooldown/last_trigger), и звавшие
+        apply_effect(source_entity_id=...) - параметра, которого нет в её
+        сигнатуре (source). Это гарантированно падало бы при первом же вызове.
+        Применение эффекта "по факту попадания" теперь делает сам
+        CombatSystem.execute_attack(on_hit_effect=...) напрямую - см. combat_system.py -
+        отдельный generic trigger-scanning механизм для этого не нужен."""
+        try:
+            for trigger in active_effect.effect.triggers:
+                if current_time - trigger.last_trigger < trigger.cooldown:
+                    continue
+
+                if trigger.trigger_type == "tick":
+                    # Обработка тиков
+                    if current_time - active_effect.last_tick >= active_effect.tick_interval:
+                        active_effect.last_tick = current_time
+                        trigger.last_trigger = current_time
+
+                        # Вызов callback
+                        if self.on_effect_tick:
+                            self.on_effect_tick(active_effect.entity_id, active_effect)
+
+                        logger.debug(f"Тик эффекта {active_effect.effect.name} для {active_effect.entity_id}")
+
+        except Exception as e:
+            logger.error(f"Ошибка обработки триггеров эффекта: {e}")
+
+    def get_modified_stat(self, entity_id: str, stat_type: str, base_value: float) -> float:
+        """Применяет активные модификаторы эффектов к базовому значению
+        характеристики - это и есть "подключение" системы эффектов к боевой
+        системе: Character/EnhancedEnemy.get_combat_stats() зовут это вместо
+        того, чтобы читать сырой атрибут напрямую.
+        
+        Поддержка синергий:
+        - NEGATIVE теги: если есть негативные эффекты, урон по ним увеличивается
+        - BREAK_RELATED теги: бонусы при пробитой стойкости
+        """
+        from src.core.constants import EffectModifierType
+        
+        value = base_value
+        
+        # Сначала аддитивные модификаторы (плоские бонусы)
+        additive_sum = 0.0
+        multiplicative_sum = 0.0
+        
+        for modifier in self.get_effect_modifiers(entity_id, stat_type):
+            # modifier_type может быть строкой или enum
+            mod_type = modifier.modifier_type
+            if isinstance(mod_type, EffectModifierType):
+                # Конвертируем enum в строку для сравнения
+                mod_type = mod_type.value
+            
+            if mod_type == "additive":
+                additive_sum += modifier.value
+            elif mod_type == "multiplicative":
+                multiplicative_sum += modifier.value
+            elif mod_type == "override":
+                return modifier.value
+        
+        # Формула: (base + flat) * (1 + percent)
+        value = (value + additive_sum) * (1.0 + multiplicative_sum)
+        
+        return value
+    
+    def has_tag(self, entity_id: str, tag: EffectTag) -> bool:
+        """Проверка наличия эффекта с тегом у сущности"""
+        if entity_id not in self.active_effects:
+            return False
+        
+        for active_effect in self.active_effects[entity_id]:
+            if not active_effect.is_active:
+                continue
+            
+            # Проверка тегов эффекта
+            if tag in active_effect.effect.tags:
+                return True
+            
+            # Проверка тегов модификаторов
+            for modifier in active_effect.effect.modifiers:
+                if tag in modifier.tags:
+                    return True
+        
+        return False
+    
+    def get_effects_by_tag(self, entity_id: str, tag: EffectTag) -> list[ActiveEffect]:
+        """Получение всех эффектов с указанным тегом"""
+        if entity_id not in self.active_effects:
+            return []
+        
+        result = []
+        for active_effect in self.active_effects[entity_id]:
+            if not active_effect.is_active:
+                continue
+            
+            if tag in active_effect.effect.tags:
+                result.append(active_effect)
+                continue
+            
+            for modifier in active_effect.effect.modifiers:
+                if tag in modifier.tags:
+                    result.append(active_effect)
+                    break
+        
+        return result
+    
+    def count_negative_effects(self, entity_id: str) -> int:
+        """Подсчет количества негативных эффектов на сущности"""
+        return len(self.get_effects_by_tag(entity_id, EffectTag.NEGATIVE))
+    
+    def is_broken(self, entity_id: str) -> bool:
+        """Проверка состояния BROKEN через теги"""
+        return self.has_tag(entity_id, EffectTag.BREAK_RELATED)
+    
+    def create_custom_effect(self, template_id: str, custom_modifiers: list[EffectModifier], 
+                           duration: float, name: str = "") -> str | None:
+        """Создание пользовательского эффекта"""
+        try:
+            if template_id not in self.effect_templates:
+                return None
+            
+            template = self.effect_templates[template_id]
+            
+            current_time = time.perf_counter()
+            effect = Effect(
+                effect_id=f"custom_{template_id}_{int(current_time)}",
+                name=name or template.name,
+                description=template.description,
+                effect_type=template.effect_type,
+                category=template.category,
+                duration=duration,
+                modifiers=custom_modifiers,
+                triggers=template.base_triggers.copy(),
+                visual_effects=template.visual_effects.copy(),
+                sound_effects=template.sound_effects.copy(),
+                icon_path=template.icon_path
+            )
+            
+            return effect.effect_id
+            
+        except Exception as e:
+            logger.exception("Ошибка создания пользовательского эффекта: %s", e)
+            return None
+    
+    def get_effect_statistics(self) -> dict[str, Any]:
+        """Получение статистики эффектов"""
+        try:
+            return {
+                "total_effects_applied": self.total_effects_applied,
+                "total_effects_removed": self.total_effects_removed,
+                "active_effects_count": sum(len(effects) for effects in self.active_effects.values()),
+                "effect_templates_count": len(self.effect_templates),
+                "effect_statistics": self.effect_statistics.copy()
+            }
+            
+        except Exception as e:
+            logger.exception("Ошибка получения статистики эффектов: %s", e)
+            return {}
+    
+    def cleanup(self) -> None:
+        """Очистка системы эффектов"""
+        try:
+            # Удаление всех эффектов
+            for entity_id in list(self.active_effects.keys()):
+                self.remove_all_effects(entity_id)
+            
+            # Очистка данных
+            self.effect_templates.clear()
+            self.active_effects.clear()
+            self.effect_statistics.clear()
+            
+            logger.info("Система эффектов очищена")
+            
+        except Exception as e:
+            logger.error(f"Ошибка очистки системы эффектов: {e}")

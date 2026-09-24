@@ -1,0 +1,36 @@
+{
+  "baseline_memory_mb": 0.0,
+  "final_memory_mb": 0.0,
+  "peak_memory_mb": 0.01,
+  "total_growth_mb": 0.0,
+  "leak_detected": false,
+  "samples_count": 2,
+  "top_object_types": {},
+  "top_allocations": [
+    {
+      "file": "/workspace/tools/plugins/memory_profiler_plugin.py:149",
+      "size_kb": 0.96,
+      "count": 11
+    },
+    {
+      "file": "/usr/local/lib/python3.12/tracemalloc.py:173",
+      "size_kb": 0.46,
+      "count": 5
+    },
+    {
+      "file": "/workspace/tools/plugins/memory_profiler_plugin.py:83",
+      "size_kb": 0.3,
+      "count": 2
+    },
+    {
+      "file": "/workspace/tools/plugins/memory_profiler_plugin.py:75",
+      "size_kb": 0.12,
+      "count": 2
+    },
+    {
+      "file": "/workspace/tools/plugins/memory_profiler_plugin.py:151",
+      "size_kb": 0.12,
+      "count": 5
+    }
+  ]
+}

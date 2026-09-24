@@ -1,0 +1,8 @@
+# Runtime dependencies of the game (python main.py). Python 3.14 - see run_game.bat.
+# Panda3D 1.10.16 ships wheels up to cp314; there are none for 3.15 yet.
+panda3d>=1.10.16,<2.0
+blinker>=1.9          # src/core/event_system.py
+cachetools>=5.0       # src/core caches
+sqlalchemy>=2.0       # src/database/db_core.py (saves/game_database.db)
+pydantic>=2.0         # src/core/validation.py
+lupa>=2.8             # Lua content (lupa.lua55 - the project standard is Lua 5.5)

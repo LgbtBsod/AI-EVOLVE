@@ -1,0 +1,8 @@
+{
+  "window_width": 1600,
+  "window_height": 900,
+  "fullscreen": false,
+  "vsync": true,
+  "fps": 120,
+  "render_scale": 1.0
+}

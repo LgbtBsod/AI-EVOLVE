@@ -1,0 +1,15 @@
+[build-system]
+requires = ["maturin>=1.9.4,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "rust_core"
+description = "Rust core layer for AI Evolve (PyO3 extension)"
+requires-python = ">=3.10"
+dynamic = ["version"]
+
+[tool.maturin]
+bindings = "pyo3"
+module-name = "rust_core"
+# maturin >= 1.9.4 sets PYO3_BUILD_EXTENSION_MODULE itself; the deprecated
+# pyo3 `extension-module` cargo feature is intentionally not enabled here.
