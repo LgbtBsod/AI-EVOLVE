@@ -4,3 +4,4 @@
 pytest>=8.0     # tests/
 Pillow>=10.0    # tools/dev_probe.py: blank-frame detection, contact sheet, GIF
 maturin>=1.9    # builds rust_core (see rust_core/README.md; needs rustup + MSVC Build Tools)
+setuptools>=70  # python setup.py build_apps (Panda3D standalone builds)

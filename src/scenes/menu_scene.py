@@ -10,11 +10,16 @@ from src.scenes.scene_manager import Scene
 logger = logging.getLogger(__name__)
 
 # Встроенный шрифт Panda3D не содержит кириллицы - русские подписи без
-# системного TTF рендерятся пустыми. Берём первый найденный шрифт Windows,
-# иначе меню падает обратно на английские подписи.
+# системного TTF рендерятся пустыми. Берём первый найденный системный шрифт
+# (Windows / Linux / macOS), иначе меню падает обратно на английские подписи.
 _CYRILLIC_FONT_CANDIDATES = [
-    os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", name)
-    for name in ("segoeui.ttf", "arial.ttf", "tahoma.ttf")
+    *(os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", name)
+      for name in ("segoeui.ttf", "arial.ttf", "tahoma.ttf")),
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+    "/usr/share/fonts/TTF/DejaVuSans.ttf",
+    "/System/Library/Fonts/Supplemental/Arial.ttf",
+    "/Library/Fonts/Arial Unicode.ttf",
 ]
 
 

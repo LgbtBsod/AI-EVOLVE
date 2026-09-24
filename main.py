@@ -16,10 +16,17 @@
 
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+# Корень приложения: рядом с exe в собранной игре (build_apps ставит
+# sys.frozen), иначе каталог этого файла.
+if getattr(sys, "frozen", False):
+    APP_ROOT = Path(sys.executable).resolve().parent
+else:
+    APP_ROOT = Path(__file__).resolve().parent
+    sys.path.insert(0, str(APP_ROOT))
 
 from direct.showbase.ShowBase import ShowBase  # noqa: E402
 from panda3d.core import loadPrcFileData  # noqa: E402
@@ -58,6 +65,13 @@ class Game(ShowBase):
 
     def __init__(self, dev_mode: bool = False, headless: bool = False, skip_menu: bool = False,
                  db_url: str = "sqlite:///saves/game_database.db"):
+        # Игра читает config/*.json и пишет saves/ по относительным путям, а
+        # собранную игру (например, двойным кликом на macOS) запускают с любым
+        # текущим каталогом - поэтому явно работаем из корня приложения.
+        # saves/ не хранится в git, SQLite сам каталог не создаёт.
+        os.chdir(APP_ROOT)
+        (APP_ROOT / "saves").mkdir(exist_ok=True)
+
         if headless:
             # Offscreen-буфер без окна и звука - для тестов и CI
             loadPrcFileData("", "window-type offscreen")
@@ -166,6 +180,10 @@ def parse_args():
         help="Use a small dev-sized map (fast to traverse) instead of the full-size world",
     )
     parser.add_argument(
+        "--full", action="store_true",
+        help="Standalone build only: use the full-size world (the build defaults to the dev map, like run_game.bat)",
+    )
+    parser.add_argument(
         "--skip-menu", action="store_true",
         help="Start directly in the game world instead of the main menu",
     )
@@ -174,7 +192,10 @@ def parse_args():
 
 def main():
     args = parse_args()
-    game = Game(dev_mode=args.dev, skip_menu=args.skip_menu)
+    # Собранную игру запускают двойным кликом, без аргументов - она ведёт
+    # себя как run_game.bat: маленькая карта, пока не попросили --full
+    dev_mode = (not args.full) if getattr(sys, "frozen", False) else args.dev
+    game = Game(dev_mode=dev_mode, skip_menu=args.skip_menu)
     game.run()
 
 

@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  game:
+    name: Game (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Combat / effects / leveling smoke test (headless, 50 tests)
+        run: python tools/combat_smoke_test.py
+      - name: Import check
+        run: python -c "import main"
+      # The boot test renders into an offscreen buffer and needs OpenGL:
+      # Linux runners get it from Mesa (llvmpipe) under a virtual X server.
+      - name: Install Mesa + Xvfb
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb libgl1 libgl1-mesa-dri libglu1-mesa
+      - name: Boot test (GameCore -> menu/world -> plugins, offscreen)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a python tools/boot_smoke_test.py
+
+  rust:
+    name: rust_core (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        id: py
+        with:
+          python-version: "3.14"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust_core
+      - name: cargo test
+        working-directory: rust_core
+        env:
+          PYO3_PYTHON: ${{ steps.py.outputs.python-path }}
+        run: cargo test
+      - name: Build and install the extension (maturin via pyproject.toml)
+        run: python -m pip install ./rust_core pytest
+      - name: FFI tests
+        run: python -m pytest -q rust_core/tests/test_ffi.py

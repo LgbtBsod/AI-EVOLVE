@@ -1,0 +1,36 @@
+"""Standalone builds of the game with Panda3D's build_apps.
+
+    python setup.py build_apps                       # all platforms below
+    python setup.py build_apps -p win_amd64          # just one
+    python setup.py bdist_apps                       # + zip/tar archives in dist/
+
+Frozen modules are found by import analysis from main.py; third-party wheels
+for each target platform are downloaded from PyPI using requirements.txt, so
+one machine can build for all three platforms. rust_core is not bundled: the
+game does not import it yet.
+"""
+
+from setuptools import setup
+
+VERSION = "0.2.0a0"
+
+setup(
+    name="AI-EVOLVE",
+    version=VERSION,
+    options={
+        "build_apps": {
+            "gui_apps": {"ai-evolve": "main.py"},
+            # Data files the game opens at runtime (checked with an audit hook)
+            "include_patterns": ["config/*.json"],
+            "plugins": ["pandagl", "p3openal_audio"],
+            "platforms": ["win_amd64", "manylinux2014_x86_64", "macosx_11_0_universal2"],
+            "log_filename": "$USER_APPDATA/AI-EVOLVE/output.log",
+            "log_append": False,
+            # Imported dynamically, invisible to the import analysis: SQLAlchemy
+            # loads its dialect by name from the "sqlite:///..." URL
+            "include_modules": {"*": ["sqlalchemy.dialects.sqlite", "sqlalchemy.dialects.sqlite.pysqlite"]},
+            # Dead/optional code paths that would drag in heavy packages
+            "exclude_modules": {"*": ["torch", "flet", "cv2", "skimage", "imagehash", "tkinter"]},
+        },
+    },
+)

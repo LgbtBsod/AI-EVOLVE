@@ -1,0 +1,79 @@
+name: Release
+
+# Push a tag like v0.2.0-alpha -> standalone game builds for Windows, Linux and
+# macOS plus rust_core wheels are attached to a DRAFT GitHub release. Publish
+# the draft by hand after checking the builds.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  apps:
+    name: Standalone game (all platforms)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+      # build_apps downloads Panda3D and dependency wheels for every target
+      # platform from PyPI, so one Linux runner builds all three.
+      - name: Build (Panda3D bdist_apps)
+        run: python setup.py bdist_apps
+      - uses: actions/upload-artifact@v7
+        with:
+          name: apps
+          path: dist/*
+          if-no-files-found: error
+
+  wheels:
+    name: rust_core wheel (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - uses: PyO3/maturin-action@v1
+        with:
+          working-directory: rust_core
+          args: --release --out dist --interpreter python3.14
+          manylinux: auto
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wheel-${{ matrix.os }}
+          path: rust_core/dist/*.whl
+          if-no-files-found: error
+
+  release:
+    name: Draft GitHub release
+    needs: [apps, wheels]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Create draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          notes=".github/release-notes/${TAG}.md"
+          if [ -f "$notes" ]; then notes_args=(--notes-file "$notes"); else notes_args=(--generate-notes); fi
+          prerelease=()
+          case "$TAG" in *alpha*|*beta*|*rc*) prerelease=(--prerelease) ;; esac
+          gh release create "$TAG" artifacts/* --draft "${prerelease[@]}" \
+            --title "AI-EVOLVE $TAG" "${notes_args[@]}"
