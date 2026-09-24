@@ -9,6 +9,7 @@ use crate::generator::WorldGenerator;
 use crate::probe::{ProbeConfig, analyze_frame, compute_ssim};
 use crate::semantic_core::{LogCompressor as RustLogCompressor, StateDiffCalculator as RustStateDiffCalculator, EventCorrelator as RustEventCorrelator};
 use crate::analytics;
+use crate::qa;
 use image::DynamicImage;
 
 /// Python module for rust_core
@@ -21,6 +22,7 @@ fn rust_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyStateDiffCalculator>()?;
     m.add_class::<PyEventCorrelator>()?;
     m.add_class::<PyRunAnalytics>()?;
+    m.add_class::<PyQaKernels>()?;
     // Aliases for cleaner Python API
     m.add("WorldGenerator", m.getattr("PyWorldGenerator")?)?;
     m.add("SimulationEnv", m.getattr("PySimulationEnv")?)?;
@@ -29,6 +31,7 @@ fn rust_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("StateDiffCalculator", m.getattr("PyStateDiffCalculator")?)?;
     m.add("EventCorrelator", m.getattr("PyEventCorrelator")?)?;
     m.add("RunAnalytics", m.getattr("PyRunAnalytics")?)?;
+    m.add("QaKernels", m.getattr("PyQaKernels")?)?;
     m.add("VERSION", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }
@@ -461,5 +464,48 @@ impl PyRunAnalytics {
     #[pyo3(signature = (lines, limit=10))]
     fn log_digest(py: Python<'_>, lines: Vec<String>, limit: usize) -> (Vec<(usize, String)>, usize) {
         py.detach(|| analytics::log_digest(&lines, limit))
+    }
+}
+
+// ============================================================================
+// QA kernels FFI (tools/qa.py via tools/probe_kernels.py)
+// ============================================================================
+
+/// Graph reachability (CSR buffers), bootstrap statistics, line fingerprints.
+#[pyclass]
+struct PyQaKernels;
+
+#[pymethods]
+impl PyQaKernels {
+    /// offsets/targets: CSR adjacency as array('Q'); roots: array('Q') -> list of 0/1 flags.
+    #[staticmethod]
+    fn reach(py: Python<'_>, offsets: &Bound<'_, PyAny>, targets: &Bound<'_, PyAny>, roots: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
+        let (offsets, targets, roots) = (buf::<u64>(py, offsets)?, buf::<u64>(py, targets)?, buf::<u64>(py, roots)?);
+        if offsets.windows(2).any(|w| w[0] > w[1]) || offsets.last().copied().unwrap_or(0) as usize > targets.len() {
+            return Err(pyo3::exceptions::PyValueError::new_err("offsets must be non-decreasing and within targets"));
+        }
+        Ok(py.detach(|| qa::reach(&offsets, &targets, &roots)))
+    }
+
+    /// values: array('d') -> dict(n, mean, sd, min, p5, p50, p95, max, ci_lo, ci_hi)
+    #[staticmethod]
+    #[pyo3(signature = (values, resamples=2000, seed=0))]
+    fn describe(py: Python<'_>, values: &Bound<'_, PyAny>, resamples: usize, seed: u64) -> PyResult<Py<PyDict>> {
+        let values = buf::<f64>(py, values)?;
+        let d = py.detach(|| qa::describe(&values, resamples, seed));
+        let out = PyDict::new(py);
+        out.set_item("n", d.n)?;
+        for (k, v) in [("mean", d.mean), ("sd", d.sd), ("min", d.min), ("p5", d.p5), ("p50", d.p50),
+                       ("p95", d.p95), ("max", d.max), ("ci_lo", d.ci_lo), ("ci_hi", d.ci_hi)] {
+            out.set_item(k, v)?;
+        }
+        Ok(out.unbind())
+    }
+
+    /// data: bytes-like, offsets: array('Q') line boundaries -> list of u64 FNV-1a hashes.
+    #[staticmethod]
+    fn fnv1a64_lines(py: Python<'_>, data: &Bound<'_, PyAny>, offsets: &Bound<'_, PyAny>) -> PyResult<Vec<u64>> {
+        let (data, offsets) = (buf::<u8>(py, data)?, buf::<u64>(py, offsets)?);
+        Ok(py.detach(|| qa::fnv1a64_lines(&data, &offsets)))
     }
 }

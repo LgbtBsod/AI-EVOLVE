@@ -27,6 +27,10 @@ try:
 except ImportError:  # rust_core не собран: pip install ./rust_core
     _rust = None
     BACKEND = "python"
+try:
+    from rust_core import QaKernels as _rust_qa
+except ImportError:  # нет rust_core или старая сборка без QA-ядер
+    _rust_qa = None
 
 SPARK_CHARS = "▁▂▃▄▅▆▇█"
 
@@ -84,11 +88,20 @@ class HeroTable:
 
 # ---------------------------------------------------------------- python twins
 
+def _naive_sum(values):
+    """Сумма слева направо, как .sum() в Rust. Встроенный sum() для float с
+    Python 3.12 компенсированный (Neumaier) - отличается в последнем бите."""
+    acc = 0.0
+    for v in values:
+        acc += v
+    return acc
+
+
 def py_linear_fit(xs, ys):
     n = min(len(xs), len(ys))
     if n < 2:
         return None
-    mx, my = sum(xs[:n]) / n, sum(ys[:n]) / n
+    mx, my = _naive_sum(xs[:n]) / n, _naive_sum(ys[:n]) / n
     sxx = sxy = 0.0
     for i in range(n):
         dx = xs[i] - mx
@@ -216,6 +229,89 @@ def py_scan_hero(table, params, busy_ts):
     }
 
 
+MASK64 = (1 << 64) - 1
+
+
+def py_reach(offsets, targets, roots):
+    n = max(len(offsets) - 1, 0)
+    seen = [0] * n
+    stack = [r for r in roots if r < n]
+    while stack:
+        node = stack.pop()
+        if seen[node]:
+            continue
+        seen[node] = 1
+        for t in targets[min(offsets[node], len(targets)):min(offsets[node + 1], len(targets))]:
+            if t < n and not seen[t]:
+                stack.append(t)
+    return seen
+
+
+class SplitMix64:
+    def __init__(self, seed):
+        self.state = seed & MASK64
+
+    def next_u64(self):
+        self.state = (self.state + 0x9E3779B97F4A7C15) & MASK64
+        z = self.state
+        z = ((z ^ (z >> 30)) * 0xBF58476D1CE4E5B9) & MASK64
+        z = ((z ^ (z >> 27)) * 0x94D049BB133111EB) & MASK64
+        return z ^ (z >> 31)
+
+
+def _percentile_sorted(sorted_vals, q):
+    if not sorted_vals:
+        return math.nan
+    pos = q * (len(sorted_vals) - 1)
+    lo = math.floor(pos)
+    hi = min(lo + 1, len(sorted_vals) - 1)
+    return sorted_vals[lo] + (sorted_vals[hi] - sorted_vals[lo]) * (pos - lo)
+
+
+def py_describe(values, resamples=2000, seed=0):
+    v = [x for x in values if not math.isnan(x)]
+    n = len(v)
+    keys = ("mean", "sd", "min", "p5", "p50", "p95", "max", "ci_lo", "ci_hi")
+    if n == 0:
+        return {"n": 0, **{k: math.nan for k in keys}}
+    mean = _naive_sum(v) / n
+    sd = math.sqrt(_naive_sum((x - mean) * (x - mean) for x in v) / (n - 1)) if n > 1 else 0.0
+    rng = SplitMix64(seed)
+    means = []
+    for _ in range(resamples):
+        acc = 0.0
+        for _ in range(n):
+            acc += v[rng.next_u64() % n]
+        means.append(acc / n)
+    v.sort()
+    means.sort()
+    ci = (_percentile_sorted(means, 0.025), _percentile_sorted(means, 0.975)) if means else (mean, mean)
+    return {"n": n, "mean": mean, "sd": sd, "min": v[0], "p5": _percentile_sorted(v, 0.05),
+            "p50": _percentile_sorted(v, 0.5), "p95": _percentile_sorted(v, 0.95), "max": v[-1],
+            "ci_lo": ci[0], "ci_hi": ci[1]}
+
+
+def py_fnv1a64_lines(data, offsets):
+    out = []
+    data = bytes(data)
+    for a, b in zip(offsets, offsets[1:]):
+        h = 0xCBF29CE484222325
+        for byte in data[min(a, len(data)):max(min(b, len(data)), min(a, len(data)))]:
+            h = ((h ^ byte) * 0x100000001B3) & MASK64
+        out.append(h)
+    return out
+
+
+def lines_fingerprint(lines):
+    """[str] -> [u64 FNV-1a] для каждой строки (golden-траектории)."""
+    blob = bytearray()
+    offsets = array("Q", [0])
+    for line in lines:
+        blob += line.encode("utf-8")
+        offsets.append(len(blob))
+    return fnv1a64_lines(bytes(blob), offsets)
+
+
 def py_log_digest(lines, limit=10):
     order, index = [], {}
     for line in lines:
@@ -233,12 +329,13 @@ def py_log_digest(lines, limit=10):
 
 # ---------------------------------------------------------------- dispatch
 
-def _pick(name, columns=()):
+def _pick(name, columns=(), rust_cls=None):
     """Rust-ядро, если оно есть в собранном rust_core (старая сборка без
     нового метода -> Python), иначе Python-двойник. `columns` - позиции
     аргументов-колонок, которые для Rust упаковываются в бинарные буферы."""
     py_impl = globals()[f"py_{name}"]
-    rust_impl = getattr(_rust, name, None) if _rust is not None else None
+    cls = rust_cls if rust_cls is not None else _rust
+    rust_impl = getattr(cls, name, None) if cls is not None else None
     if rust_impl is None:
         return py_impl
     if not columns:
@@ -261,3 +358,6 @@ stuck_interval = _pick("stuck_interval", [(0, f64), (1, f64), (2, f64), (3, u8),
 scan_hero = _pick("scan_hero", [(2, f64)])
 log_template = _pick("log_template")
 log_digest = _pick("log_digest")
+reach = _pick("reach", [(0, u64), (1, u64), (2, u64)], _rust_qa)
+describe = _pick("describe", [(0, f64)], _rust_qa)
+fnv1a64_lines = _pick("fnv1a64_lines", [(1, u64)], _rust_qa)

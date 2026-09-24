@@ -47,7 +47,7 @@ DEFAULT_FPS = 30
 def _is_game_module(name):
     """Модули, чей `time` подменяется в fast-режиме: только код игры, не
     stdlib и не сами инструменты (им нужны настоящие часы для wall-time)."""
-    return name == "main" or name.startswith("src.")
+    return name == "main" or name.startswith(("src.", "game."))
 
 
 def configure_engine(render="window", fast=False, fps=DEFAULT_FPS, notify_log=None):
@@ -93,6 +93,34 @@ class VirtualTime(types.ModuleType):
 
     def perf_counter(self):
         return self._perf0 + self.now()
+
+    monotonic = perf_counter
+
+    def __getattr__(self, name):
+        return getattr(_real_time, name)
+
+
+class ManualTime(types.ModuleType):
+    """Ручные часы для тестов: sleep(s) мгновенно сдвигает время на s.
+    Подменяет `time` в коде игры и в самом тесте (tests/conftest.py,
+    маркер virtual_time) - тесты с ожиданием таймеров идут без реальных пауз."""
+
+    def __init__(self):
+        super().__init__("time")
+        self._wall0 = _real_time.time()
+        self._perf0 = _real_time.perf_counter()
+        self.elapsed = 0.0
+
+    def advance(self, seconds):
+        self.elapsed += max(0.0, float(seconds))
+
+    sleep = advance
+
+    def time(self):
+        return self._wall0 + self.elapsed
+
+    def perf_counter(self):
+        return self._perf0 + self.elapsed
 
     monotonic = perf_counter
 

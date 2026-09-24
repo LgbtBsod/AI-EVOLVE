@@ -10,6 +10,9 @@
 """
 import pytest
 import time
+
+# time.sleep() ждёт таймер BREAK: ручные часы (tests/conftest.py) делают это мгновенно
+pytestmark = pytest.mark.virtual_time
 from game.core.effects import (
     BuffEffect, ActiveEffectsContainer, EffectType, 
     StatTarget, EffectTag

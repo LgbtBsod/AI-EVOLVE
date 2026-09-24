@@ -11,6 +11,9 @@ lua_content/dev_tools.lua: agent.player_keys), без god-mode, плюс
 - fixed-step виртуальное время (tools/probe_runtime.py): при одном --seed
   (по умолчанию 1) прогон ПОБИТОВО повторяем - любой FAIL воспроизводится
   командой из строки "repro:" в выводе;
+- инварианты мира на каждом кадре (tools/probe_invariants.py: HP > max,
+  "жив при HP 0", NaN, выход за карту, мёртвые враги в сцене...) - любое
+  нарушение = FAIL с точным t (отключить: --no-invariants);
 - вывод - только то, о чём спросили (observe/expect/until), и одна строка
   RESULT в конце + до 3 гипотез и прогноз. Детали - в <out>/session.json и
   в БД прогонов (tools/probe_db.py).
@@ -25,6 +28,7 @@ lua_content/dev_tools.lua: agent.player_keys), без god-mode, плюс
     enemies                       ближайшие враги (тип, дистанция, HP)
     expect COND                   проверка: PASS/FAIL (FAIL -> код выхода 1)
     report                        гипотезы + прогноз на текущий момент
+    story [N]                     последние N решений ИИ героя (смены ai_state; дребезг A<->B схлопнут)
     screenshot [NAME]             PNG в каталог прогона (только --render offscreen|window)
 
 COND: `alive`, `dead`, `not alive`, `NAME OP NUMBER` (OP: < <= > >= == !=),
@@ -57,7 +61,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import probe_analysis as analysis  # noqa: E402
 import probe_runtime as runtime  # noqa: E402
-from probe_settings import ROOT, section  # noqa: E402
+from probe_invariants import InvariantChecker  # noqa: E402
+from probe_settings import ROOT, qa_settings, section  # noqa: E402
 
 PRESS_FRAMES = 2  # держим клавишу 2 кадра: сцена ловит нажатие по фронту
 
@@ -167,6 +172,8 @@ def parse_script(text):
             commands.append(("expect", {"cond": parse_condition(rest), "text": rest}, src))
         elif verb in ("observe", "enemies", "report"):
             commands.append((verb, {}, src))
+        elif verb == "story":
+            commands.append(("story", {"limit": int(rest) if rest.isdigit() else 12}, src))
         elif verb == "screenshot":
             name = rest or None
             if name and not re.fullmatch(r"[\w.-]+", name):
@@ -205,6 +212,10 @@ class PlaySession:
                                     notify_log=out_dir / "panda3d.log")
         self.game = self.rt.game
         self.kills = runtime.KillTracker()
+        self.story = []        # смены ai_state героя: (t, from, to, hp, nearest_type, nearest_dist)
+        self._last_ai = None
+        inv_cfg = qa_settings()["invariants"]
+        self.invariants = InvariantChecker(inv_cfg) if inv_cfg["enabled"] and not args.no_invariants else None
         runtime.combat_recorder(self.game, self.rt.now, self.events)
         self._state_log = (out_dir / "state.jsonl").open("w", encoding="utf-8")
         self.game.taskMgr.add(self._per_frame, "agent_play_frame", sort=100)
@@ -226,7 +237,18 @@ class PlaySession:
 
     # --- game-side tasks
     def _per_frame(self, task):
-        self.kills.update(self.game, self.rt.now())
+        now = self.rt.now()
+        self.kills.update(self.game, now)
+        player = getattr(self.scene(), "player", None)
+        ai = getattr(player, "ai_state", None) if player is not None else None
+        if ai != self._last_ai:
+            dist, enemy = runtime.nearest_enemy(self.game)
+            self.story.append((round(now, 2), self._last_ai, ai, round(player.health, 1) if player else None,
+                               runtime.entity_type_of(enemy, False) if enemy is not None else None,
+                               round(dist, 1) if dist is not None else None))
+            self._last_ai = ai
+        if self.invariants is not None:
+            self.invariants.check(self.game, now)
         return task.cont
 
     def _record_sample(self):
@@ -279,6 +301,26 @@ class PlaySession:
                 f"lvl={m['lvl']} xp={m['xp']:.0f} ai={m['ai']} pos={m['pos']} | enemies={m['enemies']} "
                 f"nearest={near} | kills={m['kills']} dealt={m['dealt']:.0f} taken={m['taken']:.0f} "
                 f"| traps={m['traps']} chests={m['chests']}")
+
+    def story_lines(self, limit=12):
+        """Сжатая история решений ИИ: повторяющийся дребезг A<->B - одной строкой."""
+        items, i = [], 0
+        tr = self.story
+        while i < len(tr):
+            j = i
+            while j + 1 < len(tr) and tr[j + 1][1] == tr[j][2] and tr[j + 1][2] == tr[j][1]:
+                j += 1
+            if j - i >= 3:
+                items.append(f"t={tr[i][0]}..{tr[j][0]} {tr[i][1]}<->{tr[i][2]} flapping x{j - i + 1} (hp {tr[j][3]})")
+            else:
+                for t, a, b, hp, et, d in tr[i:j + 1]:
+                    near = f", nearest {et} {d}u" if et else ""
+                    items.append(f"t={t} {a or 'start'} -> {b} (hp {hp}{near})")
+            i = j + 1
+        shown = items[-limit:]
+        if len(items) > len(shown):
+            shown.insert(0, f"... {len(items) - len(shown)} earlier decision(s) in session.json")
+        return shown or ["no AI decisions recorded"]
 
     def enemies_lines(self):
         scene = self.scene()
@@ -353,6 +395,8 @@ class PlaySession:
                 out.append(f"PASS expect {a['text']}")
         elif verb == "report":
             out.extend(self.report_lines()[0])
+        elif verb == "story":
+            out.extend(self.story_lines(a["limit"]))
         elif verb == "screenshot":
             out.append(self.screenshot(a["name"]))
         self.transcript.append({"cmd": src, "t": round(self.rt.now(), 2), "out": out})
@@ -391,7 +435,8 @@ class PlaySession:
         self._state_log.close()
         m = self.metrics()
         failed = [e for e in self.expects if not e[1]]
-        status = "CRASHED" if self.fatal else ("FAIL" if failed or self.collector.errors else "OK")
+        violations = self.invariants.report() if self.invariants is not None else []
+        status = "CRASHED" if self.fatal else ("FAIL" if failed or self.collector.errors or violations else "OK")
         run_id = self.out_dir.name
         repro = (f"python tools/agent_play.py --seed {self.args.seed} --render {self.args.render} "
                  f"--fps {self.args.fps} {shlex.quote(script_text)}")
@@ -402,6 +447,8 @@ class PlaySession:
             "final": m, "errors": self.collector.errors[:20], "warning_count": len(self.collector.warnings),
             "kills_list": self.kills.kills, "despawns_list": self.kills.despawns,
             "hypotheses": hyps, "forecast": fc, "fatal": self.fatal, "repro": repro,
+            "invariants": violations,
+            "story": self.story,
             "wall_s": round(self.rt.wall(), 2), "analysis_backend": analysis.kernels.BACKEND,
         }
         (self.out_dir / "session.json").write_text(json.dumps(session, indent=1, default=str), encoding="utf-8")
@@ -422,8 +469,10 @@ class PlaySession:
         lines = [
             f"RESULT status={status} t={m['t']}s hp={m['hp']}/{m['max_hp']} alive={m['alive']} lvl={m['lvl']} "
             f"kills={m['kills']} dealt={m['dealt']} taken={m['taken']} expects={passed}/{len(self.expects)} "
-            f"errors={len(self.collector.errors)} wall={self.rt.wall():.2f}s",
+            f"errors={len(self.collector.errors)} invariants={len(violations)} wall={self.rt.wall():.2f}s",
         ]
+        if violations:
+            lines += self.invariants.lines()[:8]
         if self.collector.errors:
             lines += ["errors (deduped):", *(f"  {line}" for line in analysis.digest_log(self.collector.errors, 5))]
         if status != "OK" or self.args.verbose:
@@ -472,7 +521,7 @@ def serve(session, port):
 
         def do_GET(self):
             route = self.path.split("?")[0]
-            if route in ("/observe", "/report", "/enemies"):
+            if route in ("/observe", "/report", "/enemies", "/story"):
                 self._ask(route[1:])
             else:
                 self._reply(__doc__.split("Примеры:")[0].strip(), 200 if route == "/" else 404)
@@ -535,6 +584,7 @@ def parse_args(argv=None):
     parser.add_argument("--sample-interval", type=float, default=rt_cfg["sample_interval"])
     parser.add_argument("--out", default=None, help="output dir (default dev_probe_output/play_<time>_xxxx)")
     parser.add_argument("--verbose", "-v", action="store_true", help="print PASS lines and the full report")
+    parser.add_argument("--no-invariants", action="store_true", help="skip per-frame world invariant checks")
     args = parser.parse_args(argv)
     if not args.serve and not (args.script or args.script_file):
         parser.error("give a script (inline or --script FILE) or --serve")

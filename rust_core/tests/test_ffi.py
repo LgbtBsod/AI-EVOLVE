@@ -119,3 +119,16 @@ def test_run_analytics_scan_hero_table():
 def test_run_analytics_log_digest():
     digest, distinct = rust_core.RunAnalytics.log_digest(["12:00:00 a 5", "12:00:01 a 7", "b"], 5)
     assert digest == [(2, "a 5"), (1, "b")] and distinct == 2
+
+
+# ---------------------------------------------------------------- QaKernels (tools/qa.py)
+
+def test_qa_kernels_reach_describe_fnv():
+    qa = rust_core.QaKernels
+    assert list(qa.reach(array("Q", [0, 1, 2, 2, 2]), array("Q", [1, 2]), array("Q", [0]))) == [1, 1, 1, 0]
+    d = qa.describe(array("d", [1.0, 2.0, 3.0, 4.0]), 200, 1)
+    assert d["n"] == 4 and d["mean"] == 2.5 and d["ci_lo"] <= 2.5 <= d["ci_hi"]
+    assert qa.fnv1a64_lines(b"ab", array("Q", [0, 0, 1, 2])) == [0xCBF29CE484222325, 0xAF63DC4C8601EC8C,
+                                                                  0xAF63DF4C8601F1A5]
+    with pytest.raises(ValueError):
+        qa.reach(array("Q", [0, 5]), array("Q", [1]), array("Q", [0]))
