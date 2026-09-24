@@ -10,7 +10,7 @@ import logging
 import random
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Any, Optional
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 

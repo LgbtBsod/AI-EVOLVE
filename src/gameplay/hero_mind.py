@@ -15,12 +15,11 @@ rust_core (тот же, что у врагов): выжил +0.4, доля ур�
 """
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Optional
 
-from .tactics import memory_path, new_bandit
+from .learning import BanditMemory, memory_path
 
 logger = logging.getLogger(__name__)
 
@@ -54,21 +53,24 @@ class HeroMind:
     def __init__(self, hero, path: Optional[Path] = None, backend: Optional[str] = None,
                  inventory_brain=None):
         self.hero = hero
-        self.path = path
         self.inventory_brain = inventory_brain
-        self.bandit = new_bandit(backend, c=0.5, decay=0.98, contexts=len(SITUATIONS), arms=len(STANCES))
-        self.episodes = 0
+        self.memory = BanditMemory(SITUATIONS, STANCES, path, backend, c=0.5, decay=0.98, count_key="episodes")
         self.baseline: Optional[float] = None
         self.episode: Optional[dict] = None
         self.stance: Optional[str] = None
         self.log: list[str] = []
-        if path is not None and path.exists():
-            try:
-                data = json.loads(path.read_text(encoding="utf-8"))
-                self.bandit.load_state(data["counts"], data["sums"])
-                self.episodes = int(data.get("episodes", 0))
-            except Exception as exc:
-                logger.warning("hero mind not loaded: %s", exc)
+
+    @property
+    def path(self) -> Optional[Path]:
+        return self.memory.path
+
+    @path.setter
+    def path(self, value: Optional[Path]) -> None:
+        self.memory.path = value
+
+    @property
+    def episodes(self) -> int:
+        return self.memory.count
 
     # ---------------------------------------------------------------- perception
     def hp_frac(self) -> float:
@@ -98,7 +100,7 @@ class HeroMind:
         if ep is None:
             if in_combat and frac <= self.low_hp() and self.hero.is_alive():
                 ctx = 1 if self.empowered() else 0
-                arm = self.bandit.select(ctx, None)
+                arm = self.memory.select(ctx)
                 drive = self._drive()
                 # ярость подталкивает давить, но не решает за героя: учится он на том, что выбрал
                 if drive is not None and STANCES[arm] == "retreat" and drive.press_bias > 0 \
@@ -139,29 +141,17 @@ class HeroMind:
             reward = 0.0
         else:
             reward = 0.4 + ep["dealt"] / (ep["dealt"] + ep["taken"] + 1.0) * 0.6 + 0.2 * min(2, ep["kills"])
-        self.bandit.update(ep["ctx"], ep["arm"], reward)
-        self.episodes += 1
+        self.memory.update(ep["ctx"], ep["arm"], reward)
         self.log.append(f"{SITUATIONS[ep['ctx']]}:{STANCES[ep['arm']]}={reward:.2f}")
         self._set_stance(None)
         return reward
 
     # ---------------------------------------------------------------- memory
     def lessons(self) -> dict[str, dict[str, float]]:
-        out = {}
-        for i, sit in enumerate(SITUATIONS):
-            means = self.bandit.means(i)
-            if any(means):
-                out[sit] = {s: round(m, 2) for s, m in zip(STANCES, means)}
-        return out
+        return self.memory.summary(skip_zero=False)
 
     def preferred(self, situation: str) -> Optional[str]:
-        means = self.bandit.means(SITUATIONS.index(situation))
-        return STANCES[max(range(len(STANCES)), key=lambda i: means[i])] if any(means) else None
+        return self.memory.best(situation)
 
     def save(self) -> None:
-        if self.path is None:
-            return
-        counts, sums = self.bandit.state()
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps({"counts": list(counts), "sums": list(sums), "episodes": self.episodes,
-                                         "stances": STANCES, "situations": SITUATIONS}), encoding="utf-8")
+        self.memory.save()

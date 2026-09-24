@@ -314,7 +314,7 @@ def _line(tag: str, b: Bout, name: str, head: str, trace: bool) -> str:
 
 def campaign(fights, args, gear, plan) -> int:
     """Жизни одного героя: с 1-го уровня по миру; разум (уроки) переходит в следующую жизнь."""
-    from src.gameplay.hero_mind import HeroMind, mind_path
+    from src.gameplay.hero_mind import mind_path
     mind = None
     for life in range(1, args.lives + 1):
         seed = args.seed + life - 1
