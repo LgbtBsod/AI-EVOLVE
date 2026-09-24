@@ -11,15 +11,15 @@
 """
 
 import logging
-from pathlib import Path
 
 from direct.gui.DirectGui import DirectWaitBar
 from direct.gui.OnscreenText import OnscreenText
 from panda3d.core import TextNode
 
+from src.ui.fonts import load_ui_font
+
 logger = logging.getLogger(__name__)
 
-FONT_PATH = Path(__file__).resolve().parents[2] / "assets" / "fonts" / "DejaVuSans.ttf"
 FEED_LINES = 6
 KEYS_HELP = ("F1-F6 эмоция · стрелки - сторона · C сундук · X выход · N NPC · Z снять подсказку · "
              "1/2/3/4 враг/ловушка/сундук/босс")
@@ -30,15 +30,7 @@ BARS = (("health", "max_health", (0.85, 0.15, 0.15, 1)),
 
 def _font(game):
     loader = getattr(game, "loader", None) or getattr(getattr(game, "showbase", None), "loader", None)
-    if loader is None or not FONT_PATH.exists():
-        return None
-    try:
-        font = loader.loadFont(str(FONT_PATH))
-        font.setPixelsPerUnit(60)
-        return font
-    except Exception as exc:  # шрифт - украшение, не причина падать
-        logger.warning("HUD font not loaded: %s", exc)
-        return None
+    return load_ui_font(loader)
 
 
 class EnhancedHUD:

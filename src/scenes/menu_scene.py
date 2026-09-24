@@ -6,42 +6,9 @@ import os
 import sys
 
 from src.scenes.scene_manager import Scene
+from src.ui.fonts import load_ui_font
 
 logger = logging.getLogger(__name__)
-
-# Встроенный шрифт Panda3D не содержит кириллицы - русские подписи без
-# системного TTF рендерятся пустыми. Берём первый найденный системный шрифт
-# (Windows / Linux / macOS), иначе меню падает обратно на английские подписи.
-_CYRILLIC_FONT_CANDIDATES = [
-    *(os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", name)
-      for name in ("segoeui.ttf", "arial.ttf", "tahoma.ttf")),
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
-    "/usr/share/fonts/TTF/DejaVuSans.ttf",
-    "/System/Library/Fonts/Supplemental/Arial.ttf",
-    "/Library/Fonts/Arial Unicode.ttf",
-]
-
-
-def _load_cyrillic_font(game):
-    from panda3d.core import Filename
-
-    for path in _CYRILLIC_FONT_CANDIDATES:
-        if not os.path.exists(path):
-            continue
-        # WINDIR даёт "C:\WINDOWS", а Panda3D сверяет регистр с реальной
-        # папкой "C:\Windows" и иначе "не находит" файл - makeTrueCase чинит.
-        # FontPool при этом принимает только str, не Filename.
-        filename = Filename.fromOsSpecific(path)
-        filename.makeTrueCase()
-        try:
-            font = game.loader.loadFont(filename.getFullpath())
-        except OSError:
-            continue
-        if font is not None and font.isValid():
-            return font
-    return None
-
 
 class MenuScene(Scene):
     """Главное меню игры: «Начать игру» (Enter) и «Выход» (Esc)."""
@@ -107,7 +74,7 @@ class MenuScene(Scene):
             self._previous_background = game.getBackgroundColor()
             game.setBackgroundColor(0.03, 0.035, 0.05, 1)
 
-        font = _load_cyrillic_font(game)
+        font = load_ui_font(game.loader)
         label_key = "text" if font is not None else "fallback"
         font_kwargs = {"text_font": font} if font is not None else {}
 

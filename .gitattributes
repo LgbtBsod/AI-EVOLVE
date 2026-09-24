@@ -1,0 +1,21 @@
+# Line endings: LF in the repo AND in the working tree on every OS.
+# Two Lua copies must be byte-identical (rust_core include_str! vs Python read_text) -
+# with core.autocrlf=true a Windows checkout turned one of them into CRLF and the
+# "Lua bridge parity" job failed. Only Windows launchers keep CRLF.
+* text=auto eol=lf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Binary files: never touch
+*.ttf binary
+*.otf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ogg binary
+*.wav binary
+*.egg binary
+*.bam binary
+*.db binary
+*.sqlite binary
