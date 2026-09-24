@@ -39,11 +39,13 @@ from __future__ import annotations
 
 import logging
 import math
+import operator
 import random
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Optional, Protocol
 
-from .runtime import EffectRuntime, Unit, buff_fields, compute_amount, resolve_value, rules
+from .ops import OpCall, Periodic, Tracked, apply_op, replace_contribution_game
+from .runtime import EffectRuntime, Unit, buff_fields, resolve_value, rules
 
 logger = logging.getLogger(__name__)
 
@@ -125,22 +127,53 @@ def is_alive(entity) -> bool:
     return bool(alive()) if callable(alive) else getattr(entity, "health", 0) > 0
 
 
+# ---- кэш итоговых статов: входы EntityState.refresh ------------------------------------------------------------
+# поля сущности, которые читает pull()/base_game(): STAT_MAP + оба имени скорости (какое из них - решает hasattr)
+_FIELD_NAMES = tuple(dict.fromkeys([attr for attr, _s, _o in STAT_MAP.values()] + ["speed", "move_speed"]))
+_CLAMPS = (("health", "max_health"),) + tuple((res, f"max_{res}") for res in POOLS)
+
+
+def _bit_same(a: float, b: float) -> bool:
+    """Бит-в-бит для float (NaN не равен ничему, знак нуля учитывается)."""
+    return a == b and (a != 0 or math.copysign(1.0, a) == math.copysign(1.0, b))
+
+
+@dataclass(slots=True)
+class StatCache:
+    """Для каких входов посчитаны итоговые статы сущности (см. EntityState.refresh)."""
+    version: int           # EntityState.version: equipment_stats / external / перестройка рантайма
+    unit_version: int      # Unit.version: любая запись в base / mods
+    rules: Any             # rules() - правила статов не перезагружались
+    t0: float              # время расчёта; кэш действует на [t0, valid_until)
+    valid_until: float     # ближайшее истечение временного слоя (external): в этот кадр пересчёт
+    getter: Any            # attrgetter по полям, которые у сущности есть (один вызов на кадр)
+    absent: tuple          # поля, которых у сущности нет: не должны появиться (hasattr в base_game)
+    fields: tuple          # значения полей после записи статов
+    attr_names: tuple      # характеристики уровня (rules()["attributes"])
+    alloc: tuple           # их значения у сущности (очки уровня)
+
+
 # ================================================================ entity state
 
 class EntityState:
     """Статы схемы одной сущности поверх её полей и рантайм её пассивов."""
 
+    # False: refresh всегда считает статы заново (сравнение с кэшем в тестах: результат бит-в-бит тот же)
+    stat_cache = True
+
     def __init__(self, entity, faction: str, abilities: Iterable[str] = ()):
         self.entity = entity
         self.faction = faction
         self.abilities = list(abilities)
+        self.version = 0                          # dirty-флаг входов статов (Tracked-словари, rebuild_runtime, touch)
+        self._cache: Optional[StatCache] = None
         self.unit = Unit(entity_id(entity), derive=True)   # характеристики -> статы (сила -> урон, HP)
         self.items: list = []
         self.item_effects: list[dict] = []        # все эффекты надетых предметов
         self.extra_effects: list[dict] = []       # действующие части расходников (Тоник ярости)
         self.perk_effects: list[dict] = []        # перки характеристик (lua_content/perks.lua)
-        self.equipment_stats: dict[str, float] = {}
-        self.external: dict[Any, tuple[float, dict[str, float]]] = {}   # ключ -> (до, {стат: вклад})
+        self._equipment_stats: Tracked = Tracked(self)
+        self._external: Tracked = Tracked(self)   # ключ -> (до, {стат: вклад})
         self.applied: dict[str, float] = {}
         self.cooldowns: dict[str, float] = {}      # способность -> когда готова
         self.fired_at: dict[str, float] = {}       # Effect.cooldown эффектов предметов
@@ -154,6 +187,29 @@ class EntityState:
             entity.lifesteal = 0.0
         if not hasattr(entity, "kills"):
             entity.kills = 0
+
+    # ---------------------------------------------------------------- dirty flag
+    def touch(self) -> None:
+        """Вход итоговых статов изменился: кэш refresh недействителен."""
+        self.version += 1
+
+    @property
+    def equipment_stats(self) -> Tracked:
+        return self._equipment_stats
+
+    @equipment_stats.setter
+    def equipment_stats(self, value: dict) -> None:
+        self._equipment_stats = Tracked(self, value)
+        self.touch()
+
+    @property
+    def external(self) -> Tracked:
+        return self._external
+
+    @external.setter
+    def external(self, value: dict) -> None:
+        self._external = Tracked(self, value)
+        self.touch()
 
     # ---------------------------------------------------------------- effects
     @property
@@ -173,6 +229,7 @@ class EntityState:
         ids = {ef["id"] for ef in self.all_effects()}
         self.runtime._op_contrib = {k: v for k, v in keep._op_contrib.items()
                                     if str(k[0]).split("#")[0].split("->")[0] in ids}
+        self.touch()
 
     def all_effects(self) -> list[dict]:
         return self.item_effects + self.extra_effects + self.perk_effects
@@ -195,21 +252,21 @@ class EntityState:
         # стат без поля у сущности (attack_range у манекена, custom:*) - каждый раз с
         # умолчания: иначе бонус предмета прибавлялся бы к базе на каждом refresh
         defaults = rules()["defaults"]
-        for k in list(u.base):
-            u.base[k] = float(defaults.get(k, 0.0))
+        new = {k: float(defaults.get(k, 0.0)) for k in u.base}
         for stat, (attr, scale, shift) in STAT_MAP.items():
             if attr in base:
-                u.base[stat] = base[attr] * scale + shift
-        u.base["move_speed"] = base.get(self._speed_attr(), float(defaults.get("move_speed", 5.0)))
+                new[stat] = base[attr] * scale + shift
+        new["move_speed"] = base.get(self._speed_attr(), float(defaults.get("move_speed", 5.0)))
         allocated = getattr(self.entity, "attributes", None) or {}
         for attr in rules()["attributes"]:
-            u.base[attr] = float(allocated.get(attr, 0.0))   # очки уровня; предметы/эффекты - поверх
+            new[attr] = float(allocated.get(attr, 0.0))   # очки уровня; предметы/эффекты - поверх
         for k, v in self.equipment_stats.items():
-            u.base[k] = u.base.get(k, 0.0) + v
+            new[k] = new.get(k, 0.0) + v
         for until, layer in self.external.values():
             if until > now:
                 for k, v in layer.items():
-                    u.base[k] = u.base.get(k, 0.0) + v
+                    new[k] = new.get(k, 0.0) + v
+        u.assign_base(new)                    # version растёт только если база и правда изменилась
         self.pull_resources()
         return base
 
@@ -237,19 +294,84 @@ class EntityState:
             value = max(0.0, u._eff("move_speed"))
             self.applied[speed] = value - base[speed]
             setattr(e, speed, value)
-        for res in ("health",) + POOLS:
-            cap = getattr(e, "max_health" if res == "health" else f"max_{res}", None)
+        self._clamp_resources()
+
+    def _clamp_resources(self) -> None:
+        """Текущее значение ресурса не выше максимума (игра могла поднять HP/ману, не глядя на потолок)."""
+        e = self.entity
+        for res, cap_attr in _CLAMPS:
+            cap = getattr(e, cap_attr, None)
             if cap is not None and getattr(e, res, 0) > cap:
                 setattr(e, res, cap)
 
     def refresh(self, now: float) -> None:
+        """Пересчитать статы сущности. Итог - функция входов (поля сущности, очки характеристик, надетое, временные
+        слои по времени, правила); пока ни один не менялся, а прошлый расчёт был неподвижной точкой (повтор дал бы те же
+        значения бит-в-бит), статы не пересчитываются: обновляются только ресурсы и потолки (они меняются каждый кадр)."""
+        cache = self._cache if self.stat_cache else None
+        if cache is not None and self._cache_hit(cache, now):
+            self.runtime._now = now
+            self.pull_resources()
+            self._clamp_resources()
+            return
+        passive = bool(self.runtime.effects or self.runtime._op_contrib)
         base = self.pull(now)
         self.runtime._now = now
-        if self.runtime.effects or self.runtime._op_contrib:
+        if passive:                       # пассивы/условия зависят от HP, времени, баффов: считаем каждый раз
             self.runtime.refresh_passives(now)
         else:
             self.unit.mods = {}
         self.push_stats(base)
+        self._cache = self._make_cache(now, base) if self.stat_cache and not passive else None
+
+    def _cache_hit(self, c: StatCache, now: float) -> bool:
+        if not (c.t0 <= now < c.valid_until and c.version == self.version and c.unit_version == self.unit.version):
+            return False
+        if self.runtime.effects or self.runtime._op_contrib or c.rules is not rules():
+            return False
+        return self._inputs_same(c)
+
+    def _inputs_same(self, c: StatCache) -> bool:
+        """Поля сущности и очки характеристик те же, что при расчёте (игра их не трогала с прошлого кадра)."""
+        e = self.entity
+        try:
+            fields = c.getter(e)
+        except AttributeError:
+            return False
+        if fields != c.fields or any(hasattr(e, name) for name in c.absent):
+            return False
+        allocated = getattr(e, "attributes", None) or {}
+        return tuple([allocated.get(a, 0.0) for a in c.attr_names]) == c.alloc
+
+    def _fixed_point(self, base: dict[str, float]) -> bool:
+        """Повторный расчёт без изменений извне даст те же значения бит-в-бит: то, что прочитал бы СЛЕДУЮЩИЙ
+        refresh (поле - вклад), совпадает с базой этого. Иначе (дрейф в последнем бите) кэшировать нельзя."""
+        nxt = self.base_game()
+        return nxt.keys() == base.keys() and all(_bit_same(nxt[k], base[k]) for k in base)
+
+    def _field_probe(self) -> Optional[tuple]:
+        """(attrgetter по имеющимся полям, отсутствующие имена, значения) - или None, если кэшировать нечем."""
+        e = self.entity
+        present = tuple(n for n in _FIELD_NAMES if hasattr(e, n))
+        if len(present) < 2:                  # attrgetter одного поля возвращает не кортеж
+            return None
+        getter = operator.attrgetter(*present)
+        try:
+            fields = getter(e)
+        except AttributeError:
+            return None
+        return getter, tuple(n for n in _FIELD_NAMES if n not in present), fields
+
+    def _make_cache(self, now: float, base: dict[str, float]) -> Optional[StatCache]:
+        probe = self._field_probe()
+        if probe is None or not self._fixed_point(base):
+            return None
+        r = rules()
+        names = tuple(r["attributes"])
+        allocated = getattr(self.entity, "attributes", None) or {}
+        return StatCache(self.version, self.unit.version, r, now,
+                         min((until for until, _l in self.external.values() if until > now), default=math.inf),
+                         *probe, names, tuple([allocated.get(a, 0.0) for a in names]))
 
     # ---------------------------------------------------------------- queries
     def invulnerable(self, now: float) -> bool:
@@ -626,60 +748,117 @@ class EffectManager:
                 self._run_op(st, tgt_st, o, ctx, f"{src}", idx, tags, hits, primary)
 
     def _run_op(self, st, tgt_st, o, ctx, src, idx, tags, hits, primary) -> None:
-        kind = o.get("kind")
-        other = tgt_st is not st
-        default_stat = ("enemy_" if other else "") + (o.get("stat") or "hp") if o.get("stat") else None
-        amount = compute_amount(o, ctx, default_stat)
-        flags = set(o.get("flags") or ()) | ({"reflect"} if "reflect" in tags else set())
-        if kind in ("deal", "heal") and o.get("every") and o.get("duration"):
-            every = max(0.1, float(resolve_value(o["every"], ctx) if isinstance(o["every"], dict) else o["every"]))
-            tgt_st.periodic.append({"kind": kind, "stat": o.get("stat") or "hp", "amount": amount, "every": every,
-                                    "next": self.now + every, "until": self.now + self._duration(o["duration"], ctx),
-                                    "flags": sorted(flags), "source": st.entity, "ability": src})
-            return
-        if kind == "deal":
-            res = o.get("stat") or "hp"
-            if res == "hp":
-                hit = self._damage(st, tgt_st, amount, flags, src, tags)
-                if hit:
-                    hits.append(hit)
-            else:
-                self._spend(tgt_st, res, amount)
-        elif kind == "heal":
-            self._heal(tgt_st, o.get("stat") or "hp", amount)
-        elif kind == "drain":
-            res = o.get("stat") or "hp"
-            if amount > tgt_st.resource(res):
-                self._run_ops(st, o.get("fail") or [], primary, src + ".fail", tags, hits)
-            else:
-                self._spend(tgt_st, res, amount, lethal=True)
-        elif kind == "set":
-            self._set_resource(tgt_st, o.get("stat") or "hp", amount)
-        elif kind == "mod":
-            self._mod(st, tgt_st, o, ctx, src, idx)
-        elif kind == "buff":
-            self._buff(st, tgt_st, o, ctx, src)
-        elif kind == "extend":
-            b = tgt_st.unit.buffs.get(o.get("buff_id"))
-            ext = o.get("extend") or (b or {}).get("extend") or {}
-            if b and (not ext.get("on") or src.endswith("#" + ext["on"])):
-                b["until"] += float(ext.get("flat", 0.0))
-        elif kind == "remove_buff":
-            tgt_st.unit.buffs.pop(o.get("buff_id"), None)
-        elif kind == "apply_effect":
-            ef = next((e for e in st.all_effects() if e.get("id") == o.get("buff_id")), None) \
-                or self.ability(o.get("buff_id"))
-            if ef:
-                self._run_ops(st, ef.get("ops") or [], primary, f"{src}->{ef['id']}", tags, hits)
-        elif kind == "kill":
-            if is_alive(tgt_st.entity):
-                hit = self._damage(st, tgt_st, tgt_st.resource("hp"), {"true_damage", "no_crit", "unavoidable"}, src, tags)
-                if hit:
-                    hits.append(hit)
-        elif kind == "summon":
-            self._summon(st, o, ctx)
-        elif kind == "move":
-            self._move(st, tgt_st, o, primary)
+        """Одна операция на одной цели: общий интерпретатор ops.apply_op; цели, области, телеграфы - выше."""
+        apply_op(self, OpCall(ctx=ctx, src=src, t=self.now, source=st, key=(src, idx), tags=tags,
+                              hits=hits, primary=primary), tgt_st, o)
+
+    # OpHost: примитивы для обработчиков ops.py (сущности игры: урон, кулдауны, мир) ----------------------
+    @staticmethod
+    def _flags(o: dict, tags: tuple) -> set:
+        return set(o.get("flags") or ()) | ({"reflect"} if "reflect" in tags else set())
+
+    def op_stat_prefix(self, cx: OpCall, tgt: EntityState) -> str:
+        return "enemy_" if tgt is not cx.source else ""
+
+    def op_periodic_ok(self, o: dict) -> bool:
+        return bool(o.get("duration"))
+
+    def op_duration(self, d, ctx: dict) -> float:
+        return self._duration(d, ctx)
+
+    def op_add_periodic(self, cx: OpCall, tgt: EntityState, o: dict, p: Periodic) -> None:
+        tgt.periodic.append({"kind": p.kind, "stat": o.get("stat") or "hp", "amount": p.amount, "every": p.every,
+                             "next": self.now + p.every, "until": p.until,
+                             "flags": sorted(self._flags(o, cx.tags)), "source": cx.source.entity, "ability": cx.src})
+
+    def op_resource(self, tgt: EntityState, res: str) -> float:
+        return tgt.resource(res)
+
+    def op_damage(self, cx: OpCall, tgt: EntityState, o: dict, amount: float) -> None:
+        hit = self._damage(cx.source, tgt, amount, self._flags(o, cx.tags), cx.src, cx.tags)
+        if hit:
+            cx.hits.append(hit)
+
+    def op_spend(self, _cx: OpCall, tgt: EntityState, res: str, amount: float, lethal: bool) -> None:
+        self._spend(tgt, res, amount, lethal=lethal)
+
+    def op_heal(self, _cx: OpCall, tgt: EntityState, res: str, amount: float) -> None:
+        self._heal(tgt, res, amount)
+
+    def op_set_resource(self, _cx: OpCall, tgt: EntityState, stat: Optional[str], amount: float) -> None:
+        self._set_resource(tgt, stat or "hp", amount)
+
+    def op_mod(self, cx: OpCall, tgt: EntityState, o: dict) -> None:
+        st = cx.source
+        if o.get("toward") == "source":
+            if tgt is not st:      # обзор цели в сторону заклинателя (стелс); на себя смысла не имеет
+                self._mod_vision(cx, tgt, o)
+        elif o.get("duration") is not None or tgt is not st:
+            self._mod_timed(cx, tgt, o)
+        else:
+            self._mod_event(cx, st, o)
+
+    def _mod_until(self, o: dict, ctx: dict) -> float:
+        return self.now + (self._duration(o["duration"], ctx) if o.get("duration") is not None
+                           else DEFAULT_DEBUFF_SECONDS)
+
+    def _mod_vision(self, cx: OpCall, tgt: EntityState, o: dict) -> None:
+        st = cx.source
+        scratch: dict[str, float] = {}
+        st.runtime._apply_mod(o, cx.ctx, tgt.unit, sink=scratch)
+        tgt.vision_vs[(entity_id(st.entity), cx.src, cx.key[1])] = (
+            self._mod_until(o, cx.ctx), entity_id(st.entity), scratch.get(o.get("stat"), 0.0))
+
+    def _mod_timed(self, cx: OpCall, tgt: EntityState, o: dict) -> None:
+        st = cx.source
+        scratch: dict[str, float] = {}
+        st.runtime._apply_mod(o, cx.ctx, tgt.unit, sink=scratch)
+        tgt.external[(entity_id(st.entity), cx.src, cx.key[1])] = (self._mod_until(o, cx.ctx), scratch)
+        tgt.refresh(self.now)
+
+    def _mod_event(self, cx: OpCall, st: EntityState, o: dict) -> None:
+        # событийный мод на себя: вклад операции заменяет прошлый (диалект игры - см. ops.replace_contribution)
+        replace_contribution_game(st.runtime._op_contrib, cx.key, st.unit, o.get("stat"),
+                                  lambda: st.runtime._apply_mod(o, cx.ctx, st.unit))
+        st.refresh(self.now)
+
+    def op_buffs(self, tgt: EntityState) -> dict:
+        return tgt.unit.buffs
+
+    def op_granted(self, cx: OpCall) -> dict:
+        return cx.source.buff_granted_at
+
+    def op_buff_record(self, _cx: OpCall, o: dict, until: float, _cd: Optional[float]) -> dict:
+        return {"until": until, "extend": o.get("extend"), "flags": list(o.get("flags") or [])}
+
+    def op_after_buff(self, _cx: OpCall, tgt: EntityState, _bid, _o: dict) -> None:
+        tgt.refresh(self.now)
+
+    def op_extend(self, cx: OpCall, _bid, ext: dict, buff: dict) -> None:
+        if not ext.get("on") or cx.src.endswith("#" + ext["on"]):
+            buff["until"] += float(ext.get("flat", 0.0))
+
+    def op_find_effect(self, cx: OpCall, eid) -> Optional[dict]:
+        return next((e for e in cx.source.all_effects() if e.get("id") == eid), None) or self.ability(eid)
+
+    def op_nested(self, cx: OpCall, ops: list, suffix: str, _keep_event: bool) -> None:
+        self._run_ops(cx.source, ops, cx.primary, cx.src + suffix, cx.tags, cx.hits)
+
+    def op_kill(self, cx: OpCall, tgt: EntityState) -> None:
+        if is_alive(tgt.entity):
+            hit = self._damage(cx.source, tgt, tgt.resource("hp"), {"true_damage", "no_crit", "unavoidable"},
+                               cx.src, cx.tags)
+            if hit:
+                cx.hits.append(hit)
+
+    def op_summon(self, cx: OpCall, o: dict) -> None:
+        self._summon(cx.source, o, cx.ctx)
+
+    def op_move(self, cx: OpCall, tgt: EntityState, o: dict) -> None:
+        self._move(cx.source, tgt, o, cx.primary)
+
+    def op_note(self, cx: OpCall, what: str, *args) -> None:
+        """В игре лога операций нет (его ведёт только тренировочная комната)."""
 
     def _duration(self, d, ctx) -> float:
         if isinstance(d, (int, float)):
@@ -694,48 +873,6 @@ class EffectManager:
                 base += steps * float((s.get("value") or {}).get("flat", 0.0)) * float(s.get("factor", 1.0))
             return base
         return DEFAULT_DEBUFF_SECONDS
-
-    def _mod(self, st, tgt_st, o, ctx, src, idx) -> None:
-        stat = o.get("stat")
-        if o.get("toward") == "source":
-            # обзор цели в сторону заклинателя (стелс); на себя смысла не имеет
-            if tgt_st is not st:
-                scratch: dict[str, float] = {}
-                st.runtime._apply_mod(o, ctx, tgt_st.unit, sink=scratch)
-                until = self.now + (self._duration(o["duration"], ctx) if o.get("duration") is not None
-                                    else DEFAULT_DEBUFF_SECONDS)
-                tgt_st.vision_vs[(entity_id(st.entity), src, idx)] = (until, entity_id(st.entity),
-                                                                     scratch.get(stat, 0.0))
-            return
-        timed = o.get("duration") is not None or tgt_st is not st
-        if not timed:
-            # событийный мод на себя: вклад операции заменяет прошлый (семантика схемы)
-            before = st.unit.mods.get(stat, 0.0)
-            key = (src, idx)
-            old = st.runtime._op_contrib.get(key)
-            if old:
-                st.unit.mods[old[1]] = st.unit.mods.get(old[1], 0.0) - old[2]
-            st.runtime._apply_mod(o, ctx, st.unit)
-            st.runtime._op_contrib[key] = (st.unit, stat, st.unit.mods.get(stat, 0.0) - before)
-            st.refresh(self.now)
-            return
-        scratch: dict[str, float] = {}
-        st.runtime._apply_mod(o, ctx, tgt_st.unit, sink=scratch)
-        until = self.now + (self._duration(o["duration"], ctx) if o.get("duration") is not None else DEFAULT_DEBUFF_SECONDS)
-        tgt_st.external[(entity_id(st.entity), src, idx)] = (until, scratch)
-        tgt_st.refresh(self.now)
-
-    def _buff(self, st, tgt_st, o, ctx, src) -> None:
-        bid = o.get("buff_id")
-        cd = resolve_value(o["cooldown"], ctx) if o.get("cooldown") else None
-        granted = st.buff_granted_at.get(bid)
-        if cd is not None and granted is not None and self.now - granted < cd:
-            return
-        prev = tgt_st.unit.buffs.get(bid)
-        until = max(prev.get("until", self.now) if prev else self.now, self.now) + self._duration(o.get("duration"), ctx)
-        st.buff_granted_at[bid] = self.now
-        tgt_st.unit.buffs[bid] = {"until": until, "extend": o.get("extend"), "flags": list(o.get("flags") or [])}
-        tgt_st.refresh(self.now)
 
     def _summon(self, st, o, ctx) -> None:
         if self.world is None or not hasattr(self.world, "spawn_summon"):

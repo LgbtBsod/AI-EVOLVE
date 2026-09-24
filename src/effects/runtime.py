@@ -30,6 +30,10 @@ import operator as _op
 from functools import lru_cache
 from typing import Any, Callable, Optional
 
+from .ops import (_ALLOWED_CTX, OpCall, Periodic, Tracked, _hp_missing_below_40, apply_mod_math, apply_op,  # noqa: F401 - re-exported
+                  compute_amount, ctx_get as _ctx_get, default_stat_of, extend_amount, replace_contribution,
+                  resolve_value, same_map)
+
 # ---------------------------------------------------------------- stat rules
 
 # Те же значения, что lua_content/effect_rules.lua (действуют без Lua-бэкенда)
@@ -72,19 +76,10 @@ def rules() -> dict[str, dict]:
 
 # ---------------------------------------------------------------- predicates
 
-def _hp_missing_below_40(ctx) -> float:
-    """Псевдо-стат: сколько % HP не хватает ПОРОГУ 40% (0..40)."""
-    return max(0.0, 40.0 - ctx.get("hp_pct", 100.0))
-
-
 def named_predicates() -> dict[str, str]:
     """Именованные условия: имя -> выражение (lua_content/effect_rules.lua -> predicates).
     Одно определение для Python и для Lua (lua_gen кладёт их в реестр PRED файла)."""
     return dict(rules()["predicates"])
-
-_ALLOWED_CTX: dict[str, Callable[[dict], float]] = {
-    "hp_missing_below_40": _hp_missing_below_40,
-}
 
 class PrediciationException(ValueError):
     """Выражение-предикат не проходит строгую whitelist-грамматику."""
@@ -244,60 +239,7 @@ def eval_pred(pred: Optional[Any], ctx: dict) -> bool:
     return bool(compile_pred(named if named is not None else pred)(ctx))
 
 
-# ---------------------------------------------------------------- values
-
-def resolve_value(v: dict, ctx: dict, default_stat: Optional[str] = None) -> float:
-    if v is None:
-        return 0.0
-    if "flat" in v and v["flat"] is not None:
-        return float(v["flat"])
-    if "pct" in v and v["pct"] is not None:
-        of = v.get("of") or default_stat
-        base = _ctx_get(ctx, of)
-        return float(v["pct"]) / 100.0 * base
-    if "ref" in v and v["ref"]:
-        path = v["ref"]
-        if path.startswith("ctx."):
-            path = path[4:]
-        # только dict-навигация по whitelist-полям (без getattr — см. аудит:
-        # getattr допускал обход вида "__class__.__subclasses__")
-        cur: Any = ctx
-        for part in path.split("."):
-            if not isinstance(cur, dict):
-                raise KeyError(f"ref {v['ref']!r}: cannot descend into {type(cur).__name__}")
-            cur = _ctx_get(cur, part)
-        return float(cur)
-    return 0.0
-
-
-def _ctx_get(ctx: dict, key: Optional[str]) -> float:
-    if key is None:
-        return 0.0
-    if key in ctx:
-        return float(ctx[key])
-    if key in _ALLOWED_CTX:
-        return float(_ALLOWED_CTX[key](ctx))
-    raise KeyError(f"unknown ctx field {key!r}")
-
-
-def compute_amount(op: dict, ctx: dict, default_stat: Optional[str] = None) -> float:
-    """Итог: base + floor(steps)*value*factor, steps из scale.
-    default_stat: откуда брать pct без `of` (по умолчанию - стат операции у владельца;
-    для цели-врага рантайм передаёт enemy_<стат>)."""
-    default_stat = default_stat or op.get("stat")
-    total = resolve_value(op.get("value"), ctx, default_stat)
-    s = op.get("scale")
-    if s:
-        steps = _ctx_get(ctx, s["of"]) / float(s["every"])
-        steps = math.floor(steps)
-        if s.get("cap") is not None:
-            steps = min(steps, float(s["cap"]))
-        if s.get("floor") is not None:
-            steps = max(steps, float(s["floor"]))
-        total += steps * resolve_value(s.get("value"), ctx, default_stat) \
-                 * float(s.get("factor", 1.0))
-    return total
-
+# значения (resolve_value, compute_amount ...) и обработчики операций - src/effects/ops.py
 
 # ---------------------------------------------------------------- unit
 
@@ -309,9 +251,15 @@ class Unit:
     def __init__(self, name: str, max_hp: float = 1000.0, derive: bool = False, **stats):
         r = rules()
         self.name = name
-        self.base: dict[str, float] = {k: float(v) for k, v in r["defaults"].items()}
-        self.base["max_hp"] = float(max_hp)
-        self.base.update({k: float(v) for k, v in stats.items()})
+        # dirty-флаг: version растёт при ЛЮБОЙ записи в base / mods (Tracked) и при touch(); от него зависит
+        # кэш итоговых статов (_eff) - и кэши владельцев (EntityState.refresh)
+        self.version = 0
+        self._eff_memo: dict[str, float] = {}
+        self._eff_ver = 0
+        self._base: Tracked = Tracked(self, {k: float(v) for k, v in r["defaults"].items()})
+        self._mods: Tracked = Tracked(self)      # mod-эффекты (add/sub/mul/div)
+        self._base["max_hp"] = float(max_hp)
+        self._base.update({k: float(v) for k, v in stats.items()})
         self.bounds: dict[str, dict] = r["bounds"]
         # производные статы от характеристик (effect_rules.lua -> attributes): стат -> [(характеристика, за очко)].
         # derive=True - игра (менеджер эффектов): сила даёт урон и HP, и hp_pct условий считается
@@ -322,13 +270,43 @@ class Unit:
                 self.derived.setdefault(stat, []).append((attr, float(k)))
         # ресурс -> {max: стат максимума, regen: стат регена в секунду}
         self.resources: dict[str, dict] = r["resources"]
-        self.mods: dict[str, float] = {}          # mod-эффекты (add/sub/mul/div)
         self.current_hp = self._eff("max_hp")     # hp отдельно: его читает весь код комнаты
         self.pools: dict[str, float] = {}         # прочие ресурсы: mana, stamina
         self.refill()
         self.buffs: dict[str, dict] = {}          # buff_id -> {until, ...}
         self.alive = True
         self.kills = 0
+
+    # dirty flag ----------------------------------------------------------
+    def touch(self) -> None:
+        """Вход итоговых статов изменился (base / mods / bounds / derived): кэш _eff недействителен."""
+        self.version += 1
+
+    @property
+    def base(self) -> Tracked:
+        return self._base
+
+    @base.setter
+    def base(self, value: dict) -> None:
+        self._base = Tracked(self, value)
+        self.touch()
+
+    @property
+    def mods(self) -> Tracked:
+        return self._mods
+
+    @mods.setter
+    def mods(self, value: dict) -> None:
+        if not same_map(value, self._mods):     # то же содержимое (в т.ч. знак нуля) - ничего не менялось
+            self._mods = Tracked(self, value)
+            self.touch()
+
+    def assign_base(self, new: dict) -> None:
+        """Заменить содержимое base целиком (EntityState.pull): version растёт, только если оно изменилось."""
+        if not same_map(new, self._base):
+            dict.clear(self._base)
+            dict.update(self._base, new)
+            self.touch()
 
     # effective stats -----------------------------------------------------
     def stat(self, key: str) -> float:
@@ -339,9 +317,22 @@ class Unit:
         return self._eff(key)
 
     def _eff(self, key: str) -> float:
-        v = self.base.get(key, 0.0) + self.mods.get(key, 0.0)
+        """Итоговый стат: (base + mods + вклад характеристик) в границах. Кэш по version: пока base/mods не менялись,
+        повторный вызов - чтение словаря (те же float-операции, что и при вычислении - бит-в-бит)."""
+        memo = self._eff_memo
+        if self._eff_ver != self.version:
+            memo.clear()
+            self._eff_ver = self.version
+        v = memo.get(key)
+        if v is None:
+            v = memo[key] = self._eff_calc(key)
+        return v
+
+    def _eff_calc(self, key: str) -> float:
+        base, mods = self._base, self._mods
+        v = base.get(key, 0.0) + mods.get(key, 0.0)
         for attr, k in self.derived.get(key, ()):     # сила -> урон и HP, живучесть -> HP ...
-            v += (self.base.get(attr, 0.0) + self.mods.get(attr, 0.0)) * k
+            v += (base.get(attr, 0.0) + mods.get(attr, 0.0)) * k
         b = self.bounds.get(key)
         if b:
             v = min(max(v, b.get("min", -math.inf)), b.get("max", math.inf))
@@ -413,6 +404,23 @@ class Unit:
 
 
 # ---------------------------------------------------------------- runtime
+
+# строки лога тренировочной комнаты по видам записи (аргументы - как их передают обработчики ops.py)
+_NOTES: dict[str, Callable[..., str]] = {
+    "deal": lambda tg, res, amount: f"deal {amount:.2f} -> {tg.name} {res}={tg.resource(res):.1f}",
+    "heal": lambda tg, res, amount: f"heal {amount:.2f} -> {res}={tg.resource(res):.1f}",
+    "set": lambda tg, res: f"set {res}={tg.resource(res):.1f}",
+    "drain_fail": lambda tg, res, cost, have: f"drain FAIL (cost {cost:.2f} > {res} {have:.1f})",
+    "drain": lambda tg, res, cost: f"drain {cost:.2f} -> {res}={tg.resource(res):.1f}",
+    "buff_cooldown": lambda bid: f"buff {bid} ON COOLDOWN",
+    "buff": lambda bid, dur, until: f"buff {bid} +{dur:.1f}s (until {until:.1f})",
+    "remove_buff": lambda bid: f"remove_buff {bid}",
+    "extend_skip": lambda bid, ext, ev: f"extend {bid}: on={ext['on']} != event={ev!r} -> skip",
+    "periodic": lambda kind, amount, every: f"{kind} over time {amount:.2f} every {every:g}s",
+    "summon": lambda o: f"summon {o.get('summon')} x{o.get('count', 1)} (no world in training room)",
+    "move": lambda o: f"move {o.get('mode')} (no world in training room)",
+}
+
 
 class EffectRuntime:
     """Прогон эффектов схемы по юниту. Логирует каждое действие (для теста)."""
@@ -766,140 +774,120 @@ class EffectRuntime:
 
     def run_op(self, o: dict, ctx: dict, t: float, src: str,
                event: Optional[str] = None, op_key: Optional[tuple] = None):
-        kind = o.get("kind")
+        """Одна операция схемы на юните тренировки: `when` -> цель -> общий интерпретатор (ops.apply_op)."""
         if o.get("when") and not self._test(o["when"], ctx):
             return
         target = self._resolve_target(o.get("target", "self"))
         if target is None:
             return
-        amount = compute_amount(o, ctx, self._default_stat(o, target))
+        apply_op(self, OpCall(ctx=ctx, src=src, t=t, source=self.owner, event=event, key=op_key), target, o)
 
-        if kind in ("deal", "heal") and o.get("every") and o.get("duration") is not None:
-            # DoT/HoT: те же правила, что в менеджере эффектов игры - тик каждые every с
-            every = max(0.1, float(o["every"]))
-            self._periodic.append({"op": {k: v for k, v in o.items() if k not in ("every", "duration")},
-                                   "target": target, "amount": amount, "every": every, "next": t + every,
-                                   "until": t + self._duration(o["duration"], ctx), "src": src})
-            self.log.append(f"t={t:.1f} {src} {kind} over time {amount:.2f} every {every:g}s")
-            return
-        if kind in ("summon", "move"):
-            what = f"summon {o.get('summon')} x{o.get('count', 1)}" if kind == "summon" else f"move {o.get('mode')}"
-            self.log.append(f"t={t:.1f} {src} {what} (no world in training room)")
-            return
+    # OpHost: примитивы для обработчиков ops.py (изолированный Unit + лог для теста) --------------------
+    def op_stat_prefix(self, _cx: OpCall, tgt: Unit) -> str:
+        return self._prefix(tgt)
 
-        if kind == "mod":
-            # Событийная mod-операция задаёт СВОЙ текущий вклад: прошлый вклад
-            # этой же операции снимается, новый записывается в _op_contrib.
-            # Дельта меряется вокруг одной операции: вложенные события и
-            # пересборка пассивного слоя в неё не попадают.
-            stat = o.get("stat")
-            key = op_key if op_key is not None else (src, id(o))
-            old_unit, old_stat, old = self._op_contrib.get(key, (target, stat, 0.0))
-            if old:
-                old_unit.mods[old_stat] = old_unit.mods.get(old_stat, 0.0) - old
-            before = target.mods.get(stat, 0.0)
-            self._apply_mod(o, ctx, target)
-            self._op_contrib[key] = (target, stat, target.mods.get(stat, 0.0) - before)
-            target.clamp_resources()  # мод max_hp вниз: текущее HP не выше нового максимума
-        elif kind == "heal":
-            res = o.get("stat") or "hp"
-            target.heal(amount, res)
-            self.log.append(f"t={t:.1f} {src} heal {amount:.2f} -> {res}={target.resource(res):.1f}")
-        elif kind == "deal":
-            res = o.get("stat") or "hp"
-            if res == "hp":
-                target.deal_damage(amount, log=self._dmg_log(target))
-            else:  # mana burn
-                target.set_resource(res, target.resource(res) - amount)
-            self.log.append(f"t={t:.1f} {src} deal {amount:.2f} -> {target.name} {res}={target.resource(res):.1f}")
-        elif kind == "set":
-            res = o.get("stat")
-            if res in target.resources:
-                target.set_resource(res, amount)
-                self.log.append(f"t={t:.1f} {src} set {res}={target.resource(res):.1f}")
-        elif kind == "drain":
-            res = o.get("stat") or "hp"
-            cost, have = amount, target.resource(res)
-            if cost > have:
-                self.log.append(f"t={t:.1f} {src} drain FAIL (cost {cost:.2f} > {res} {have:.1f})")
-                self.run_ops(o.get("fail", []), ctx, t, src + ".fail", event=event)
-            else:
-                target.set_resource(res, have - cost)  # ровно до 0 HP - смерть (раньше alive оставался True)
-                self.log.append(f"t={t:.1f} {src} drain {cost:.2f} -> {res}={target.resource(res):.1f}")
-        elif kind == "buff":
-            bid = o.get("buff_id")
-            prev = target.buffs.get(bid)
-            # кулдаун на повторную активацию щита/баффа
-            cd = resolve_value(o.get("cooldown"), ctx) if o.get("cooldown") else None
-            granted = self._buff_granted_at.get(bid)
-            if cd is not None and granted is not None and t - granted < cd:
-                self.log.append(f"t={t:.1f} {src} buff {bid} ON COOLDOWN")
-                return
-            dur = self._duration(o.get("duration"), ctx)
-            until = max(prev.get("until", t) if prev else t, t) + dur
-            self._buff_granted_at[bid] = t
-            target.buffs[bid] = {"until": until, "extend": o.get("extend"),
-                                 "cooldown": cd, "last_cd": t, "flags": list(o.get("flags") or [])}
-            self.log.append(f"t={t:.1f} {src} buff {bid} +{dur:.1f}s (until {until:.1f})")
-            # декларация extend внутри ops-buff: срабатывает при событии ext["on"]
-            ext = o.get("extend") or {}
-            if ext and event and event == ext.get("on"):
-                self._extend_buff(target, bid, ext, ctx, t, src)
-        elif kind == "extend":
-            bid = o.get("buff_id")
-            b = target.buffs.get(bid)
-            if b:
-                ext = o.get("extend") or b.get("extend") or {}
-                ev = event
-                if ev is None and "#" in src:
-                    # fallback: событие зашито в src вида "effect#event(.fail)"
-                    ev = src.rsplit("#", 1)[-1].split(".", 1)[0]
-                # фильтр по событию: extend срабатывает только на ext["on"]
-                if ext.get("on") and ev != ext.get("on"):
-                    self.log.append(
-                        f"t={t:.1f} {src} extend {bid}: on={ext['on']} "
-                        f"!= event={ev!r} -> skip")
-                    return
-                self._extend_buff(target, bid, ext, ctx, t, src, buff_obj=b)
-        elif kind == "remove_buff":
-            target.buffs.pop(o.get("buff_id"), None)
-            self.log.append(f"t={t:.1f} {src} remove_buff {o.get('buff_id')}")
-        elif kind == "apply_effect":
-            eid = o.get("buff_id")  # apply_effect использует buff_id как effect id
-            ef = next((e for e in self.effects if e.get("id") == eid), None)
-            if ef:
-                self.run_ops(ef.get("ops", []), ctx, t, f"{src}->{eid}")
-        elif kind == "kill":
-            was_alive = target.alive and target.current_hp > 0
-            if was_alive:
-                # фиксируем фактический урон "добиания" в ctx.last_damage,
-                # чтобы heal по ref/pct-of last_damage (лifesteal на execute)
-                # считался от реального снятого HP, а не от заявленного dmg
-                if target is self.enemy:
-                    self.last_damage = target.current_hp
-            target.deal_damage(target.current_hp, log=self._dmg_log(target))
-            if was_alive:
-                if target is self.owner:
-                    self.log.append(f"t={t:.1f} {src} KILL {target.name} (self!)"
-                                    " -- revive/set-hp ops must follow")
-                    self.fire_event("die", t)
-                else:
-                    # Инкремент kills здесь — ЕДИНСТВЕННЫЙ для целей, убитых
-                    # ops-эффектом (execute). Флаг сообщает циклу attack(),
-                    # что килл уже засчитан и событие "kill" разослано, —
-                    # иначе счётчик удвоился бы (см. attack()).
-                    self.owner.kills += 1
-                    if target is self.enemy:
-                        self._killed_this_attack = True
-                    self.log.append(f"t={t:.1f} {src} KILL {target.name}")
-                    # каскад событий: die у жертвы / kill у владельца
-                    if target is self.enemy:
-                        self.fire_event("kill", t)
-            # NOTE про единый счётчик kills: run_op("kill") инкрементирует
-            # kills ЗДЕСЬ; цикл attack() засчитывает киллы только когда цель
-            # умерла от базового удара (см. комментарий в attack()). Флаг
-            # _killed_this_attack связывает оба пути и исключает двойной
-            # подсчёт execute-убийств (judgement и т.п.).
+    def op_periodic_ok(self, o: dict) -> bool:
+        return o.get("duration") is not None
+
+    def op_duration(self, d, ctx: dict) -> float:
+        return self._duration(d, ctx)
+
+    def op_add_periodic(self, cx: OpCall, tgt: Unit, o: dict, p: Periodic) -> None:
+        self._periodic.append({"op": {k: v for k, v in o.items() if k not in ("every", "duration")},
+                               "target": tgt, "amount": p.amount, "every": p.every, "next": cx.t + p.every,
+                               "until": p.until, "src": cx.src})
+        self.op_note(cx, "periodic", p.kind, p.amount, p.every)
+
+    def op_resource(self, tgt: Unit, res: str) -> float:
+        return tgt.resource(res)
+
+    def op_damage(self, _cx: OpCall, tgt: Unit, _o: dict, amount: float) -> None:
+        tgt.deal_damage(amount, log=self._dmg_log(tgt))
+
+    def op_spend(self, _cx: OpCall, tgt: Unit, res: str, amount: float, _lethal: bool) -> None:
+        tgt.set_resource(res, tgt.resource(res) - amount)
+
+    def op_heal(self, _cx: OpCall, tgt: Unit, res: str, amount: float) -> None:
+        tgt.heal(amount, res)
+
+    def op_set_resource(self, cx: OpCall, tgt: Unit, stat: Optional[str], amount: float) -> None:
+        if stat in tgt.resources:
+            tgt.set_resource(stat, amount)
+            self.op_note(cx, "set", tgt, stat)
+
+    def op_mod(self, cx: OpCall, tgt: Unit, o: dict) -> None:
+        # Событийная mod-операция задаёт СВОЙ текущий вклад: прошлый вклад этой же операции снимается,
+        # новый записывается в _op_contrib. Дельта меряется вокруг одной операции: вложенные события
+        # и пересборка пассивного слоя в неё не попадают.
+        key = cx.key if cx.key is not None else (cx.src, id(o))
+        replace_contribution(self._op_contrib, key, tgt, o.get("stat"), lambda: self._apply_mod(o, cx.ctx, tgt))
+        tgt.clamp_resources()  # мод max_hp вниз: текущее HP не выше нового максимума
+
+    def op_buffs(self, tgt: Unit) -> dict:
+        return tgt.buffs
+
+    def op_granted(self, _cx: OpCall) -> dict:
+        return self._buff_granted_at
+
+    def op_buff_record(self, cx: OpCall, o: dict, until: float, cd: Optional[float]) -> dict:
+        return {"until": until, "extend": o.get("extend"), "cooldown": cd, "last_cd": cx.t,
+                "flags": list(o.get("flags") or [])}
+
+    def op_after_buff(self, cx: OpCall, tgt: Unit, bid, o: dict) -> None:
+        # декларация extend внутри ops-buff: срабатывает при событии ext["on"]
+        ext = o.get("extend") or {}
+        if ext and cx.event and cx.event == ext.get("on"):
+            self._extend_buff(tgt, bid, ext, cx.ctx, cx.t, cx.src)
+
+    def op_extend(self, cx: OpCall, bid, ext: dict, buff: dict) -> None:
+        ev = cx.event
+        if ev is None and "#" in cx.src:
+            # fallback: событие зашито в src вида "effect#event(.fail)"
+            ev = cx.src.rsplit("#", 1)[-1].split(".", 1)[0]
+        # фильтр по событию: extend срабатывает только на ext["on"]
+        if ext.get("on") and ev != ext.get("on"):
+            self.op_note(cx, "extend_skip", bid, ext, ev)
+            return
+        self._extend_buff(None, bid, ext, cx.ctx, cx.t, cx.src, buff_obj=buff)
+
+    def op_find_effect(self, _cx: OpCall, eid) -> Optional[dict]:
+        return next((e for e in self.effects if e.get("id") == eid), None)
+
+    def op_nested(self, cx: OpCall, ops: list, suffix: str, keep_event: bool) -> None:
+        self.run_ops(ops, cx.ctx, cx.t, cx.src + suffix, event=cx.event if keep_event else None)
+
+    def op_kill(self, cx: OpCall, tgt: Unit) -> None:
+        t, src = cx.t, cx.src
+        was_alive = tgt.alive and tgt.current_hp > 0
+        if was_alive and tgt is self.enemy:
+            # фактический урон "добиания" - в ctx.last_damage: heal по ref/pct-of last_damage
+            # (лайфстил на execute) считается от реального снятого HP, а не от заявленного dmg
+            self.last_damage = tgt.current_hp
+        tgt.deal_damage(tgt.current_hp, log=self._dmg_log(tgt))
+        if not was_alive:
+            return
+        if tgt is self.owner:
+            self.log.append(f"t={t:.1f} {src} KILL {tgt.name} (self!) -- revive/set-hp ops must follow")
+            self.fire_event("die", t)
+            return
+        # Инкремент kills здесь - ЕДИНСТВЕННЫЙ для целей, убитых ops-эффектом (execute). Флаг сообщает
+        # циклу attack(), что килл уже засчитан и событие "kill" разослано, - иначе счётчик удвоился бы.
+        self.owner.kills += 1
+        if tgt is self.enemy:
+            self._killed_this_attack = True
+        self.log.append(f"t={t:.1f} {src} KILL {tgt.name}")
+        if tgt is self.enemy:
+            self.fire_event("kill", t)      # каскад: kill у владельца
+
+    def op_summon(self, cx: OpCall, o: dict) -> None:
+        self.op_note(cx, "summon", o)
+
+    def op_move(self, cx: OpCall, _tgt: Unit, o: dict) -> None:
+        self.op_note(cx, "move", o)
+
+    def op_note(self, cx: OpCall, what: str, *args) -> None:
+        self.log.append(f"t={cx.t:.1f} {cx.src} " + _NOTES[what](*args))
+
 
     # helpers -----------------------------------------------------------------
     def _extend_buff(self, target, bid: str, ext: dict, ctx: dict,
@@ -908,17 +896,13 @@ class EffectRuntime:
         b = buff_obj if buff_obj is not None else target.buffs.get(bid)
         if b is None:
             return
-        add = resolve_value(
-            {"flat": ext["flat"]} if ext.get("flat") is not None
-            else {"pct": ext.get("pct"), "of": ext.get("of", "max_hp")}
-            if ext.get("pct") is not None else {}, ctx)
+        add = extend_amount(ext, ctx)
         b["until"] += add
         self.log.append(f"t={t:.1f} {src} extend {bid} +{add:.1f}s")
 
     def _default_stat(self, o: dict, unit: Unit) -> Optional[str]:
         """pct без `of` - процент от того же стата ЦЕЛИ операции."""
-        stat = o.get("stat")
-        return stat and self._prefix(unit) + stat
+        return default_stat_of(o, self._prefix(unit))
 
     def _apply_mod(self, o: dict, ctx: dict, unit: Unit,
                    sink: Optional[dict] = None, mult: float = 1.0):
@@ -929,23 +913,7 @@ class EffectRuntime:
         mo = o.get("op") or "add"  # op не задан (или null из формы) - add; раньше мод молча не применялся
         if mo in ("add", "sub"):
             amount *= mult  # Effect.amplify (Lost My Self при 1 HP)
-        dst = unit.mods if sink is None else sink
-        cur = dst.get(stat, 0.0)
-        base = unit.base.get(stat, 0.0)
-        if mo == "add":
-            dst[stat] = cur + amount
-        elif mo == "sub":
-            dst[stat] = cur - amount
-        elif mo == "mul":
-            dst[stat] = (base + cur) * amount - base
-        elif mo == "div":
-            dst[stat] = (base + cur) / amount - base if amount else cur
-        elif mo == "set":
-            dst[stat] = amount - base
-        elif mo == "min":
-            dst[stat] = min(base + cur, amount) - base
-        elif mo == "max":
-            dst[stat] = max(base + cur, amount) - base
+        apply_mod_math(unit.mods if sink is None else sink, unit.base.get(stat, 0.0), stat, mo, amount)
 
     def _duration(self, d, ctx) -> float:
         if d is None:
