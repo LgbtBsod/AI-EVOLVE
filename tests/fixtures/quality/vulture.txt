@@ -1,0 +1,5 @@
+src\core\a.py:300: unused variable 'max_events' (100% confidence)
+src\db\c.py:18: unused import 'Engine' (90% confidence)
+src/db/c.py:192: unused variable 'dbapi_conn' (100% confidence)
+src/db/c.py:50: unreachable code after 'return' (100% confidence)
+not a vulture line

@@ -1,0 +1,46 @@
+=============
+Import Linter
+=============
+
+
+---------
+Contracts
+---------
+
+Analyzed 110 files, 146 dependencies.
+-------------------------------------
+
+layers BROKEN (3 ignored imports, 1 warning)
+
+Contracts: 0 kept, 1 broken.
+
+--------
+Warnings
+--------
+
+layers
+------
+
+- No matches for ignored import src.entities.character -> 
+src.gameplay.nonexistent.
+
+
+----------------
+Broken contracts
+----------------
+
+layers
+------
+
+src.entities is not allowed to import src.gameplay:
+
+- src.entities.character -> src.gameplay.progression (l.1272)
+
+- src.entities.character -> src.gameplay.hero_drive (l.894)
+
+
+src.core is not allowed to import src.entities:
+
+- src.core.entity_manager -> src.entities.base_entity (l.14)
+   src.entities.base_entity -> src.core.helper (l.3)
+

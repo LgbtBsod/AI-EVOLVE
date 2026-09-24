@@ -1,0 +1,350 @@
+{
+ "dup_defs": {
+  "CombatStats": [
+   "src/core/validation.py",
+   "src/systems/combat/combat_system.py"
+  ],
+  "EntityState": [
+   "src/core/constants.py",
+   "src/effects/manager.py",
+   "src/entities/base_entity.py"
+  ],
+  "EventData": [
+   "src/core/event_system.py",
+   "src/core/validation.py"
+  ],
+  "WeatherType": [
+   "src/core/constants.py",
+   "src/features/dynamic_weather.py"
+  ]
+ },
+ "files": {
+  "main.py": {
+   "BLE001": 1
+  },
+  "src/__init__.py": {
+   "F401": 4
+  },
+  "src/core/__init__.py": {
+   "F401": 4
+  },
+  "src/core/architecture.py": {
+   "PLW0603": 2,
+   "SIM102": 2
+  },
+  "src/core/base_plugin.py": {
+   "BLE001": 2,
+   "F401": 1,
+   "F841": 2
+  },
+  "src/core/cache.py": {
+   "ARG002": 1,
+   "F401": 2,
+   "PLW0108": 1,
+   "RET504": 1
+  },
+  "src/core/circuit_breaker.py": {
+   "SIM102": 1
+  },
+  "src/core/constants.py": {
+   "dup_defs": 2
+  },
+  "src/core/event_system.py": {
+   "ARG002": 2,
+   "dup_defs": 1,
+   "vulture": 1
+  },
+  "src/core/game_core.py": {
+   "BLE001": 4,
+   "C901": 1,
+   "PLR0911": 1,
+   "SIM102": 1
+  },
+  "src/core/renderer.py": {
+   "ARG002": 2,
+   "PLR0913": 3,
+   "RET505": 1
+  },
+  "src/core/rng_manager.py": {
+   "PLW0603": 3
+  },
+  "src/core/state_manager.py": {
+   "BLE001": 5,
+   "PLR0913": 1,
+   "SIM102": 1
+  },
+  "src/core/stats_loader.py": {
+   "F401": 1
+  },
+  "src/core/validation.py": {
+   "B904": 3,
+   "dup_defs": 2
+  },
+  "src/database/db_core.py": {
+   "ARG002": 2,
+   "BLE001": 1,
+   "F401": 5,
+   "F841": 4,
+   "PLW0108": 3,
+   "vulture": 9
+  },
+  "src/database/game_database.py": {
+   "BLE001": 8,
+   "PLR0913": 2,
+   "PLW2901": 2
+  },
+  "src/effects/abilities.py": {
+   "BLE001": 2
+  },
+  "src/effects/manager.py": {
+   "ARG002": 2,
+   "B007": 1,
+   "B009": 1,
+   "BLE001": 2,
+   "C901": 4,
+   "PLR0911": 1,
+   "PLR0912": 1,
+   "PLR0913": 5,
+   "SIM114": 1,
+   "dup_defs": 1
+  },
+  "src/effects/runtime.py": {
+   "ARG002": 2,
+   "B007": 1,
+   "B905": 1,
+   "BLE001": 1,
+   "C901": 2,
+   "PLR0911": 1,
+   "PLR0912": 2,
+   "PLR0913": 2,
+   "PLR0915": 1,
+   "SIM102": 1
+  },
+  "src/entities/base_entity.py": {
+   "ARG002": 2,
+   "BLE001": 4,
+   "dup_defs": 1
+  },
+  "src/entities/character.py": {
+   "ARG002": 2,
+   "BLE001": 1,
+   "C901": 5,
+   "F401": 1,
+   "F841": 1,
+   "PLR0911": 1,
+   "PLR0912": 2,
+   "PLR0913": 4,
+   "PLR0915": 1,
+   "RET505": 2,
+   "RUF012": 1,
+   "SIM102": 2,
+   "vulture": 1
+  },
+  "src/entities/enemy.py": {
+   "PLR0913": 2,
+   "RET505": 1,
+   "RUF012": 1,
+   "SIM102": 1
+  },
+  "src/features/adaptive_anticipation.py": {
+   "RET505": 1,
+   "SIM102": 1
+  },
+  "src/features/dynamic_weather.py": {
+   "dup_defs": 1
+  },
+  "src/features/genetic_memory.py": {
+   "ARG002": 1
+  },
+  "src/features/terraforming.py": {
+   "ARG002": 1
+  },
+  "src/gameplay/enemy_ai.py": {
+   "C901": 2,
+   "PLR0911": 2,
+   "PLR0912": 2,
+   "PLR0913": 1
+  },
+  "src/gameplay/hero_drive.py": {
+   "BLE001": 1,
+   "PERF403": 1,
+   "PLR0911": 1
+  },
+  "src/gameplay/inventory.py": {
+   "C901": 1,
+   "PLR0913": 1,
+   "SIM102": 1
+  },
+  "src/gameplay/items.py": {
+   "BLE001": 1
+  },
+  "src/gameplay/learning.py": {
+   "B905": 2,
+   "BLE001": 1,
+   "PLR0913": 1
+  },
+  "src/gameplay/loot.py": {
+   "B007": 1,
+   "BLE001": 1,
+   "PERF102": 1
+  },
+  "src/gameplay/progression.py": {
+   "BLE001": 2
+  },
+  "src/gameplay/world.py": {
+   "BLE001": 1,
+   "PLR0913": 1
+  },
+  "src/scenes/__init__.py": {
+   "F401": 4
+  },
+  "src/scenes/main_game_scene.py": {
+   "ARG002": 9,
+   "B007": 3,
+   "BLE001": 4,
+   "C901": 3,
+   "F401": 1,
+   "F841": 3,
+   "PERF401": 1,
+   "PLR0912": 1,
+   "PLR0913": 3,
+   "PLR0915": 2,
+   "SIM105": 1,
+   "vulture": 1
+  },
+  "src/scenes/menu_scene.py": {
+   "F401": 1
+  },
+  "src/scenes/scene_manager.py": {
+   "BLE001": 17,
+   "C901": 1,
+   "SIM102": 2
+  },
+  "src/systems/__init__.py": {
+   "F401": 4
+  },
+  "src/systems/attributes/attribute_system.py": {
+   "ARG002": 1,
+   "BLE001": 8
+  },
+  "src/systems/combat/combat_system.py": {
+   "BLE001": 1,
+   "SIM102": 1,
+   "dup_defs": 1
+  },
+  "src/systems/combat/components/combat_stats_component.py": {
+   "ARG002": 1
+  },
+  "src/systems/combat/components/health_component.py": {
+   "RET504": 1
+  },
+  "src/systems/combat/refactored_combat_system.py": {
+   "ARG002": 1,
+   "vulture": 1
+  },
+  "src/systems/effects/effect_system.py": {
+   "ARG002": 1,
+   "BLE001": 12,
+   "PLW0108": 4,
+   "PLW2901": 1,
+   "RET504": 1,
+   "RET505": 1,
+   "SIM102": 4
+  },
+  "src/ui/fonts.py": {
+   "BLE001": 1
+  },
+  "src/ui/health_bar.py": {
+   "F401": 2
+  },
+  "src/ui/hud.py": {
+   "B905": 1
+  }
+ },
+ "functions": {
+  "src/core/game_core.py::GameCore.start": 13,
+  "src/effects/manager.py::EffectManager._damage": 22,
+  "src/effects/manager.py::EffectManager._move": 13,
+  "src/effects/manager.py::EffectManager._run_op": 44,
+  "src/effects/manager.py::EffectManager._targets": 24,
+  "src/effects/manager.py::EffectManager.can_cast": 15,
+  "src/effects/manager.py::EffectManager.cast": 12,
+  "src/effects/manager.py::EffectManager.emit": 24,
+  "src/effects/manager.py::EffectManager.update": 20,
+  "src/effects/manager.py::EffectManager.use_item": 16,
+  "src/effects/manager.py::EntityState.pull": 11,
+  "src/effects/runtime.py::EffectRuntime._apply_mod": 12,
+  "src/effects/runtime.py::EffectRuntime.attack": 11,
+  "src/effects/runtime.py::EffectRuntime.fire_event": 16,
+  "src/effects/runtime.py::EffectRuntime.run_op": 56,
+  "src/effects/runtime.py::_compile": 29,
+  "src/effects/runtime.py::_lua_pow": 12,
+  "src/effects/runtime.py::resolve_value": 12,
+  "src/effects/runtime.py::run_step": 15,
+  "src/entities/character.py::Character._select_best_exit_target": 14,
+  "src/entities/character.py::Character._update_ai_driven": 17,
+  "src/entities/character.py::Character._use_skills_via_manager": 12,
+  "src/entities/character.py::Character.attack": 16,
+  "src/entities/character.py::Character.update_ai": 19,
+  "src/entities/character.py::Character.use_skill_automatically": 25,
+  "src/entities/enemy.py::EnhancedEnemy.attack": 16,
+  "src/gameplay/enemy_ai.py::AttackSlots.request": 11,
+  "src/gameplay/enemy_ai.py::EnemyBrain._goal": 26,
+  "src/gameplay/enemy_ai.py::EnemyBrain.update": 27,
+  "src/gameplay/hero_mind.py::HeroMind.update": 18,
+  "src/gameplay/inventory.py::InventoryBrain.update": 19,
+  "src/gameplay/items.py::ItemDef.from_lua": 16,
+  "src/gameplay/learning.py::PyBandit.select": 12,
+  "src/gameplay/loot.py::outfit": 12,
+  "src/gameplay/world.py::WorldPlan.info": 11,
+  "src/gameplay/world.py::make_enemy": 12,
+  "src/scenes/main_game_scene.py::EnhancedGameScene._advance_to_next_level": 17,
+  "src/scenes/main_game_scene.py::EnhancedGameScene._check_exit_beacon_reached": 12,
+  "src/scenes/main_game_scene.py::EnhancedGameScene._consume_reached_echo_points": 11,
+  "src/scenes/main_game_scene.py::EnhancedGameScene._track_tricks": 12,
+  "src/scenes/main_game_scene.py::EnhancedGameScene._update_inventories": 11,
+  "src/scenes/main_game_scene.py::EnhancedGameScene.exit": 13,
+  "src/scenes/main_game_scene.py::EnhancedGameScene.handle_input": 15,
+  "src/scenes/main_game_scene.py::EnhancedGameScene.nudge_hero": 11,
+  "src/scenes/main_game_scene.py::EnhancedGameScene.update": 24,
+  "src/scenes/scene_manager.py::SceneManager.load_scene": 13,
+  "src/ui/hud.py::EnhancedHUD.update_hud": 13
+ },
+ "rules": {
+  "ARG002": 30,
+  "B007": 6,
+  "B009": 1,
+  "B904": 3,
+  "B905": 4,
+  "BLE001": 81,
+  "C901": 19,
+  "F401": 30,
+  "F841": 10,
+  "PERF102": 1,
+  "PERF401": 1,
+  "PERF403": 1,
+  "PLR0911": 7,
+  "PLR0912": 8,
+  "PLR0913": 26,
+  "PLR0915": 4,
+  "PLW0108": 8,
+  "PLW0603": 5,
+  "PLW2901": 3,
+  "RET504": 3,
+  "RET505": 6,
+  "RUF012": 2,
+  "SIM102": 18,
+  "SIM105": 1,
+  "SIM114": 1
+ },
+ "totals": {
+  "blind_except": 81,
+  "cc11": 47,
+  "cc_max": 56,
+  "dup_defs": 4,
+  "layers_broken": 10,
+  "ruff": 279,
+  "vulture": 13
+ },
+ "version": 1
+}

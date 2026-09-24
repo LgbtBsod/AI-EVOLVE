@@ -50,8 +50,15 @@ jobs:
         run: xvfb-run -a python tools/boot_smoke_test.py
       # One line per check + a `QA verdict` header (lua_content/qa.lua, tools/qa_report.py);
       # `python tools/qa.py ci` extracts these lines from the log of a failed run.
+      - name: QA layer tests (uniform report, CI log reader, quality ratchet)
+        run: python -m pytest -q tests/test_qa_report.py tests/test_qa_ci.py tests/test_quality_check.py
       - name: QA verdict (qa.py check --ci)
         run: python tools/qa.py check --ci --no-cache
+      # SOLID/DRY/SRP/SSOT ratchet: ruff + radon + vulture + import-linter vs tests/quality_baseline.json (tools/quality_metrics.py).
+      # The counts do not depend on the OS, so one run is enough. Failing? `python tools/qa.py quality --worst 10` lists the offenders.
+      - name: Code-quality ratchet (new violations fail)
+        if: runner.os == 'Linux'
+        run: python tools/qa.py check --name quality --no-cache
 
   rust:
     name: rust_core (${{ matrix.os }})

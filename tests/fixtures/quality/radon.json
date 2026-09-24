@@ -1,0 +1,13 @@
+{
+  "src/a.py": [
+    {"type": "function", "rank": "C", "lineno": 10, "endline": 60, "col_offset": 0, "name": "big", "complexity": 13, "closures": []},
+    {"type": "function", "rank": "A", "lineno": 70, "endline": 75, "col_offset": 0, "name": "small", "complexity": 5, "closures": []},
+    {"type": "method", "rank": "D", "lineno": 90, "endline": 150, "col_offset": 4, "name": "run", "classname": "Runner", "complexity": 25,
+     "closures": [{"type": "function", "rank": "C", "lineno": 100, "endline": 120, "col_offset": 8, "name": "inner", "complexity": 11, "closures": []}]},
+    {"type": "class", "rank": "F", "lineno": 80, "endline": 160, "col_offset": 0, "name": "Runner", "complexity": 45, "methods": [], "inner_classes": []}
+  ],
+  "src/b.py": [
+    {"type": "method", "rank": "C", "lineno": 5, "name": "x", "classname": "K", "complexity": 11, "closures": []},
+    {"type": "method", "rank": "C", "lineno": 30, "name": "x", "classname": "K", "complexity": 12, "closures": []}
+  ]
+}

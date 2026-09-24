@@ -5,3 +5,9 @@ pytest>=8.0     # tests/
 Pillow>=10.0    # tools/dev_probe.py: blank-frame detection, contact sheet, GIF
 maturin>=1.9    # builds rust_core (see rust_core/README.md; needs rustup + MSVC Build Tools)
 setuptools>=70  # python setup.py build_apps (Panda3D standalone builds)
+# Code-quality ratchet (tools/quality_metrics.py, `qa.py check --name quality`): EXACT pins - a new ruff rule or another radon/vulture
+# score would move the counts recorded in tests/quality_baseline.json.
+ruff==0.16.8
+vulture==2.16
+radon==6.0.1
+import-linter==2.15

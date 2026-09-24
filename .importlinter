@@ -1,0 +1,41 @@
+# Intended layering of src/ (import-linter, run by `qa.py check --name quality`; or just `lint-imports`).
+# A layer may import the layers BELOW it, never above. `a | b` = same level, must not import each other;
+# `a : b` = same level, may import each other (engine services around one shared core).
+#
+#   scenes | features        entry level: screens and plugins
+#   ui                       widgets/HUD: used by scenes, never by the domain
+#   gameplay | entities      domain
+#   systems : effects : content : database    engine services
+#   core                     infrastructure (constants, events, config) - imports nothing above it
+#
+# ignore_imports = the BASELINE: violations that exist today. The quality ratchet fails when this list grows or a
+# new upward import appears; fix an edge, then delete its line (a stale line only warns, and the baseline count drops).
+[importlinter]
+root_packages =
+    src
+include_external_packages = False
+
+[importlinter:contract:layers]
+name = layers
+type = layers
+layers =
+    src.scenes | src.features
+    src.ui
+    src.gameplay | src.entities
+    src.systems : src.effects : src.content : src.database
+    src.core
+unmatched_ignore_imports_alerting = warn
+ignore_imports =
+    # baseline: infrastructure imports the game (core -> scenes / database / entities)
+    src.core.game_core -> src.scenes.scene_manager
+    src.core.game_core -> src.database.db_core
+    src.core.entity_manager -> src.entities.base_entity
+    src.core.entity_manager -> src.entities.character
+    src.core.entity_manager -> src.entities.enemy
+    # baseline: entities import UI and gameplay (health bar, progression, hero drive)
+    src.entities.character -> src.ui.health_bar
+    src.entities.enemy -> src.ui.health_bar
+    src.entities.character -> src.gameplay.progression
+    src.entities.character -> src.gameplay.hero_drive
+    # baseline: gameplay and entities are one level but import each other
+    src.gameplay.world -> src.entities.enemy

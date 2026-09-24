@@ -133,7 +133,10 @@ return {
     detail_lines = 3,       -- строк деталей у упавшей проверки (первая - в её строке)
     line_width = 150,       -- деталь в строке обрезается до стольких символов
     delta_pct = 15, delta_abs = 1,
-    delta = { dealt = { pct = 10, abs = 5 }, taken = { pct = 10, abs = 5 }, hp = { pct = 10, abs = 5 }, kills = { pct = 0, abs = 1 } },
+    delta = { dealt = { pct = 10, abs = 5 }, taken = { pct = 10, abs = 5 }, hp = { pct = 10, abs = 5 }, kills = { pct = 0, abs = 1 },
+              -- quality ratchet: any move of a count is news
+              ruff = { pct = 0, abs = 1 }, blind_except = { pct = 0, abs = 1 }, cc11 = { pct = 0, abs = 1 }, cc_max = { pct = 0, abs = 1 },
+              dup_defs = { pct = 0, abs = 1 }, layers_broken = { pct = 0, abs = 1 }, vulture = { pct = 0, abs = 1 }, improved = { pct = 0, abs = 1 } },
     delta_ignore = { "dur", "wall", "t" },
     history_keep = 400,     -- строк в dev_probe_output/qa/history.jsonl
     cache_hours = 24,       -- кэш результатов старше - не используется
@@ -195,6 +198,96 @@ return {
       pattern = { [[(?P<md>\d+) markdown files]], [[STALE=(?P<stale>\d+)]], [[CHECK=(?P<review>\d+)]] },
       cost = "low", ci = false, tags = { "hygiene" }, what = "markdown files whose references point at missing/dead code (informational count)",
       watches = { "**/*.md", "**/*.py" } },
+    -- Code-quality ratchet: the logic is tools/quality_metrics.py, the data is the `quality` table below. It prints detail lines, `repro:` and one
+    -- RESULT line (`qa.py quality --result`); `ci = false`: CI runs it once on Linux (`check --name quality --no-cache`), not on every OS.
+    { name = "quality", cmd = "python tools/qa.py quality --result", parse = "result_line", cost = "low", ci = false,
+      needs = { "ruff", "radon", "vulture", "importlinter" }, tags = { "hygiene", "quality" }, detail = [[^(?!RESULT |repro:)\S]],
+      what = "SOLID/DRY/SRP/SSOT ratchet: ruff + radon CC + vulture + import-linter layers + duplicate definitions vs tests/quality_baseline.json (a NEW violation fails)",
+      watches = { "src/**/*.py", "main.py", "pyproject.toml", ".importlinter", "tests/quality_baseline.json", "lua_content/qa.lua",
+                  "tools/quality_metrics.py", "tools/qa_plugins/quality.py" } },
+  },
+
+  -- ===== code-quality RATCHET (tools/quality_metrics.py) =====
+  -- `qa.py check --name quality` | `qa.py quality --worst N | --explain RULE | --update-baseline [--force]`.
+  -- SOLID/DRY/SRP/SSOT violations cannot grow: today's ones are the baseline (tests/quality_baseline.json, per metric, per file, per function);
+  -- a NEW one fails, an improvement is reported (`improved=N`) and ratcheted down by --update-baseline (it refuses to raise a number without --force).
+  -- Tools (nothing re-implemented): ruff (rules below; numeric limits in pyproject.toml), radon (cyclomatic complexity), vulture (dead code),
+  -- import-linter (.importlinter: layers; its `ignore_imports` IS the layering baseline), plus a ~20-line ast detector for duplicated definitions.
+  quality = {
+    baseline = "tests/quality_baseline.json",
+    -- Scope: live game modules = qa_graph.liveness == 'game' (reachable from main.py), recomputed every run - no file list to maintain.
+    scope = { liveness = "game", exclude = { "setup.py" } },   -- setup.py = Panda3D build script, an entry point but not a game module
+    ruff = {
+      select = { "C901", "PLR0911", "PLR0912", "PLR0913", "PLR0915", "SIM", "PERF", "RET", "B", "BLE", "E722", "F401", "F841", "ARG002", "PLW", "RUF012" },
+      groups = { blind_except = { "BLE001", "E722" } },        -- derived metric = sum of these rules
+    },
+    cc = { min = 11 },                                         -- radon rank C+: metric cc<min> = functions with CC >= min, cc_max = the worst
+    vulture = { min_confidence = 80 },
+    -- Duplicated top-level definitions across live modules (DRY/SSOT): class names and UPPER_CONSTANTS defined in >= 2 modules.
+    -- allow = names (or "Name@src/x.py") that are duplicated on purpose.
+    dup_defs = { const_pattern = [=[^[A-Z][A-Z0-9_]+$]=], allow = {} },
+    layers = { config = ".importlinter" },
+    budget = { worst = 10, findings = 6, argv_chars = 24000 }, -- default --worst N, detail lines of a failure, max chars of one tool command line (Windows: 32k)
+    -- SRP hints for `--worst`: the first row whose `over` is below the function's CC; a module with many complex functions gets `srp_module`.
+    cc_hints = {
+      { over = 40, hint = "CC>40: split by op kind (one handler per op + a dispatch table)" },
+      { over = 25, hint = "CC>25: one helper per branch group; if/elif chains -> table lookup" },
+      { over = 15, hint = "CC>15: guard clauses (early return) + extract the loop/branch bodies" },
+      { over = 0,  hint = "CC>10: extract the nested branch into a named helper" },
+    },
+    srp_module = { cc11 = 3, hint = "SRP: {n} functions with CC>10 - split the module by responsibility" },
+    -- What each rule means and the usual fix (`qa.py quality --explain RULE`; `hint` = the short form shown by --worst).
+    -- Not listed here: `ruff rule CODE` is shown instead.
+    rules = {
+      BLE001 = { hint = "catch the specific exceptions", what = "`except Exception` (blind except) hides real bugs together with the expected failure.",
+                 fix = "catch what can actually happen (OSError, ValueError, KeyError...); a broad catch is only for a plugin/tool boundary: log with logger.exception and add `# noqa: BLE001 - reason`." },
+      E722 = { hint = "no bare except", what = "bare `except:` also swallows KeyboardInterrupt and SystemExit.",
+               fix = "name the exception; at the very least `except Exception:` with logging." },
+      F401 = { hint = "delete unused imports", what = "imported name is never used (dead dependency, slower import, false coupling).",
+               fix = "delete the import; for a deliberate re-export list it in __all__; for an optional-dependency probe use importlib.util.find_spec." },
+      F841 = { hint = "drop the unused local", what = "local variable is assigned but never read.",
+               fix = "delete the assignment (keep the call if it has a side effect) or bind to `_`." },
+      ARG002 = { hint = "drop/underscore the unused argument", what = "method argument is never used (a signature that promises more than it does).",
+                 fix = "remove the parameter and fix the callers; if an interface/override dictates it, keep it and add `# noqa: ARG002 - interface`." },
+      PLR0913 = { hint = "group arguments into a dataclass", what = "function takes more than 5 arguments (one function knows too many details: SRP/ISP).",
+                  fix = "bundle the related arguments into a small dataclass/config object, make the rest keyword-only (`*`)." },
+      PLR0912 = { hint = "split branches by case", what = "more than 12 branches in one function.",
+                  fix = "one function per case + a dispatch dict, or polymorphism when the branches switch on a type." },
+      PLR0911 = { hint = "fewer exits: table lookup", what = "more than 6 return statements in one function.",
+                  fix = "replace the if-chain by a dict lookup or split the function; keep guard-clause returns, merge the rest." },
+      PLR0915 = { hint = "extract the steps", what = "more than 50 statements in one function.",
+                  fix = "extract each stage into a helper named for what it does; the original becomes a readable outline." },
+      C901 = { hint = "extract branches", what = "McCabe complexity above 10 (too many independent paths to test).",
+               fix = "guard clauses, one helper per branch group, table lookup instead of if/elif chains." },
+      SIM102 = { hint = "merge nested ifs", what = "`if a:` containing only `if b:` (nested ifs that can be one condition).",
+                 fix = "`if a and b:` (one level less; ruff can autofix, run `ruff check --select SIM102 --fix FILE`)." },
+      SIM114 = { hint = "merge equal branches", what = "two if-branches have an identical body.", fix = "combine the conditions with `or`." },
+      SIM105 = { hint = "contextlib.suppress", what = "`try/except X: pass`.", fix = "`with contextlib.suppress(X):` - says what is ignored and why." },
+      PLW0108 = { hint = "pass the callable itself", what = "lambda that only forwards to another callable.", fix = "use the callable directly (`map(str, xs)` not `map(lambda x: str(x), xs)`)." },
+      RET505 = { hint = "dedent after return", what = "`else`/`elif` after a branch that already returns.", fix = "drop the `else`, dedent the block (guard-clause style)." },
+      RET504 = { hint = "return the expression", what = "value is assigned to a name and returned right away.", fix = "`return expr`." },
+      B007 = { hint = "rename unused loop var to _x", what = "loop variable is not used in the loop body.", fix = "rename it `_name`/`_`, or use enumerate/items() correctly." },
+      B904 = { hint = "raise ... from err", what = "`raise` inside `except` without `from`: the original cause is lost.", fix = "`raise NewError(...) from err` (or `from None` to hide it on purpose)." },
+      B905 = { hint = "zip(..., strict=)", what = "`zip()` without `strict=`: silently truncates on unequal lengths.", fix = "`strict=True` when lengths must match (fails loudly), `strict=False` when truncation is intended." },
+      B009 = { hint = "plain attribute access", what = "`getattr(obj, \"name\")` with a constant name.", fix = "`obj.name`." },
+      PLW0603 = { hint = "no `global`", what = "`global` statement: hidden shared state (SSOT/testability).", fix = "hold the state in an object/class or pass it in; a module-level cache object beats rebinding a global." },
+      PLW2901 = { hint = "new name for the loop value", what = "loop variable is reassigned inside the loop body.", fix = "assign to a new name." },
+      RUF012 = { hint = "ClassVar / instance attr", what = "mutable class attribute (list/dict/set) is shared by every instance.", fix = "annotate `ClassVar[...]` if sharing is intended, otherwise create it in __init__." },
+      PERF401 = { hint = "list comprehension", what = "list built by `append` in a for loop.", fix = "a list comprehension (or `list.extend(genexpr)`)." },
+      PERF403 = { hint = "dict comprehension", what = "dict filled key by key in a for loop.", fix = "a dict comprehension." },
+      PERF102 = { hint = "iterate .values()/.keys()", what = "`.items()` where only the key or only the value is used.", fix = "iterate `.keys()`/`.values()` directly." },
+      -- metrics that are not a single ruff rule
+      blind_except = { hint = "catch the specific exceptions", what = "sum of BLE001 + E722: `except Exception` / bare `except`.", fix = "see --explain BLE001." },
+      cc11 = { hint = "extract branches", what = "number of functions with cyclomatic complexity >= 11 (radon rank C or worse): hard to test, usually 2+ responsibilities (SRP).",
+               fix = "one helper per branch/op kind, dispatch table instead of if/elif chains, guard clauses. A NEW function with CC >= 11 fails the check; an existing one may not get worse." },
+      cc_max = { hint = "split the worst function first", what = "the highest cyclomatic complexity of one function in scope.", fix = "see --worst: the top rows are the ones to split first." },
+      dup_defs = { hint = "keep ONE definition, import it", what = "the same top-level class / UPPER_CONSTANT is defined in two live modules (DRY/SSOT): the copies drift apart.",
+                   fix = "keep the definition in the lowest module that needs it (usually src/core/constants.py), import it elsewhere; a deliberate duplicate goes to quality.dup_defs.allow." },
+      layers_broken = { hint = "invert or move down the import", what = "imports against the layering in .importlinter (a lower layer imports a higher one): the ignore_imports list there IS the baseline.",
+                        fix = "move the shared thing down (constant/interface into src.core), invert the dependency (callback/Protocol passed in), or import lazily as the last resort. Never add to ignore_imports." },
+      vulture = { hint = "delete the dead code", what = "unused import/variable/argument with >= 80% confidence (vulture).",
+                  fix = "delete it; if it is used dynamically (getattr, plugins), reference it once or add a whitelist entry." },
+    },
   },
 
   -- Выбор тестов по графу импортов (qa.py affected / test --changed)

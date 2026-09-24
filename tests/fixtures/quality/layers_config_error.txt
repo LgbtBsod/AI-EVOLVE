@@ -1,0 +1,7 @@
+=============
+Import Linter
+=============
+
+
+src.core.entity_manager -> src.entities.character  # baseline is not a valid 
+import expression.

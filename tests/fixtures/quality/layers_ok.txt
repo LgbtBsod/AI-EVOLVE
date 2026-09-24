@@ -1,0 +1,15 @@
+=============
+Import Linter
+=============
+
+
+---------
+Contracts
+---------
+
+Analyzed 110 files, 146 dependencies.
+-------------------------------------
+
+layers KEPT (10 ignored imports)
+
+Contracts: 1 kept, 0 broken.

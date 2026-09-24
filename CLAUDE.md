@@ -45,8 +45,13 @@ Drill down only when a line fails — first tool that answers the question:
 | Why did the hero AI do that / bosses | `agent_play "...; story"` · `qa.py gauntlet [--campaign --lives 5 --trace]` |
 | Visual regression between runs | `python tools/dev_probe_diff.py --before A --after B --frames` |
 | Pathfinding (A*/JPS/flow field) | `python tools/bench_pathfinding.py` · `pytest tests/test_pathfinding.py` (`AI_EVOLVE_PATHFINDING=python` = twin) |
+| Code quality: SOLID/DRY/SRP/SSOT | `qa.py quality --worst 10` (top offenders + SRP hint) · `--explain BLE001` (what/fix) · `--update-baseline` (1 s; part of `qa.py check`) |
 | Lua / items without reading Lua | `qa.py lua show FILE --keys\|--key a.b` · `qa.py item diff FILE\|digest FILE\|all` · `python -m tools.effect_schema.itemcheck FILE` |
 | Build an item like a designer | `tools/web_builder/headless.py` (`UI().pick("Шаблон из каталога", "venom_bite")…click("Проверить предмет (itemcheck)")`) |
+
+**Quality ratchet** (`qa.py check --name quality`; ruff + radon + vulture + import-linter `.importlinter` + an ast duplicate-definition detector on the live game modules; rules, scope, thresholds, hints = `quality` in `lua_content/qa.lua`):
+today's violations are the baseline (`tests/quality_baseline.json`: per metric, file, function with CC>=11); a NEW one fails, an improvement prints `improved=N` (warn) and
+`qa.py quality --update-baseline` locks it in (refuses to raise a number without `--force`). Fix a new violation (`--explain RULE`); never grow the baseline or `ignore_imports`.
 
 ## How to add a check (no wiring: all three are picked up by `qa.py check`)
 

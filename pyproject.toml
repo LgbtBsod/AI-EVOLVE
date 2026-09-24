@@ -1,0 +1,16 @@
+# Root project file: tool settings only (no [project]/[build-system]: the game is started with `python main.py`,
+# tests are configured in pytest.ini). rust_core/ has its own pyproject.toml for the maturin build.
+
+[tool.ruff]
+target-version = "py314"
+
+# Which rules count is DATA: lua_content/qa.lua `quality.ruff.select` (the ratchet passes it as --select and tests/quality_baseline.json
+# records today's violations). Only the numeric limits of those rules live here; they are ruff's defaults, written down so they are explicit.
+[tool.ruff.lint.mccabe]
+max-complexity = 10        # C901
+
+[tool.ruff.lint.pylint]
+max-args = 5               # PLR0913
+max-branches = 12          # PLR0912
+max-returns = 6            # PLR0911
+max-statements = 50        # PLR0915
