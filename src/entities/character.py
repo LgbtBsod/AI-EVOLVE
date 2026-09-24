@@ -820,7 +820,11 @@ class Character(BaseEntity):
 
         # 1. Бой и преследование врагов
         # Если здоровье низкое, приоритет — выживание: отходим от врага.
-        if nearest_enemy and self.health <= self.max_health * 0.3 and self.get_distance_to(nearest_enemy) <= 12:
+        # Разум героя (src/gameplay/hero_mind.py) сам решает, бежать ли на низком HP:
+        # с «Печалью берсерка» он со временем учится давить, а не убегать.
+        mind = getattr(self, "mind", None)
+        low = mind.should_retreat() if mind is not None else self.health <= self.max_health * 0.3
+        if nearest_enemy and low and self.get_distance_to(nearest_enemy) <= 12:
             self.ai_state = "retreating"
             self._move_away_from_enemy(nearest_enemy, dt)
             return

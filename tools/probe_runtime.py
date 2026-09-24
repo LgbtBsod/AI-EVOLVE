@@ -260,6 +260,7 @@ def boot_game(render="none", fast=True, fps=DEFAULT_FPS, seed=None, notify_log=N
             game_kwargs["db_url"] = "sqlite:///:memory:"
             # память тактик врагов - только в процессе: seed = тот же прогон
             os.environ.setdefault("AI_EVOLVE_TACTICS_MEMORY", "off")
+            os.environ.setdefault("AI_EVOLVE_HERO_MIND", "off")
     module = importlib.import_module(entry_module)
     game = getattr(module, game_class)(**game_kwargs)
 

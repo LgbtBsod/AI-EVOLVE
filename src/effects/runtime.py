@@ -306,13 +306,20 @@ class Unit:
 
     База, ресурсы и границы итоговых статов - lua_content/effect_rules.lua."""
 
-    def __init__(self, name: str, max_hp: float = 1000.0, **stats):
+    def __init__(self, name: str, max_hp: float = 1000.0, derive: bool = False, **stats):
         r = rules()
         self.name = name
         self.base: dict[str, float] = {k: float(v) for k, v in r["defaults"].items()}
         self.base["max_hp"] = float(max_hp)
         self.base.update({k: float(v) for k, v in stats.items()})
         self.bounds: dict[str, dict] = r["bounds"]
+        # производные статы от характеристик (effect_rules.lua -> attributes): стат -> [(характеристика, за очко)].
+        # derive=True - игра (менеджер эффектов): сила даёт урон и HP, и hp_pct условий считается
+        # от настоящего максимума. False - тренировочная комната: чистая математика предмета.
+        self.derived: dict[str, list[tuple[str, float]]] = {}
+        for attr, conv in ((r.get("attributes") or {}) if derive else {}).items():
+            for stat, k in (conv or {}).items():
+                self.derived.setdefault(stat, []).append((attr, float(k)))
         # ресурс -> {max: стат максимума, regen: стат регена в секунду}
         self.resources: dict[str, dict] = r["resources"]
         self.mods: dict[str, float] = {}          # mod-эффекты (add/sub/mul/div)
@@ -333,6 +340,8 @@ class Unit:
 
     def _eff(self, key: str) -> float:
         v = self.base.get(key, 0.0) + self.mods.get(key, 0.0)
+        for attr, k in self.derived.get(key, ()):     # сила -> урон и HP, живучесть -> HP ...
+            v += (self.base.get(attr, 0.0) + self.mods.get(attr, 0.0)) * k
         b = self.bounds.get(key)
         if b:
             v = min(max(v, b.get("min", -math.inf)), b.get("max", math.inf))

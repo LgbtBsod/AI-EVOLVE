@@ -108,3 +108,16 @@ def test_level_up_gives_points_not_hidden_stats():
     hp = hero.max_health
     hero.add_experience(hero.experience_to_next_level)
     assert hero.level == 2 and hero.attribute_points == 5 and hero.max_health == hp
+
+
+def test_conditions_see_hp_pct_of_the_real_max_hp():
+    # раньше hp_pct считался от max_hp без вклада характеристик: на 35% настоящего HP
+    # условие «hp_pct < 40» видело 60% и «Потерять себя» не включался
+    mgr = EffectManager(abilities=load_abilities(), rng=FakeRng(0.99))
+    hero = Fighter(hp=100.0)
+    hero.attributes = {"vitality": 25}                                # +150 HP
+    mgr.register(hero, "hero")
+    assert hero.max_health == pytest.approx(250.0)
+    hero.health = 0.35 * hero.max_health
+    st = mgr.state(hero)
+    assert mgr._ctx(st, None)["hp_pct"] == pytest.approx(35.0)

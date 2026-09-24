@@ -36,6 +36,7 @@ modules nobody imports (~18k LOC) and `qa.py docs` marks stale .md reports — d
 | Visual regression between two probe runs | `python tools/dev_probe_diff.py --before A --after B --frames` (image only for changed frames) | s |
 | Why did the hero AI do that | `agent_play "...; story"` (compressed ai_state transitions) | <1 s |
 | Performance hot spots | `python tools/qa.py perf "spawn enemy x10; wait 60"` | 2 s |
+| Can the hero beat the bosses / a whole session | `python tools/qa.py gauntlet` (hero at each boss's level) · `gauntlet --campaign --lives 5 --trace` (from level 1, XP only from kills, hero mind learns across lives) · `--boss-points N` to try balance | ~10 s per life |
 | Build/edit an item like a designer, no window | `tools/web_builder/headless.py` (`UI().pick("Шаблон из каталога", "venom_bite")…click("Проверить предмет (itemcheck)")`) | <1 s |
 | What does a Lua file contain (no reading Lua) | `python tools/qa.py lua show FILE --keys` / `--key a.b` · `qa.py lua check` (all files, both backends) | ms |
 | What changed in an item / all items OK | `python tools/qa.py item diff FILE` (vs HEAD) · `item digest FILE` · `item all` | <1 s |
@@ -69,6 +70,10 @@ Rules of thumb:
   `EffectManager.can_see` (vision_range, stealth) and fight with a learned tactic
   (`src/gameplay/enemy_ai.py`, memory = Rust bandit in `src/gameplay/tactics.py`; tools run it
   in-process only via `AI_EVOLVE_TACTICS_MEMORY=off`, so seeded runs stay reproducible).
+- The hero has a mind too (`src/gameplay/hero_mind.py`): on low HP it notices whether it is
+  empowered (e.g. Sorrow of Berserk) and learns "retreat" vs "press" from outcomes (same Rust
+  bandit; `AI_EVOLVE_HERO_MIND=off` in tools). Game Units derive stats from attributes
+  (`Unit(derive=True)`: hp_pct in conditions uses the real max HP); the training room does not.
 
 ## Where things live
 

@@ -134,7 +134,7 @@ class EntityState:
         self.entity = entity
         self.faction = faction
         self.abilities = list(abilities)
-        self.unit = Unit(entity_id(entity))
+        self.unit = Unit(entity_id(entity), derive=True)   # характеристики -> статы (сила -> урон, HP)
         self.items: list = []
         self.item_effects: list[dict] = []        # все эффекты надетых предметов
         self.extra_effects: list[dict] = []       # действующие части расходников (Тоник ярости)
@@ -225,13 +225,10 @@ class EntityState:
     def push_stats(self, base: dict[str, float]) -> None:
         """Итоговые статы Unit -> поля сущности (вклад запоминается дельтой)."""
         u, e = self.unit, self.entity
-        attrs = rules()["attributes"]
         for stat, (attr, scale, shift) in STAT_MAP.items():
             if attr not in base:
                 continue
-            v = u._eff(stat)
-            for a, conv in attrs.items():
-                v += u._eff(a) * float(conv.get(stat, 0.0))
+            v = u._eff(stat)                      # уже с производными от характеристик
             value = (v - shift) / scale
             self.applied[attr] = value - base[attr]
             setattr(e, attr, value)

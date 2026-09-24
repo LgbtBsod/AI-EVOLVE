@@ -36,6 +36,15 @@ HERO_WEIGHTS = {
 }
 
 
+_OVERRIDES: dict = {}
+
+
+def override(**rules) -> None:
+    """Подменить правила поверх world.lua (стенды баланса: qa.py gauntlet --boss-points 3)."""
+    _OVERRIDES.update(rules)
+    progression.cache_clear()
+
+
 @lru_cache(maxsize=1)
 def progression() -> dict:
     from ..content import lua_bridge
@@ -45,7 +54,7 @@ def progression() -> dict:
     except Exception as exc:
         logger.warning("progression: world.lua not loaded: %s", exc)
         data = {}
-    for k, v in data.items():
+    for k, v in list(data.items()) + list(_OVERRIDES.items()):
         if isinstance(v, dict) and isinstance(rules.get(k), dict):
             rules[k].update(v)
         else:

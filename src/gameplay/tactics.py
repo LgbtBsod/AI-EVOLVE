@@ -21,13 +21,13 @@ logger = logging.getLogger(__name__)
 MEMORY_ENV = "AI_EVOLVE_TACTICS_MEMORY"   # путь файла памяти; "off" - только в памяти процесса
 
 
-def memory_path() -> Optional[Path]:
-    """Где хранить память врагов. Инструменты (dev probe, agent_play) ставят off:
+def memory_path(env: str = MEMORY_ENV, name: str = "tactics_memory.json") -> Optional[Path]:
+    """Где хранить память (врагов, героя). Инструменты (dev probe, agent_play) ставят off:
     иначе прогон с тем же seed зависел бы от прошлых прогонов."""
-    raw = os.environ.get(MEMORY_ENV)
+    raw = os.environ.get(env)
     if raw is None:
         from ..content.lua_bridge import ROOT
-        return ROOT / "saves" / "tactics_memory.json"
+        return ROOT / "saves" / name
     return None if raw.strip().lower() in ("", "off", "none") else Path(raw)
 
 TACTICS = ("rush", "flank", "kite", "ambush", "pack", "hit_and_run")
@@ -88,10 +88,12 @@ class PyBandit:
         self.counts, self.sums = list(counts), list(sums)
 
 
-def new_bandit(backend: Optional[str] = None, c: float = 0.6, decay: float = 0.97):
+def new_bandit(backend: Optional[str] = None, c: float = 0.6, decay: float = 0.97,
+               contexts: int = len(CONTEXTS), arms: int = len(TACTICS)):
+    """Бандит rust_core (если собран) или его Python-двойник - одинаковый выбор."""
     if backend != "python" and _RustBandit is not None:
-        return _RustBandit(len(CONTEXTS), len(TACTICS), c, decay)
-    return PyBandit(len(CONTEXTS), len(TACTICS), c, decay)
+        return _RustBandit(contexts, arms, c, decay)
+    return PyBandit(contexts, arms, c, decay)
 
 
 class TacticsMemory:

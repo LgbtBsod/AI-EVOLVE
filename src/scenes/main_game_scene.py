@@ -51,6 +51,7 @@ class EnhancedGameScene:
         
         # Система создания объектов игроком
         self.player_created_objects = []
+        self.player_spawns = 0          # сколько врагов создал игрок (клавиша 1) за сессию
         self.creation_mode = None  # None, "enemy", "trap", "chest"
         
         # Маяк смерти
@@ -426,6 +427,8 @@ class EnhancedGameScene:
         player.inventory = self.hero_inventory
         from src.gameplay.progression import HeroGrowth
         self.hero_growth = HeroGrowth(player.character_class)
+        from src.gameplay.hero_mind import HeroMind, mind_path
+        player.mind = HeroMind(player, mind_path(), inventory_brain=self.hero_inventory_brain)
         cat = catalog()
         weapon = {"mage": "apprentice_staff", "rogue": "worn_dagger"}.get(player.character_class, "rusty_sword")
         for item_id in (weapon, "leather_armor", "health_potion", "health_potion"):
@@ -496,6 +499,9 @@ class EnhancedGameScene:
         if self.player is None:
             return
         hero_id = str(self.player.entity_id)
+        mind = getattr(self.player, "mind", None)
+        if mind is not None:
+            mind.note_hit(info, hero_id)
         for key in (info.source, info.target):
             brain = self.combat_brains.get(key)
             if brain is not None:
@@ -550,6 +556,7 @@ class EnhancedGameScene:
         self.enemies.append(enemy)
         if player_created:
             self.player_created_objects.append(enemy)
+            self.player_spawns += 1
         return enemy
 
     # ---------------------------------------------------------------- уровни и боссы
@@ -799,6 +806,11 @@ class EnhancedGameScene:
 
             if self.player.health_bar:
                 self.player.health_bar.update(self.player.health / self.player.max_health)
+
+            # Разум героя: стойка на низком HP (учится, стоит ли давить)
+            mind = getattr(self.player, "mind", None)
+            if mind is not None and self.effects is not None:
+                mind.update(dt, bool(self.visible_enemies(self.player)), self.effects.now)
 
             # Обновляем ИИ персонажа
             self._consume_reached_echo_points()
@@ -1289,6 +1301,8 @@ class EnhancedGameScene:
         """Выход из игровой сцены"""
         if self.tactics is not None:
             self.tactics.save()
+        if self.player is not None and getattr(self.player, "mind", None) is not None:
+            self.player.mind.save()
         if getattr(self.game, "effect_manager", None) is self.effects:
             self.game.effect_manager = None
         for bag in self.loot_bags:
@@ -1507,6 +1521,10 @@ class EnhancedGameScene:
                     brain.finish(hero_died=True)
             if self.tactics is not None:
                 self.tactics.save()
+            mind = getattr(self.player, "mind", None)
+            if mind is not None:
+                mind.update(0.0, True, self.effects.now if self.effects else 0.0)
+                mind.save()
             # Сохраняем позицию смерти
             self.death_position = (self.player.x, self.player.y, self.player.z)
             
