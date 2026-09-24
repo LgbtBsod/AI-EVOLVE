@@ -297,6 +297,17 @@ class EffectRuntime:
         # owner.mods как event + passive-слой, поэтому повторные вызовы
         # refresh идемпотентны (нет двойного применения scale-of-counter).
         self._event_mods: dict[str, float] = {}
+        # Вклад каждой событийной mod-операции: (источник, индекс) -> (стат,
+        # вклад). Повторное срабатывание ЗАМЕНЯЕТ вклад операции текущим
+        # значением (Vampire's Fang: +5 и +1 за kill => 5 + kills, cap 10), а
+        # не складывает его с прошлым ударом - иначе бонус рос бы с каждой
+        # атакой без предела. _event_mods = сумма вкладов.
+        self._op_contrib: dict[tuple, tuple[str, float]] = {}
+        # Когда бафф выдан последний раз: кулдаун живёт дольше самого баффа
+        # (раньше хранился в записи баффа, которая удаляется при истечении -
+        # после истечения щит выдавался снова без кулдауна)
+        self._buff_granted_at: dict[str, float] = {}
+        self._now = 0.0
         # --- hp_cross -----------------------------------------------------
         # Зоны пересечения порога HP (kind="condition", threshold=N):
         # name -> {"above": bool | None}. None = порог ещё не наблюдали.
@@ -313,6 +324,24 @@ class EffectRuntime:
         c = t.ctx()
         return {f"{prefix}_{k}": v for k, v in c.items()}
 
+    def _buff_active(self, bid: str) -> bool:
+        b = self.owner.buffs.get(bid)
+        return b is not None and b.get("until", 1e18) > self._now
+
+    def _amplify(self, ef: dict, ctx: dict) -> float:
+        """Effect.amplify {when | while_buff, factor, every, of}: множитель
+        бонусов эффекта factor^floor(of/every), пока выполнено условие `when`
+        (предикат ctx, напр. "ctx.hp <= 1") и/или активен бафф while_buff."""
+        amp = ef.get("amplify")
+        if not amp:
+            return 1.0
+        if amp.get("when") and not eval_pred(amp["when"], ctx):
+            return 1.0
+        if amp.get("while_buff") and not self._buff_active(amp["while_buff"]):
+            return 1.0
+        steps = math.floor(_ctx_get(ctx, amp.get("of")) / float(amp.get("every", 10)))
+        return float(amp.get("factor", 2)) ** max(0, steps)
+
     def _passive_layer(self, ctx: dict) -> dict[str, float]:
         """Пассивный слой mods — ЧИСТАЯ функция от переданного контекста
         (hp_pct, kills, ...): passive/condition-эффекты, mod-ops. Никаких
@@ -325,9 +354,10 @@ class EffectRuntime:
                 continue
             if kind == "condition" and not eval_pred(tr.get("when"), ctx):
                 continue
+            mult = self._amplify(ef, ctx)
             for o in ef.get("ops", []):
                 if o.get("kind") == "mod":
-                    self._apply_mod(o, ctx, sink=layer)
+                    self._apply_mod(o, ctx, sink=layer, mult=mult)
         return layer
 
     def refresh_passives(self, t: float = 0.0):
@@ -342,12 +372,18 @@ class EffectRuntime:
         (ранее condition-эффекты со scale.of=kills применялись и в событии,
         и в refresh — стаки удваивались).
         """
+        self._now = t
+        event = getattr(self, "_event_mods", None) or {}
+        # Пассивный слой считается от base + событийного слоя, БЕЗ прошлого
+        # пассивного вклада: иначе "+20% strength" брался от уже усиленной
+        # силы (100 -> 120 -> 24% ...) - петля обратной связи.
+        self.owner.mods = dict(event)
         ctx = {**self.owner.ctx(),
                **self.target_ctx("enemy", self.enemy)}
         ctx["last_damage"] = self.last_damage
         self._scan_hp_cross(ctx, t)
         layer = self._passive_layer(ctx)
-        event = getattr(self, "_event_mods", None) or {}
+        event = self._event_mods
         merged = {k: v for k, v in event.items()}
         for k, v in layer.items():
             merged[k] = merged.get(k, 0.0) + v
@@ -448,6 +484,12 @@ class EffectRuntime:
         """Враг бьёт героя; после урона — событие take_damage (retaliation)."""
         if not self.owner.alive:
             return
+        self._now = t
+        shield = next((bid for bid, b in self.owner.buffs.items()
+                       if "iframe" in (b.get("flags") or []) and b.get("until", 1e18) > t), None)
+        if shield is not None:
+            self.log.append(f"t={t:.1f} {self.owner.name} ignores {amount:.1f} damage (iframe {shield})")
+            return
         self.owner.deal_damage(amount)
         self.log.append(f"t={t:.1f} {self.owner.name} takes {amount:.1f} "
                         f"hp={self.owner.current_hp:.1f}")
@@ -462,7 +504,14 @@ class EffectRuntime:
         # псевдо-поле: фактический урон последнего базового удара — источник
         # для value {"ref": "ctx.last_damage"} / {"pct": N, "of": "last_damage"}
         ctx["last_damage"] = self.last_damage
-        mods_before = dict(self.owner.mods)
+        self._now = t
+        # Активные баффы с extend.on == событие продлеваются (Last Will: каждый
+        # kill под щитом +5 с). Раньше extend срабатывал только если сам
+        # buff-op выполнялся в этом событии - kill щит не продлевал никогда.
+        for bid, b in list(self.owner.buffs.items()):
+            ext = b.get("extend") or {}
+            if ext.get("on") == event and b.get("until", 1e18) > t:
+                self._extend_buff(self.owner, bid, ext, ctx, t, f"{bid}#{event}", buff_obj=b)
         for ef in self.effects:
             tr = ef.get("trigger", {})
             if tr.get("kind") != "event" or tr.get("event") != event:
@@ -477,24 +526,12 @@ class EffectRuntime:
                 continue
             self.run_ops(ef.get("ops", []), ctx, t, f"{ef['id']}#{event}",
                          event=event)
-        # После событийных ops пересобираем mods из слоёв, НО сохраняем
-        # накопления mod-ops, внесённые самим событием (delta над пассивным
-        # слоем до события). Так scale-of-counter событийные стаки
-        # (Vampire's Fang) применяются ровно один раз за событие и не
-        # теряются при последующем refresh_passives(); а чистые пассивные
-        # condition-эффекты (Lost My Self) не дублируются в событийный слой.
-        if self.owner.mods != mods_before:
-            # Дельта считается над ПОЛНЫМmods до события (он, как правило,
-            # = event + passive от предыдущего refresh), а не только над
-            # пассивным слоем: иначе чистые condition-моды (Lost My Self)
-            # при каждом событии ошибочно оседали бы в событийном слое и
-            # масштабировались бы по hp_pct на следующий цикл.
-            delta = {k: v - mods_before.get(k, 0.0)
-                     for k, v in self.owner.mods.items()
-                     if abs(v - mods_before.get(k, 0.0)) > 1e-12}
-            merged = dict(self.owner.mods)
-            for k, v in delta.items():
-                self._event_mods[k] = self._event_mods.get(k, 0.0) + v
+        # Событийный слой пополняет run_op("mod") - по каждой операции
+        # отдельно. Раньше здесь бралась дельта owner.mods за всё событие, но
+        # fire_event реентерабелен (kill, hp_cross из refresh_passives): дельта
+        # внешнего события включала вклад вложенных (уже записанный ими) и
+        # перестроенный пассивный слой - моды учитывались дважды
+        # (Lost My Self: strength +24 вместо +20, Vampire's Fang: +11 вместо +5).
         # каскад: attack порождает attack_hit только через attack();
         # здесь — ре-ентрансные события из ops (например kill внутри fail-ветки)
 
@@ -513,11 +550,11 @@ class EffectRuntime:
     # ops -------------------------------------------------------------------
     def run_ops(self, ops: list[dict], ctx: dict, t: float, src: str,
                 event: Optional[str] = None):
-        for o in ops:
-            self.run_op(o, ctx, t, src, event=event)
+        for i, o in enumerate(ops):
+            self.run_op(o, ctx, t, src, event=event, op_key=(src, i))
 
     def run_op(self, o: dict, ctx: dict, t: float, src: str,
-               event: Optional[str] = None):
+               event: Optional[str] = None, op_key: Optional[tuple] = None):
         kind = o.get("kind")
         if o.get("when") and not eval_pred(o["when"], ctx):
             return
@@ -528,11 +565,22 @@ class EffectRuntime:
 
         if kind == "mod":
             # Событийные mod-ops — НАКОПИТЕЛЬНЫЕ стаки: применяются к
-            # owner.mods ровно один раз здесь; fire_event() после каскада
-            # выделит из них delta и закрепит в слое `_event_mods`, который
-            # не сбрасывается пересчётом пассивов. Раньше отсюда вызывался
-            # refresh_passives() — мод применялся повторно (стаки удваивались).
+            # owner.mods ровно один раз здесь, и ровно это изменение
+            # закрепляется в слое `_event_mods` (его не сбрасывает пересчёт
+            # пассивов). Дельта меряется вокруг одной операции: вложенные
+            # события и пересборка пассивного слоя в неё не попадают.
+            stat = o.get("stat")
+            key = op_key if op_key is not None else (src, id(o))
+            old_stat, old = self._op_contrib.get(key, (stat, 0.0))
+            if old:
+                self.owner.mods[old_stat] = self.owner.mods.get(old_stat, 0.0) - old
+            before = self.owner.mods.get(stat, 0.0)
             self._apply_mod(o, ctx)
+            self._op_contrib[key] = (stat, self.owner.mods.get(stat, 0.0) - before)
+            totals: dict[str, float] = {}
+            for st, v in self._op_contrib.values():
+                totals[st] = totals.get(st, 0.0) + v
+            self._event_mods = {k: v for k, v in totals.items() if abs(v) > 1e-12}
         elif kind == "heal":
             target.heal(amount)
             self.log.append(f"t={t:.1f} {src} heal {amount:.2f} -> hp={target.current_hp:.1f}")
@@ -557,14 +605,15 @@ class EffectRuntime:
             prev = target.buffs.get(bid)
             # кулдаун на повторную активацию щита/баффа
             cd = resolve_value(o.get("cooldown"), ctx) if o.get("cooldown") else None
-            if cd is not None and prev is not None and \
-                    t - prev.get("last_cd", -1e18) < cd:
+            granted = self._buff_granted_at.get(bid)
+            if cd is not None and granted is not None and t - granted < cd:
                 self.log.append(f"t={t:.1f} {src} buff {bid} ON COOLDOWN")
                 return
             dur = self._duration(o.get("duration"), ctx)
             until = max(prev.get("until", t) if prev else t, t) + dur
+            self._buff_granted_at[bid] = t
             target.buffs[bid] = {"until": until, "extend": o.get("extend"),
-                                 "cooldown": cd, "last_cd": t}
+                                 "cooldown": cd, "last_cd": t, "flags": list(o.get("flags") or [])}
             self.log.append(f"t={t:.1f} {src} buff {bid} +{dur:.1f}s (until {until:.1f})")
             # декларация extend внутри ops-buff: срабатывает при событии ext["on"]
             ext = o.get("extend") or {}
@@ -641,7 +690,7 @@ class EffectRuntime:
         self.log.append(f"t={t:.1f} {src} extend {bid} +{add:.1f}s")
 
     def _apply_mod(self, o: dict, ctx: Optional[dict] = None,
-                   sink: Optional[dict] = None):
+                   sink: Optional[dict] = None, mult: float = 1.0):
         """Применить mod-оп. sink=None -> owner.mods (совместимость);
         sink=dict -> накопление в отдельный слой (persistent/passive)."""
         if ctx is None:
@@ -649,6 +698,8 @@ class EffectRuntime:
         stat = o.get("stat")
         amount = compute_amount(o, ctx)
         mo = o.get("op", "add")
+        if mo in ("add", "sub"):
+            amount *= mult  # meta.amplify (Lost My Self под Last Will)
         dst = self.owner.mods if sink is None else sink
         cur = dst.get(stat, 0.0)
         base = self.owner.base.get(stat, 0.0)

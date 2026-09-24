@@ -5,10 +5,12 @@
 ## 🚀 Запуск
 
 ```bash
-python tools/web_builder/app.py
+pip install -r tools/requirements-dev.txt   # flet + flet-web (не входят в зависимости игры)
+python tools/web_builder/app.py --web       # браузер: http://localhost:8550
+python tools/web_builder/app.py             # десктопное окно Flet
 ```
 
-Приложение откроется в браузере по адресу `http://localhost:8550`
+Без флага `--web` приложение запускается как десктопное окно Flet, а не в браузере.
 
 ## 📋 Возможности
 

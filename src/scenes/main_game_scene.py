@@ -61,6 +61,7 @@ class EnhancedGameScene:
         self._action_key_state = {}
         self.current_level = 1
         self.exit_reach_distance = 2.0
+        self.echo_point_reach_distance = 1.0  # точка эхо-тропы считается пройденной
         self.echo_refresh_interval = 1.0
         self.last_echo_refresh_time = 0.0
         self._runtime_task_names = set()
@@ -505,6 +506,7 @@ class EnhancedGameScene:
                 self.player.health_bar.update(self.player.health / self.player.max_health)
 
             # Обновляем ИИ персонажа
+            self._consume_reached_echo_points()
             ai_known_exits = list(self.known_exit_positions) + list(self.echo_trail_points)
             self.player.update_ai(
                 self.enemies,
@@ -689,6 +691,32 @@ class EnhancedGameScene:
         ex, ey, _ez = self.exit_beacon_position
         self._rebuild_echo_trail(ex, ey)
         self.last_echo_refresh_time = now
+
+    def _consume_reached_echo_points(self):
+        """Точки эхо-тропы - путевые: достигнутая точка убирается.
+
+        ИИ идёт к БЛИЖАЙШЕЙ известной точке выхода. Когда выход известен точно,
+        тропа больше не перестраивается (_refresh_echo_trail_guidance), и раньше
+        первая точка тропы навсегда оставалась ближайшей: герой доходил до неё
+        (move_towards останавливается в 0.1u) и стоял в seeking_exit вечно."""
+        if not self.echo_trail_points or not self.player:
+            return
+        px, py = self.player.x, self.player.y
+        keep_points, keep_nodes = [], []
+        nodes_aligned = len(self.echo_trail_nodes) == len(self.echo_trail_points)
+        for idx, (tx, ty) in enumerate(self.echo_trail_points):
+            node = self.echo_trail_nodes[idx] if nodes_aligned else None
+            if math.hypot(px - tx, py - ty) <= self.echo_point_reach_distance:
+                if node is not None and hasattr(node, "removeNode"):
+                    node.removeNode()
+                continue
+            keep_points.append((tx, ty))
+            if node is not None:
+                keep_nodes.append(node)
+        if len(keep_points) != len(self.echo_trail_points):
+            self.echo_trail_points = keep_points
+            if nodes_aligned:
+                self.echo_trail_nodes = keep_nodes
 
     def _register_exit_knowledge(self, precise: bool):
         """Регистрирует знания о выходе: точные координаты или цепочку эхо-точек."""

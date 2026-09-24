@@ -241,7 +241,9 @@ class Character(BaseEntity):
         
         # Настройки класса
         self._setup_character_class()
-        
+        # Класс переопределяет max_health/health уже ПОСЛЕ создания компонента
+        self._health_component.sync(self.health, self.max_health)
+
     def _setup_character_class(self):
         """Настройка характеристик в зависимости от класса"""
         if self.character_class == "warrior":
@@ -756,7 +758,11 @@ class Character(BaseEntity):
         if self.is_defeated:
             return True
         
-        # Используем HealthComponent для обработки урона
+        # Источник правды - health/max_health персонажа (их меняют реген,
+        # лечение, level-up, настройка класса); компонент подтягивается к ним
+        # перед расчётом, иначе его устаревшее значение перезаписывало HP
+        # (149/120 после первого удара)
+        self._health_component.sync(self.health, self.max_health)
         actual_damage = self._health_component.take_damage(damage)
         
         # Синхронизируем legacy атрибут health с компонентом

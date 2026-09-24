@@ -3,10 +3,13 @@
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
+use pyo3::buffer::{Element, PyUntypedBuffer};
 use crate::simulation::SimulationEnv;
 use crate::generator::WorldGenerator;
 use crate::probe::{ProbeConfig, analyze_frame, compute_ssim};
 use crate::semantic_core::{LogCompressor as RustLogCompressor, StateDiffCalculator as RustStateDiffCalculator, EventCorrelator as RustEventCorrelator};
+use crate::analytics;
+use crate::qa;
 use image::DynamicImage;
 
 /// Python module for rust_core
@@ -18,6 +21,8 @@ fn rust_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyLogCompressor>()?;
     m.add_class::<PyStateDiffCalculator>()?;
     m.add_class::<PyEventCorrelator>()?;
+    m.add_class::<PyRunAnalytics>()?;
+    m.add_class::<PyQaKernels>()?;
     // Aliases for cleaner Python API
     m.add("WorldGenerator", m.getattr("PyWorldGenerator")?)?;
     m.add("SimulationEnv", m.getattr("PySimulationEnv")?)?;
@@ -25,6 +30,8 @@ fn rust_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("LogCompressor", m.getattr("PyLogCompressor")?)?;
     m.add("StateDiffCalculator", m.getattr("PyStateDiffCalculator")?)?;
     m.add("EventCorrelator", m.getattr("PyEventCorrelator")?)?;
+    m.add("RunAnalytics", m.getattr("PyRunAnalytics")?)?;
+    m.add("QaKernels", m.getattr("PyQaKernels")?)?;
     m.add("VERSION", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }
@@ -303,5 +310,202 @@ impl PyEventCorrelator {
 
     fn clear(&mut self) {
         self.inner.clear();
+    }
+}
+
+// ============================================================================
+// Run analytics FFI (agent dev tools: tools/probe_kernels.py)
+// ============================================================================
+
+/// Stateless number-crunching kernels for tools/probe_analysis.py.
+///
+/// Data crosses the layer as columnar binary buffers (Python `array('d')`,
+/// `array('B')`, `array('Q')`, numpy arrays, memoryviews - anything with the
+/// buffer protocol): one memcpy per column instead of converting every float
+/// object. `scan_hero` takes a whole struct-of-arrays table object and
+/// returns one dict, so a full hero analysis is a single FFI crossing.
+/// Every method releases the GIL while computing.
+#[pyclass]
+struct PyRunAnalytics;
+
+/// Buffer-protocol object -> Vec<T> with one memcpy. Empty buffers are
+/// special-cased: CPython may hand out an unaligned pointer for an empty
+/// array('d'), which a typed buffer view rejects.
+fn buf<T: Element + Copy>(py: Python<'_>, obj: &Bound<'_, PyAny>) -> PyResult<Vec<T>> {
+    let untyped = PyUntypedBuffer::get(obj)?;
+    if untyped.item_count() == 0 {
+        return Ok(Vec::new());
+    }
+    untyped.into_typed::<T>()?.to_vec(py)
+}
+
+fn column<T: Element + Copy>(py: Python<'_>, table: &Bound<'_, PyAny>, name: &str) -> PyResult<Vec<T>> {
+    buf(py, &table.getattr(name)?)
+}
+
+fn same_len(n: usize, others: &[usize]) -> PyResult<()> {
+    if others.iter().any(|&l| l != n) {
+        return Err(pyo3::exceptions::PyValueError::new_err("columns must have equal length"));
+    }
+    Ok(())
+}
+
+fn param(params: &Bound<'_, PyDict>, name: &str, default: f64) -> PyResult<f64> {
+    match params.get_item(name)? {
+        Some(v) => v.extract(),
+        None => Ok(default),
+    }
+}
+
+#[pymethods]
+impl PyRunAnalytics {
+    #[staticmethod]
+    fn linear_fit(py: Python<'_>, xs: &Bound<'_, PyAny>, ys: &Bound<'_, PyAny>) -> PyResult<Option<(f64, f64)>> {
+        let (xs, ys) = (buf::<f64>(py, xs)?, buf::<f64>(py, ys)?);
+        Ok(py.detach(|| analytics::linear_fit(&xs, &ys)))
+    }
+
+    #[staticmethod]
+    #[pyo3(signature = (values, width=24))]
+    fn sparkline(py: Python<'_>, values: &Bound<'_, PyAny>, width: usize) -> PyResult<String> {
+        let values = buf::<f64>(py, values)?;
+        Ok(py.detach(|| analytics::sparkline(&values, width)))
+    }
+
+    #[staticmethod]
+    fn nearest_distances(
+        py: Python<'_>, px: &Bound<'_, PyAny>, py_: &Bound<'_, PyAny>, offsets: &Bound<'_, PyAny>, ex: &Bound<'_, PyAny>, ey: &Bound<'_, PyAny>,
+    ) -> PyResult<Vec<f64>> {
+        let (px, py_, ex, ey) = (buf::<f64>(py, px)?, buf::<f64>(py, py_)?, buf::<f64>(py, ex)?, buf::<f64>(py, ey)?);
+        let offsets: Vec<usize> = buf::<u64>(py, offsets)?.into_iter().map(|o| o as usize).collect();
+        if offsets.len() != px.len() + 1 || py_.len() != px.len() || ex.len() != ey.len()
+            || offsets.last().copied().unwrap_or(0) > ex.len()
+        {
+            return Err(pyo3::exceptions::PyValueError::new_err("inconsistent column lengths"));
+        }
+        Ok(py.detach(|| analytics::nearest_distances(&px, &py_, &offsets, &ex, &ey)))
+    }
+
+    #[staticmethod]
+    fn pinned_interval(
+        py: Python<'_>, ts: &Bound<'_, PyAny>, hp: &Bound<'_, PyAny>, max_hp: &Bound<'_, PyAny>, alive: &Bound<'_, PyAny>,
+        frac: f64, min_seconds: f64,
+    ) -> PyResult<Option<(f64, f64, f64)>> {
+        let (ts, hp, max_hp) = (buf::<f64>(py, ts)?, buf::<f64>(py, hp)?, buf::<f64>(py, max_hp)?);
+        let alive: Vec<bool> = buf::<u8>(py, alive)?.into_iter().map(|a| a != 0).collect();
+        same_len(ts.len(), &[hp.len(), max_hp.len(), alive.len()])?;
+        Ok(py.detach(|| analytics::pinned_interval(&ts, &hp, &max_hp, &alive, frac, min_seconds)))
+    }
+
+    #[staticmethod]
+    #[allow(clippy::too_many_arguments)]
+    fn stuck_interval(
+        py: Python<'_>, ts: &Bound<'_, PyAny>, xs: &Bound<'_, PyAny>, ys: &Bound<'_, PyAny>, alive: &Bound<'_, PyAny>,
+        window_s: f64, min_dist: f64, busy_ts: &Bound<'_, PyAny>,
+    ) -> PyResult<Option<(f64, f64)>> {
+        let (ts, xs, ys, busy) = (buf::<f64>(py, ts)?, buf::<f64>(py, xs)?, buf::<f64>(py, ys)?, buf::<f64>(py, busy_ts)?);
+        let alive: Vec<bool> = buf::<u8>(py, alive)?.into_iter().map(|a| a != 0).collect();
+        same_len(ts.len(), &[xs.len(), ys.len(), alive.len()])?;
+        Ok(py.detach(|| analytics::stuck_interval(&ts, &xs, &ys, &alive, window_s, min_dist, &busy)))
+    }
+
+    /// table: object with buffer attributes ts, hp, max_hp, x, y (f64), alive (u8),
+    /// offsets (u64), ex, ey (f64) - see tools/probe_kernels.py:HeroTable.
+    /// params: dict with low_hp_fraction, pinned_seconds, stuck_seconds, stuck_distance, spark_width.
+    #[staticmethod]
+    fn scan_hero(
+        py: Python<'_>, table: &Bound<'_, PyAny>, params: &Bound<'_, PyDict>, busy_ts: &Bound<'_, PyAny>,
+    ) -> PyResult<Py<PyDict>> {
+        let (ts, hp, max_hp): (Vec<f64>, Vec<f64>, Vec<f64>) =
+            (column(py, table, "ts")?, column(py, table, "hp")?, column(py, table, "max_hp")?);
+        let (x, y): (Vec<f64>, Vec<f64>) = (column(py, table, "x")?, column(py, table, "y")?);
+        let alive: Vec<u8> = column(py, table, "alive")?;
+        let offsets: Vec<u64> = column(py, table, "offsets")?;
+        let (ex, ey): (Vec<f64>, Vec<f64>) = (column(py, table, "ex")?, column(py, table, "ey")?);
+        let n = ts.len();
+        if [hp.len(), max_hp.len(), x.len(), y.len(), alive.len()].iter().any(|&l| l != n)
+            || offsets.len() != n + 1 || ex.len() != ey.len()
+            || offsets.last().copied().unwrap_or(0) as usize > ex.len()
+        {
+            return Err(pyo3::exceptions::PyValueError::new_err("inconsistent HeroTable column lengths"));
+        }
+        let p = analytics::HeroScanParams {
+            low_hp_fraction: param(params, "low_hp_fraction", 0.2)?,
+            pinned_seconds: param(params, "pinned_seconds", 5.0)?,
+            stuck_seconds: param(params, "stuck_seconds", 8.0)?,
+            stuck_distance: param(params, "stuck_distance", 0.5)?,
+            spark_width: param(params, "spark_width", 24.0)? as usize,
+        };
+        let busy = buf::<f64>(py, busy_ts)?;
+        let scan = py.detach(|| {
+            let cols = analytics::HeroColumns {
+                ts: &ts, hp: &hp, max_hp: &max_hp, x: &x, y: &y, alive: &alive, offsets: &offsets, ex: &ex, ey: &ey,
+            };
+            analytics::scan_hero(&cols, &p, &busy)
+        });
+        let d = PyDict::new(py);
+        d.set_item("pinned", scan.pinned)?;
+        d.set_item("stuck", scan.stuck)?;
+        d.set_item("death_t", scan.death_t)?;
+        d.set_item("invalid_count", scan.invalid_count)?;
+        d.set_item("invalid_first", scan.invalid_first)?;
+        d.set_item("min_nearest", scan.min_nearest)?;
+        d.set_item("hp_sparkline", scan.hp_sparkline)?;
+        Ok(d.unbind())
+    }
+
+    #[staticmethod]
+    fn log_template(line: &str) -> String {
+        analytics::log_template(line)
+    }
+
+    /// -> ([(count, first_body)], distinct_templates)
+    #[staticmethod]
+    #[pyo3(signature = (lines, limit=10))]
+    fn log_digest(py: Python<'_>, lines: Vec<String>, limit: usize) -> (Vec<(usize, String)>, usize) {
+        py.detach(|| analytics::log_digest(&lines, limit))
+    }
+}
+
+// ============================================================================
+// QA kernels FFI (tools/qa.py via tools/probe_kernels.py)
+// ============================================================================
+
+/// Graph reachability (CSR buffers), bootstrap statistics, line fingerprints.
+#[pyclass]
+struct PyQaKernels;
+
+#[pymethods]
+impl PyQaKernels {
+    /// offsets/targets: CSR adjacency as array('Q'); roots: array('Q') -> list of 0/1 flags.
+    #[staticmethod]
+    fn reach(py: Python<'_>, offsets: &Bound<'_, PyAny>, targets: &Bound<'_, PyAny>, roots: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
+        let (offsets, targets, roots) = (buf::<u64>(py, offsets)?, buf::<u64>(py, targets)?, buf::<u64>(py, roots)?);
+        if offsets.windows(2).any(|w| w[0] > w[1]) || offsets.last().copied().unwrap_or(0) as usize > targets.len() {
+            return Err(pyo3::exceptions::PyValueError::new_err("offsets must be non-decreasing and within targets"));
+        }
+        Ok(py.detach(|| qa::reach(&offsets, &targets, &roots)))
+    }
+
+    /// values: array('d') -> dict(n, mean, sd, min, p5, p50, p95, max, ci_lo, ci_hi)
+    #[staticmethod]
+    #[pyo3(signature = (values, resamples=2000, seed=0))]
+    fn describe(py: Python<'_>, values: &Bound<'_, PyAny>, resamples: usize, seed: u64) -> PyResult<Py<PyDict>> {
+        let values = buf::<f64>(py, values)?;
+        let d = py.detach(|| qa::describe(&values, resamples, seed));
+        let out = PyDict::new(py);
+        out.set_item("n", d.n)?;
+        for (k, v) in [("mean", d.mean), ("sd", d.sd), ("min", d.min), ("p5", d.p5), ("p50", d.p50),
+                       ("p95", d.p95), ("max", d.max), ("ci_lo", d.ci_lo), ("ci_hi", d.ci_hi)] {
+            out.set_item(k, v)?;
+        }
+        Ok(out.unbind())
+    }
+
+    /// data: bytes-like, offsets: array('Q') line boundaries -> list of u64 FNV-1a hashes.
+    #[staticmethod]
+    fn fnv1a64_lines(py: Python<'_>, data: &Bound<'_, PyAny>, offsets: &Bound<'_, PyAny>) -> PyResult<Vec<u64>> {
+        let (data, offsets) = (buf::<u8>(py, data)?, buf::<u64>(py, offsets)?);
+        Ok(py.detach(|| qa::fnv1a64_lines(&data, &offsets)))
     }
 }

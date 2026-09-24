@@ -5,7 +5,8 @@ Tests the "Apocalypse Bringer" item with 20+ conditions and complex interactions
 
 import unittest
 import sys
-sys.path.insert(0, '/workspace/src')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / 'src'))
 
 from core.cas_engine import (
     CASManager, DamageCalculator, EffectTemplate, Condition, Action,

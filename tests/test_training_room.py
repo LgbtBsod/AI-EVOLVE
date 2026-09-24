@@ -9,8 +9,9 @@ import sys
 import json
 from pathlib import Path
 
-sys.path.insert(0, '/workspace/src')
-sys.path.insert(0, '/workspace/tools')
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / 'src'))
+sys.path.insert(0, str(ROOT / 'tools'))
 
 from training_room import (
     TrainingRoom, Mannequin, MannequinConfig, MannequinType,
@@ -168,12 +169,12 @@ class TestLuaConfigIntegration(unittest.TestCase):
     
     def test_lua_config_exists(self):
         """Проверка существования Lua конфигов"""
-        lua_path = Path('/workspace/lua_content/training_room/mannequins.lua')
+        lua_path = ROOT / 'lua_content' / 'training_room' / 'mannequins.lua'
         self.assertTrue(lua_path.exists())
         
     def test_lua_config_content(self):
         """Проверка содержимого Lua конфига"""
-        lua_path = Path('/workspace/lua_content/training_room/mannequins.lua')
+        lua_path = ROOT / 'lua_content' / 'training_room' / 'mannequins.lua'
         content = lua_path.read_text()
         
         self.assertIn('mannequins', content)

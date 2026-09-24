@@ -21,6 +21,10 @@ from src.systems.combat.components.toughness_component import (
 )
 from src.core.constants import StanceState, ToughnessType
 
+# Тесты восстановления ждут таймеры компонента через time.sleep(): ручные
+# часы (tests/conftest.py) делают эти ожидания мгновенными, логика та же.
+pytestmark = pytest.mark.virtual_time
+
 
 # ============================================================================
 # FIXTURES

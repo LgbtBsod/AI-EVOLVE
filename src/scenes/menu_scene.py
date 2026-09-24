@@ -101,8 +101,11 @@ class MenuScene(Scene):
         from direct.gui.DirectGui import DirectButton, DirectFrame
         from direct.gui.OnscreenText import OnscreenText
 
-        self._previous_background = game.getBackgroundColor()
-        game.setBackgroundColor(0.03, 0.035, 0.05, 1)
+        # Без окна (window-type none - безоконная симуляция агентских
+        # инструментов) у ShowBase нет win, а цвет фона хранится именно в нём
+        if getattr(game, "win", None) is not None:
+            self._previous_background = game.getBackgroundColor()
+            game.setBackgroundColor(0.03, 0.035, 0.05, 1)
 
         font = _load_cyrillic_font(game)
         label_key = "text" if font is not None else "fallback"

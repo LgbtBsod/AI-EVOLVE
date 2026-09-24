@@ -1,0 +1,6 @@
+{
+ "_comment": "Pre-existing failures: qa.py test reports them as known, not NEW. Update with `python tools/qa.py test --update-known`.",
+ "failures": {
+  "tests/test_comprehensive.py": "ModuleNotFoundError: No module named 'dependency_injector'"
+ }
+}

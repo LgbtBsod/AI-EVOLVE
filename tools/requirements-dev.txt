@@ -27,6 +27,10 @@ numpy>=1.24.0
 scikit-image>=0.21.0
 imagehash>=4.3.0
 
+# tools/web_builder/app.py (CAS item builder UI; `--web` serves it on :8550)
+flet>=1.0
+flet-web>=1.0
+
 # Optional ML-enhanced features (uncomment if needed):
 # mediapipe>=0.10.0      # Google's ML for UI element detection, OCR
 # plotly>=5.18.0         # Interactive charts for agent reports

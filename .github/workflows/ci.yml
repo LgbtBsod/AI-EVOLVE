@@ -32,6 +32,10 @@ jobs:
         run: python tools/combat_smoke_test.py
       - name: Import check
         run: python -c "import main"
+      # Windowless (window-type none) + fixed-step virtual clock: no OpenGL,
+      # runs on every OS. Includes a byte-for-byte determinism check on the real game.
+      - name: Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)
+        run: python -m pytest -q tests/test_agent_tools.py tests/test_qa_tools.py
       # The boot test renders into an offscreen buffer and needs OpenGL:
       # Linux runners get it from Mesa (llvmpipe) under a virtual X server.
       - name: Install Mesa + Xvfb

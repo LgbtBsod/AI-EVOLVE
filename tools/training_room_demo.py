@@ -12,8 +12,11 @@ Training Room Demo - Equipment Testing on Mannequins
 """
 
 import sys
-sys.path.insert(0, '/workspace/src')
-sys.path.insert(0, '/workspace')
+from pathlib import Path
+_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_ROOT / 'src'))
+sys.path.insert(0, str(_ROOT))
+sys.path.insert(0, str(_ROOT / 'tools'))
 
 from tools.training_room import (
     TrainingRoom, MannequinType, TestScenario, 

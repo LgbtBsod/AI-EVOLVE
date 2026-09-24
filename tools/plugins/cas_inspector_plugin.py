@@ -8,7 +8,8 @@ import json
 from typing import Dict, List, Any, Optional
 from dataclasses import asdict
 import sys
-sys.path.insert(0, '/workspace/src')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'src'))
 
 from core.cas_engine import CASManager, EffectTemplate, Condition, Action, StatType, DamageType, ConditionOperator
 
