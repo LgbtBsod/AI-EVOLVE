@@ -37,6 +37,8 @@ modules nobody imports (~18k LOC) and `qa.py docs` marks stale .md reports — d
 | Why did the hero AI do that | `agent_play "...; story"` (compressed ai_state transitions) | <1 s |
 | Performance hot spots | `python tools/qa.py perf "spawn enemy x10; wait 60"` | 2 s |
 | Build/edit an item like a designer, no window | `tools/web_builder/headless.py` (`UI().pick("Шаблон из каталога", "venom_bite")…click("Проверить предмет (itemcheck)")`) | <1 s |
+| What does a Lua file contain (no reading Lua) | `python tools/qa.py lua show FILE --keys` / `--key a.b` · `qa.py lua check` (all files, both backends) | ms |
+| What changed in an item / all items OK | `python tools/qa.py item diff FILE` (vs HEAD) · `item digest FILE` · `item all` | <1 s |
 | Does an item work (schema → Lua → combat) | `python -m tools.effect_schema.itemcheck lua_content/items/X.lua` (`--forge N` stress item, `--hostile` Python/Lua parity hunt) | <1 s per 300 effects |
 
 Rules of thumb:
@@ -77,6 +79,8 @@ Rules of thumb:
   `rust_core/src/lua_content/` — its Rust backend; `export.lua` there is shared by both backends.
 - `lua_content/dev_tools.lua` — thresholds, agent limits, DB path; `lua_content/qa.lua` — scenarios, fuzz
   weights, invariants, sweep; `lua_content/probe_config.lua` — frame analysis.
+- `tools/qa_plugins/*.py` — extra `qa.py` commands, discovered automatically (`register(sub)`); a new
+  command needs no edit of qa.py.
 - `tools/qa.py` + `qa_graph.py` (import graph), `qa_pool.py` (asyncio subprocess pool),
   `probe_invariants.py`; Rust `QaKernels` (graph reachability, bootstrap stats, trajectory hashes).
 - Outputs go to `dev_probe_output/` (git-ignored), DB at `dev_probe_output/probe.sqlite`
