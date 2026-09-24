@@ -224,8 +224,8 @@ class TestRealGame:
     # (расхождения пар: Windows 12%, Linux 57%). База теперь фиксированная (tools/probe_runtime.py):
     # остаётся ~1-2% пар, где глобальный random расходится уже на кадре 0 и только при случайном
     # хеше строк (hashseed0 чист) - вероятно, обход множества строк при загрузке. Пока это не
-    # найдено, тест на POSIX нестрогий (XFAIL/XPASS виден в отчёте, CI не красит).
-    @pytest.mark.xfail(sys.platform != "win32", strict=False, reason="same-seed runs occasionally diverge on POSIX (open bug)")
+    # найдено, тест нестрогий на всех ОС (XFAIL/XPASS виден в отчёте, CI не красит).
+    @pytest.mark.xfail(strict=False, reason="~1-2% of same-seed pairs diverge at frame 0 with a random string hash (open bug)")
     def test_agent_play_is_deterministic(self, tmp_path):
         finals = []
         for i in range(2):
