@@ -12,8 +12,8 @@ on:
         description: "Same-seed pairs per variant"
         default: "20"
       clock_base:
-        description: "Virtual clock base: real (process start time) or fixed"
-        default: "real"
+        description: "Virtual clock base: fixed (default) or real (process start time)"
+        default: "fixed"
       script:
         description: "agent_play script"
         default: "spawn enemy x2; until kills>=1 max 40; observe; expect kills>=1; expect alive; wait 5"

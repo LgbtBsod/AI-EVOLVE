@@ -83,13 +83,19 @@ class VirtualTime(types.ModuleType):
     def __init__(self, clock):
         super().__init__("time")
         self._clock = clock
-        if os.environ.get("AI_EVOLVE_CLOCK_BASE") == "fixed":
-            # experiment: the virtual clock must not depend on the process start time
-            self._wall0 = 1_800_000_000.0
-            self._perf0 = 1000.0
-        else:
+        # The bases must NOT come from the real clock. Game code compares differences of
+        # perf_counter()/time() against thresholds (cooldowns, 1 s ticks, retarget intervals) that
+        # the fixed frame step lands on EXACTLY; the rounding of (base + t) - (base + t0) depends on
+        # the low bits of the base, so a base taken from the process start time flipped those
+        # comparisons at random: two same-seed runs diverged in 12% (Windows) to 57% (Linux) of
+        # CI pairs (qa.py determinism, 2026-09-24). With a fixed base: ~1-2%, and see below.
+        # AI_EVOLVE_CLOCK_BASE=real restores the old behaviour to test wall-clock sensitivity.
+        if os.environ.get("AI_EVOLVE_CLOCK_BASE", "fixed") == "real":
             self._wall0 = _real_time.time()
             self._perf0 = _real_time.perf_counter()
+        else:
+            self._wall0 = 1_800_000_000.0
+            self._perf0 = 1000.0
 
     def now(self):
         return self._clock.getFrameTime()
