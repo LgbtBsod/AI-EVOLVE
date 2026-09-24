@@ -611,10 +611,27 @@ class KillTracker:
         return len(self.kills)
 
 
+def hit_details(info):
+    """Поля конвейера урона (src/effects/damage.py, docs/DAMAGE_PIPELINE.md) удара менеджера эффектов для события боя:
+    type, armor (снято бронёй), resisted, missed / blocked + guarded (снято блоком) / pierced (очков брони пробито) - только
+    когда были. У DamageInfo старой боевой системы этих полей нет: {}."""
+    if not hasattr(info, "hit_type"):
+        return {}
+    d = {"type": info.hit_type, "armor": round(info.armor_reduced, 1), "resisted": round(info.resisted, 1)}
+    if info.missed:
+        d["missed"] = True
+    if info.blocked:
+        d.update(blocked=True, guarded=round(info.blocked_amount, 1))
+    if info.armor_ignored:
+        d["pierced"] = round(info.armor_ignored, 1)
+    return d
+
+
 def combat_recorder(game, clock, sink):
     """Подписывается на CombatSystem; каждое событие - dict в sink (list).
     Тип источника/цели резолвится в момент события: после смерти врага по
-    одному id его уже не восстановить."""
+    одному id его уже не восстановить. `dodged` = удар не дошёл (уклонение ИЛИ промах по меткости: все потребители
+    считают попадания как `not dodged`); промах отдельно - `missed` (hit_details)."""
     combat_system = get_combat_system(game)
     if combat_system is None:
         return False
@@ -626,7 +643,8 @@ def combat_recorder(game, clock, sink):
             "source": info.source, "target": info.target,
             "source_type": types_by_id.get(info.source), "target_type": types_by_id.get(info.target),
             "damage": round(info.damage, 1), "critical": bool(info.is_critical),
-            "dodged": bool(info.is_dodged),
+            "dodged": bool(info.is_dodged or getattr(info, "missed", False)),
+            **hit_details(info),
         })
 
     combat_system.register_event_handler(on_event)

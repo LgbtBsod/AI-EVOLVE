@@ -675,7 +675,7 @@ class Character(BaseEntity):
             result = manager.cast(self, "weapon_attack", target)
             if result.ok:
                 self.set_animation_state("attacking")
-            return result.ok and any(not h.is_dodged for h in result.hits)
+            return result.ok and any(h.landed for h in result.hits)
         if self.attack_cooldown <= 0 and self.is_alive():
             self.set_animation_state("attacking")
             

@@ -19,6 +19,24 @@ return {
     spell_power = 0, dodge = 0,     -- dodge в пунктах (%), в игре dodge_chance 0..1
     attack_range = 2,               -- как далеко бьёт удар оружием (лук, копьё - больше)
     vision_range = 20,              -- как далеко сущность замечает других (стелс снижает)
+    -- урон: конвейер lua_content/damage.lua + docs/DAMAGE_PIPELINE.md. Броня - это `defense`, крит - crit_chance /
+    -- crit_dmg, уклонение - dodge; здесь остальное. Всё 0 = нейтрально (урон как до конвейера).
+    accuracy = 0,                   -- атакующий: очки шанса попасть (шанс = 100 + accuracy - evasion, %)
+    evasion = 0,                    -- цель: очки шанса промаха по ней
+    penetration_pct = 0,            -- атакующий: % брони цели, который удар игнорирует
+    penetration_flat = 0,           -- атакующий: очков брони, которые удар игнорирует (после процента)
+    resist_pen = 0,                 -- атакующий: пунктов %, снимаемых с каждого положительного resist_<тип>
+    block_chance = 0,               -- цель: шанс блока, %
+    block_reduction = 0,            -- цель: пунктов % сверх block.reduction из damage.lua, которые режет блок
+    damage_taken = 0,               -- цель: % урона сверх обычного (минус - меньше); итоговый модификатор
+    broken = 0,                     -- цель: 1 = сломана (guard break): весь урон x broken из damage.lua; вешается mod-ом на время
+  },
+
+  -- семейства статов по типам урона (типы и их значения по умолчанию - lua_content/damage.lua): rules() добавляет
+  -- defaults и bounds для prefix..<тип> (resist_fire, damage_ice ...). default_of - поле типа в damage.lua.
+  families = {
+    { prefix = "resist_", default_of = "resist", bounds = { min = -100, max = 100 } },  -- цель: % урона типа, который не проходит
+    { prefix = "damage_", default_of = "mod",    bounds = { min = -100 } },             -- атакующий: % бонус к урону типа
   },
 
   -- ресурсы как у Character в игре: текущее значение меняют heal/drain/deal/set,
@@ -61,5 +79,14 @@ return {
     aspd        = { min = 0.1, max = 4 },  -- больше 4 ударов в секунду не бывает
     attack_range = { min = 0.5, max = 30 },
     vision_range = { min = 0, max = 80 },
+    accuracy    = { min = -100, max = 100 },
+    evasion     = { min = 0, max = 95 },        -- шанс попасть не падает ниже hit.min из damage.lua
+    penetration_pct  = { min = 0, max = 100 },
+    penetration_flat = { min = 0 },
+    resist_pen  = { min = 0, max = 100 },
+    block_chance = { min = 0, max = 75 },
+    block_reduction = { min = 0, max = 100 },
+    damage_taken = { min = -90 },
+    broken      = { min = 0, max = 1 },
   },
 }

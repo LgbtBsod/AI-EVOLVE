@@ -146,6 +146,7 @@ def make_enemy(game, enemy_type: str, level: int, x: float, y: float, plan: Opti
     enemy.loot_class = "boss" if spec.get("role") else spec.get("loot", "basic")
     enemy.dialog = spec.get("dialog") or {}
     enemy.tactics_pool = list(spec.get("tactics") or [])
+    enemy.innate_stats = dict(spec.get("stats") or {})   # схема-статы вида: resist_*, block_chance ... (менеджер эффектов)
     enemy.ranged = bool(spec.get("ranged"))
     enemy.role = spec.get("role")                     # miniboss / boss / final
     enemy.rooted = bool(spec.get("rooted"))

@@ -8,6 +8,7 @@
 //! - L8b: Run analytics (agent dev tools: fits, sparklines, anomaly windows, log digest)
 //! - L8c: QA kernels (graph reachability, bootstrap stats, trajectory fingerprints)
 //! - L11: Tactics memory (collective bandit of enemy tactics vs the hero)
+//! - L12: Damage pipeline kernel (accuracy, dodge, block, crit, armor + penetration, resistance)
 //! - L10: Lua content bridge (sandboxed Lua 5.5 -> one JSON string for Python)
 //! - L9: Semantic Core (log compression, state diffs, event correlation)
 //! 
@@ -26,6 +27,7 @@ pub mod analytics;
 pub mod qa;
 pub mod lua_content;
 pub mod tactics;
+pub mod combat;
 pub mod semantic_core;
 pub mod training_room;
 

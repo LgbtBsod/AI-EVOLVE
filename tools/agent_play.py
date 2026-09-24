@@ -20,6 +20,7 @@ lua_content/dev_tools.lua: agent.player_keys), без god-mode, плюс
 
 Команды (через ';' или с новой строки, '#' - комментарий):
     spawn enemy|trap|chest|boss [xN]   клавиши 1/2/3/4 (N раз); boss - босс текущего акта
+    spawn enemy TYPE [xN]         враг конкретного вида из lua_content/bestiary.lua (режиссёр выбирает, кого призвать)
     attack [xN]                   space: удар по ближайшему врагу в радиусе
     interact [SEC]                удерживать e SEC секунд (по умолчанию 0.5)
     wait SEC                      прокрутить игру на SEC секунд игрового времени
@@ -33,7 +34,8 @@ lua_content/dev_tools.lua: agent.player_keys), без god-mode, плюс
 
 COND: `alive`, `dead`, `not alive`, `NAME OP NUMBER` (OP: < <= > >= == !=),
 соединённые `and`/`or` (and сильнее). Имена: t hp max_hp hp_pct lvl xp kills
-despawns enemies nearest dealt taken attacks hits crits dodges traps chests.
+despawns enemies nearest dealt taken attacks hits crits dodges traps chests misses blocks resisted armored pierced
+(последние пять - конвейер урона: промахи, блоки, снято сопротивлением и бронёй, пробито брони; docs/DAMAGE_PIPELINE.md).
 
 Примеры:
     python tools/agent_play.py "spawn enemy x3; until kills>=3 or dead max 90; observe; expect alive"
@@ -76,7 +78,10 @@ class ScriptError(ValueError):
 
 _COND_TERM = re.compile(r"^(not\s+)?([a-z_]+)(?:\s*(<=|>=|==|!=|<|>)\s*(-?\d+(?:\.\d+)?))?$")
 METRIC_NAMES = {"t", "hp", "max_hp", "hp_pct", "lvl", "xp", "kills", "despawns", "enemies", "nearest", "dealt",
-                "taken", "attacks", "hits", "crits", "dodges", "traps", "chests", "alive", "dead"}
+                "taken", "attacks", "hits", "crits", "dodges", "traps", "chests", "alive", "dead",
+                # damage pipeline (docs/DAMAGE_PIPELINE.md), all hits of the run: accuracy misses, blocked hits, points taken
+                # off by resistance / armor, armor points pierced
+                "misses", "blocks", "resisted", "armored", "pierced"}
 
 
 def parse_condition(text):
@@ -118,6 +123,22 @@ def eval_condition(groups, metrics):
 
 # ---------------------------------------------------------------- script
 
+def _parse_spawn(src, tokens, n, keys):
+    """`spawn enemy|trap|chest|boss` и `spawn enemy TYPE` (TYPE - вид из бестиария) -> команда-нажатие клавиши."""
+    what = tokens[0] if tokens else None
+    kind = tokens[1] if what == "enemy" and len(tokens) == 2 else None
+    if what not in ("enemy", "trap", "chest", "boss") or len(tokens) != (2 if kind else 1):
+        raise ScriptError(f"{src!r}: expected 'spawn enemy|trap|chest|boss [xN]' or 'spawn enemy TYPE [xN]'")
+    if kind is not None:
+        from src.gameplay.world import world_plan
+        if world_plan().spec(kind) is None:
+            raise ScriptError(f"{src!r}: unknown enemy type {kind!r} (lua_content/bestiary.lua, bosses.lua)")
+    args = {"key": keys[what], "times": n, "what": what}
+    if kind is not None:
+        args["enemy"] = kind
+    return ("press", args, src)
+
+
 def parse_script(text):
     """-> [(verb, args_dict, source_text)] с валидацией ДО запуска игры."""
     agent_cfg = section("agent")
@@ -143,9 +164,7 @@ def parse_script(text):
         if verb == "spawn":
             tokens = rest.split()
             n = repeat(tokens)
-            if len(tokens) != 1 or tokens[0] not in ("enemy", "trap", "chest", "boss"):
-                raise ScriptError(f"{src!r}: expected 'spawn enemy|trap|chest|boss [xN]'")
-            commands.append(("press", {"key": keys[tokens[0]], "times": n, "what": tokens[0]}, src))
+            commands.append(_parse_spawn(src, tokens, n, keys))
         elif verb == "attack":
             tokens = rest.split()
             n = repeat(tokens)
@@ -406,6 +425,8 @@ class PlaySession:
             "nearest": round(dist, 1) if dist is not None else None,
             "dealt": stats["dealt"], "taken": stats["taken"], "attacks": stats["attacks"],
             "hits": stats["hits"], "crits": stats["crits"], "dodges": stats["dodges"],
+            "misses": stats["misses"], "blocks": stats["blocks"], "resisted": stats["resisted"],
+            "armored": stats["armored"], "pierced": stats["pierced"],
             "traps": names.count("trap"), "chests": names.count("chest"),
             "ai": getattr(player, "ai_state", None),
             "pos": (round(player.x, 1), round(player.y, 1)) if player else None,
@@ -484,8 +505,10 @@ class PlaySession:
     def _step(self, frames):
         self.rt.step(frames)
 
-    def press(self, key, times):
+    def press(self, key, times, enemy=None):
         for _ in range(times):
+            if enemy is not None:                       # `spawn enemy TYPE`: режиссёр выбрал вид (одноразово)
+                self.scene().next_enemy_type = enemy
             self.game._set_key(key, True)
             self._step(PRESS_FRAMES)
             self.game._set_key(key, False)
@@ -494,7 +517,7 @@ class PlaySession:
     def run_command(self, verb, a, src):
         out = []
         if verb == "press":
-            self.press(a["key"], a["times"])
+            self.press(a["key"], a["times"], a.get("enemy"))
         elif verb == "hold":
             self.game._set_key(a["key"], True)
             self.rt.advance(a["seconds"])
@@ -597,9 +620,11 @@ class PlaySession:
         }, self.samples, self.events, self.kills.kills, self.kills.despawns)
 
         passed = sum(1 for e in self.expects if e[1])
+        # конвейер урона (docs/DAMAGE_PIPELINE.md): в строке только то, что было (без резистов/блока/брони строка прежняя)
+        pipeline = "".join(f" {k}={m[k]}" for k in ("misses", "blocks", "resisted", "pierced") if m[k])
         lines = [
             f"RESULT status={status} t={m['t']}s hp={m['hp']}/{m['max_hp']} alive={m['alive']} lvl={m['lvl']} "
-            f"kills={m['kills']} dealt={m['dealt']} taken={m['taken']} expects={passed}/{len(self.expects)} "
+            f"kills={m['kills']} dealt={m['dealt']} taken={m['taken']}{pipeline} expects={passed}/{len(self.expects)} "
             f"errors={len(self.collector.errors)} invariants={len(violations)} wall={self.rt.wall():.2f}s",
         ]
         if violations:

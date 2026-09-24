@@ -5,13 +5,16 @@
 --   shape: humanoid | beast | blob | spirit | giant | spider | serpent
 --   attack_range - дальность удара (стрелки бьют издалека), vision - дальность обзора:
 --   враг замечает героя только ближе неё (стелс героя её снижает)
+--   stats - статы схемы вида поверх базы (lua_content/effect_rules.lua): сопротивления по типам урона resist_<тип>
+--   (100 = иммунитет), block_chance, penetration_pct / penetration_flat, evasion, accuracy ... Конвейер урона -
+--   docs/DAMAGE_PIPELINE.md. Без stats урон по врагу считается как раньше (броня defense - и всё).
 local function foe(name, shape, size, color, hp, dmg, def, speed, exp, opts)
   opts = opts or {}
   return { name = name, shape = shape, size = size, color = color,
            health = hp, damage = dmg, defense = def, speed = speed, exp_reward = exp,
            skills = opts.skills or {}, loot = opts.loot or "basic", ranged = opts.ranged or false,
            attack_range = opts.attack_range or (opts.ranged and 7 or 2), vision = opts.vision or 20,
-           tactics = opts.tactics }
+           tactics = opts.tactics, stats = opts.stats }
 end
 
 return {
@@ -34,7 +37,11 @@ return {
     dark_elf     = foe("Тёмный альв", "humanoid", 0.95, { 0.3, 0.25, 0.45, 1 }, 60, 12, 3, 6.0, 26,
                        { skills = { "venom_spit" }, ranged = true, tactics = { "kite", "flank" } }),
     cave_spider  = foe("Пещерный паук", "spider", 0.9, { 0.25, 0.2, 0.2, 1 }, 45, 11, 2, 6.5, 22, { skills = { "venom_spit" } }),
-    golem_shard  = foe("Осколок голема", "giant", 1.1, { 0.55, 0.45, 0.35, 1 }, 90, 12, 9, 3.0, 30),
+    -- каменный осколок: щит держит часть ударов (блок), камень глушит обычный урон и лёд, трещины боятся огня;
+    -- его удары пробивают 3 очка брони (кожаная броня героя даёт 3)
+    golem_shard  = foe("Осколок голема", "giant", 1.1, { 0.55, 0.45, 0.35, 1 }, 90, 12, 9, 3.0, 30,
+                       { stats = { resist_physical = 30, resist_ice = 50, resist_fire = -25, block_chance = 25,
+                                   penetration_flat = 3 } }),
     forge_guard  = foe("Страж кузни", "humanoid", 1.3, { 0.6, 0.35, 0.2, 1 }, 200, 18, 10, 4.0, 110,
                        { skills = { "crushing_blow", "war_cry" }, loot = "elite" }),
     -- Ванахейм

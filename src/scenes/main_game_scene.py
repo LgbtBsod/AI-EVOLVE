@@ -53,6 +53,7 @@ class EnhancedGameScene:
         self.player_created_objects = []
         self.player_spawns = 0          # сколько врагов создал игрок (клавиша 1) за сессию
         self.creation_mode = None  # None, "enemy", "trap", "chest"
+        self.next_enemy_type = None  # режиссёр выбрал вид врага (agent_play: spawn enemy TYPE); действует на один спавн
         
         # Маяк смерти
         self.death_beacon = None
@@ -1401,8 +1402,9 @@ class EnhancedGameScene:
         logger.debug(f"Created {self.creation_mode} at position ({x:.1f}, {y:.1f})")
     
     def _create_enemy_at(self, x, y, z):
-        """Создание врага в указанной позиции (игрок-режиссёр: враги текущего акта)"""
-        self._spawn_enemy(self._plan().pick_enemy(self.current_level, self.rng, elite_chance=self._plan().elite_chance(self.enemy_level())), x, y,
+        """Создание врага в указанной позиции (игрок-режиссёр: враги текущего акта, или выбранный next_enemy_type)"""
+        chosen, self.next_enemy_type = self.next_enemy_type, None
+        self._spawn_enemy(chosen or self._plan().pick_enemy(self.current_level, self.rng, elite_chance=self._plan().elite_chance(self.enemy_level())), x, y,
                           player_created=True)
 
     def _create_boss_at(self, x, y, z):

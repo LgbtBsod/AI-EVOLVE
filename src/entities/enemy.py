@@ -309,7 +309,7 @@ class EnhancedEnemy:
                 if manager.ability(skill) is not None and manager.cast(self, skill, target).ok:
                     return True
             result = manager.cast(self, "weapon_attack", target)
-            return result.ok and any(not h.is_dodged for h in result.hits)
+            return result.ok and any(h.landed for h in result.hits)
         current_time = time.time()
         if current_time - self.last_attack_time >= self.attack_cooldown and self.is_alive():
             # Проверяем расстояние до цели

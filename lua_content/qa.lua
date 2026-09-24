@@ -15,6 +15,11 @@ return {
     { name = "idle_explore",  seed = 4, script = "wait 90" },
     -- ci = false: не входит в `qa.py check --ci` (kills>=1 держится без запаса на эталонной Linux-записи)
     { name = "forced_attacks", seed = 5, script = "spawn enemy x2; attack x5; wait 20; expect kills>=1", ci = false },
+    -- Damage pipeline (docs/DAMAGE_PIPELINE.md): the golem shard (bestiary `stats`: resist_physical 30, block_chance 25,
+    -- penetration_flat 3) - resistance, block and armor penetration show up as resisted / blocks / pierced. 8 of 8 seeds
+    -- (21..28) survive with blocks >= 2, so the expects are not a coin flip on another platform.
+    { name = "golem_guard", seed = 21, script = "spawn enemy golem_shard x3; until kills>=3 or dead max 60",
+      expects = { "alive", "kills>=3", "blocks>=1", "resisted>0", "pierced>0" } },
   },
   -- Поля итогового состояния, которые сравнивает golden (плюс отпечаток траектории)
   golden_fields = { "t", "hp", "max_hp", "lvl", "xp", "kills", "despawns", "enemies",
@@ -149,7 +154,7 @@ return {
   scenario_check = {
     cost = "low", tags = { "play" }, timeout = 120,
     watches = { "src/**/*.py", "lua_content/**/*.lua", "tools/agent_play.py", "tools/probe_*.py", "config.prc", "rust_core/src/**/*.rs" },
-    keep = { "hp", "lvl", "kills", "dealt", "taken", "expects" },   -- метрики строки; остальное RESULT-строки не печатается
+    keep = { "hp", "lvl", "kills", "dealt", "taken", "misses", "blocks", "resisted", "pierced", "expects" },   -- метрики строки; остальное RESULT-строки не печатается
     hide_zero = { "errors", "invariants", "expects" },   -- "expects" = "0/0": в сценарии нет expect
   },
   plays = {
@@ -183,6 +188,11 @@ return {
       hide_zero = { "failed", "skipped", "error" },
       tags = { "pytest", "rust" }, what = "A*/JPS/flow field: Rust kernel vs the Python twin on seeded grids",
       watches = { "src/gameplay/pathfinding.py", "rust_core/src/simulation/pathfinding.rs", "tests/test_pathfinding.py", "tools/probe_kernels.py" } },
+    { name = "damage", cmd = "python -m pytest -q tests/test_damage_pipeline.py", parse = "pytest", cost = "low",
+      hide_zero = { "failed", "skipped", "error" },
+      tags = { "pytest", "rust", "combat" }, what = "damage pipeline: Rust kernel vs the Python twin (bit for bit), stage cases, the neutral guard",
+      watches = { "src/effects/damage.py", "src/effects/manager.py", "rust_core/src/combat/**", "lua_content/damage.lua",
+                  "lua_content/effect_rules.lua", "tests/test_damage_pipeline.py", "tools/bench_damage.py" } },
     { name = "boot_smoke", cmd = "python tools/boot_smoke_test.py", parse = "result_line", requires = "display", cost = "medium",
       ci = false, tags = { "boot" }, what = "GameCore -> menu -> world -> plugins, offscreen buffer (skip without OpenGL/xvfb)",
       watches = { "src/**/*.py", "main.py", "config.prc", "lua_content/**/*.lua", "tools/boot_smoke_test.py", "tools/probe_runtime.py" } },

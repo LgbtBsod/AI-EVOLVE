@@ -83,6 +83,12 @@ def combat_stats(events, player_id):
         "enemy_attacks": sum(1 for e in events if e["target"] == player_id),
         "zero_damage_hits": sum(1 for e in hits if e["damage"] <= 0),
         "first_t": events[0]["t"] if events else None,
+        # конвейер урона (docs/DAMAGE_PIPELINE.md): промахи по меткости входят в dodges; блоки, снятое, пробитое - по попаданиям
+        "misses": sum(1 for e in events if e.get("missed")),
+        "blocks": sum(1 for e in hits if e.get("blocked")),
+        "resisted": round(sum(e.get("resisted", 0.0) for e in hits), 1),
+        "armored": round(sum(e.get("armor", 0.0) for e in hits), 1),
+        "pierced": round(sum(e.get("pierced", 0.0) for e in hits), 1),
     }
     taken_by, dealt_to = Counter(), Counter()
     for e in hits:

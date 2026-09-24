@@ -449,9 +449,14 @@ def cmd_golden(args):
     platform_tag = f"{platform.system()}-{platform.machine()}-py{platform.python_version()}"
     if args.record:
         GOLDEN_FILE.parent.mkdir(parents=True, exist_ok=True)
-        GOLDEN_FILE.write_text(json.dumps({"_comment": "qa.py golden --record; scenarios in lua_content/qa.lua",
-                                           "platform": platform_tag, "scenarios": current}, indent=1) + "\n",
-                               encoding="utf-8")
+        payload = {"_comment": "qa.py golden --record; scenarios in lua_content/qa.lua",
+                   "platform": platform_tag, "scenarios": current}
+        if args.only and GOLDEN_FILE.exists():
+            # --only NAME --record: refresh just these; the other scenarios stay exactly as recorded (their platform
+            # too), a refreshed one carries its own `platform`
+            payload = json.loads(GOLDEN_FILE.read_text(encoding="utf-8"))
+            payload["scenarios"].update({n: {**c, "platform": platform_tag} for n, c in current.items()})
+        GOLDEN_FILE.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8", newline="\n")
         print(f"recorded {len(current)} scenario(s) -> {relpath(GOLDEN_FILE)} ({platform_tag})")
         for name, c in current.items():
             print(f"  {name}: {c['status']} " + " ".join(f"{k}={c['final'][k]}" for k in ("t", "hp", "kills", "lvl"))
@@ -461,8 +466,10 @@ def cmd_golden(args):
         print("no golden file yet: run `python tools/qa.py golden --record` on a known-good tree")
         return 2
     golden = json.loads(GOLDEN_FILE.read_text(encoding="utf-8"))
-    if golden.get("platform") != platform_tag:
-        print(f"(note: golden recorded on {golden.get('platform')}, this is {platform_tag}; "
+    # a scenario refreshed by `--only --record` has its own platform; the others use the file's
+    recorded_on = {r.get("platform") or golden.get("platform") for n, r in golden["scenarios"].items() if n in current}
+    for other in sorted(p for p in recorded_on if p != platform_tag):
+        print(f"(note: golden recorded on {other}, this is {platform_tag}; "
               "libm differences can shift float-sensitive trajectories)")
     changed = 0
     for name, cur in current.items():

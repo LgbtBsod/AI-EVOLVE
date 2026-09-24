@@ -61,9 +61,21 @@ DEFAULT_RULES: dict[str, dict] = {
 }
 
 
+def _add_type_families(merged: dict, families: list) -> None:
+    """Статы по типам урона: для каждого типа из lua_content/damage.lua - defaults/bounds семейств effect_rules.lua."""
+    from .damage import config
+    cfg = config()
+    for fam in families:
+        for kind in cfg.types:
+            name = fam["prefix"] + kind
+            merged["defaults"].setdefault(name, cfg.type_defaults[kind].get(fam.get("default_of"), 0.0))
+            if fam.get("bounds"):
+                merged["bounds"].setdefault(name, dict(fam["bounds"]))
+
+
 @lru_cache(maxsize=1)
 def rules() -> dict[str, dict]:
-    """Правила статов из lua_content/effect_rules.lua поверх DEFAULT_RULES."""
+    """Правила статов из lua_content/effect_rules.lua поверх DEFAULT_RULES (плюс семейства статов по типам урона)."""
     merged = {k: dict(v) for k, v in DEFAULT_RULES.items()}
     try:
         from ..content import lua_bridge
@@ -72,6 +84,7 @@ def rules() -> dict[str, dict]:
         return merged
     for section in merged:
         merged[section].update(data.get(section) or {})
+    _add_type_families(merged, data.get("families") or [])
     return merged
 
 # ---------------------------------------------------------------- predicates

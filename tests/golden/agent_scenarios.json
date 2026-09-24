@@ -497,6 +497,61 @@
     "f189d597de939a29",
     "e9f3acee02fd5341"
    ]
+  },
+  "golem_guard": {
+   "seed": 21,
+   "script": "spawn enemy golem_shard x3; until kills>=3 or dead max 60",
+   "status": "OK",
+   "final": {
+    "t": 12.33,
+    "hp": 94.5,
+    "max_hp": 140.0,
+    "lvl": 1,
+    "xp": 90,
+    "kills": 3,
+    "despawns": 0,
+    "enemies": 10,
+    "dealt": 270.0,
+    "taken": 112.0,
+    "attacks": 45,
+    "hits": 45,
+    "crits": 4,
+    "alive": true
+   },
+   "invariants": [],
+   "t": [
+    0.0,
+    1.0,
+    2.0,
+    3.0,
+    4.0,
+    5.0,
+    6.0,
+    7.0,
+    8.0,
+    9.0,
+    10.0,
+    11.0,
+    12.0,
+    12.33
+   ],
+   "fingerprints": [
+    "e2178c2f803c1217",
+    "f14bb237ee4766d8",
+    "71390ad2de90a402",
+    "c98a47ac3b22c527",
+    "b4b0b8c9213b6ac1",
+    "1f8c6613cf89a589",
+    "5c94039d23ad4ff0",
+    "857da8ea1dec82f1",
+    "4b34324624e0ce66",
+    "9b431787491e5d7b",
+    "3d336bf5db9d2b9e",
+    "9be96cc03ac8cb24",
+    "d13efafc47b4facf",
+    "9194ec7241f2cee4"
+   ],
+   "platform": "Windows-AMD64-py3.14.5"
   }
  }
 }

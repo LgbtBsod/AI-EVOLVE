@@ -1376,7 +1376,10 @@ def main():
             *shown_timeline,
             "",
             "## Combat totals",
-            f"attacks: {stats['attacks']} ({stats['hits']} hit, {stats['dodges']} dodged, {stats['crits']} critical)",
+            f"attacks: {stats['attacks']} ({stats['hits']} hit, {stats['dodges']} dodged, {stats['crits']} critical)"
+            + (f"; pipeline: {stats['misses']} missed, {stats['blocks']} blocked, {stats['resisted']} resisted, "
+               f"{stats['armored']} soaked by armor, {stats['pierced']} armor pierced"
+               if stats["misses"] or stats["blocks"] or stats["resisted"] or stats["pierced"] else ""),
             f"damage dealt by player: {dmg_dealt:.1f}" + (f"  by type: {stats['dealt_to_type']}" if stats["dealt_to_type"] else ""),
             f"damage taken by player: {dmg_taken:.1f}" + (f"  by type: {stats['taken_by_type']}" if stats["taken_by_type"] else ""),
             f"enemies killed: {kill_count} (+{len(kill_tracker.despawns)} despawned alive)",

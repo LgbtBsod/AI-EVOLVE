@@ -7,7 +7,9 @@
 --   cost      - { mana = 10 } / { stamina = 20 } / { hp = 5 },
 --   when      - условие применения (ИИ не тратит лечение на полном HP),
 --   needs_target - нужна живая цель в range (по умолчанию - если операции бьют enemy),
---   tags      - attack (лайфстил, attack_hit, события оружия), spell, skill, heal,
+--   tags      - attack (лайфстил, attack_hit, события оружия), spell, skill, heal; тип урона - тег из
+--               lua_content/damage.lua (fire, ice, poison ...): первый такой тег задаёт тип ударов способности (и её
+--               DoT), без него урон физический (сопротивление resist_<тип>, бонус damage_<тип>);
 --   cast_time - задержка с кругом на земле (навыки боссов), radius - для area.
 -- area бьёт ВСЕХ в круге, и своих, и самого заклинателя (френдли фаер); affects =
 -- "others" | "enemies" | "allies" сужает круг. ИИ сам решает, стоит ли бить по кругу.
@@ -65,7 +67,7 @@ return {
     { id = "magic_bolt", name = "Магическая стрела", tags = { "attack", "spell" }, range = 7.0, cooldown = 1.2,
       cost = { mana = 10 },
       ops = { { kind = "deal", target = "enemy", stat = "hp", op = "sub", value = { ref = "ctx.spell_power" } } } },
-    { id = "fireball", name = "Огненный шар", tags = { "spell" }, range = 8.0, cooldown = 7, cost = { mana = 25 },
+    { id = "fireball", name = "Огненный шар", tags = { "spell", "fire" }, range = 8.0, cooldown = 7, cost = { mana = 25 },
       ops = { { kind = "deal", target = "area", radius = 3.0, stat = "hp", op = "sub", value = { pct = 120, of = "spell_power" } },
               { kind = "deal", target = "enemy", stat = "hp", op = "sub", value = { pct = 15, of = "spell_power" },
                 every = 1, duration = { flat = 3 }, flags = { "true_damage" } } } },
@@ -93,7 +95,7 @@ return {
       ops = { hit(130),
               { kind = "mod", target = "enemy", stat = "move_speed", op = "add", value = { pct = -40 },
                 duration = { flat = 3 } } } },
-    { id = "venom_spit", name = "Ядовитый плевок", tags = { "attack", "skill" }, range = 6.0, cooldown = 6,
+    { id = "venom_spit", name = "Ядовитый плевок", tags = { "attack", "skill", "poison" }, range = 6.0, cooldown = 6,
       ops = { { kind = "deal", target = "enemy", stat = "hp", op = "sub", value = { pct = 25, of = "attack_damage" },
                 every = 1, duration = { flat = 4 }, flags = { "true_damage" } } } },
     { id = "war_cry", name = "Боевой клич", tags = { "skill" }, cooldown = 15, needs_target = true, range = 8.0,

@@ -171,8 +171,8 @@ class Session:
     # ---------------------------------------------------------------- battle loop
     def _record_hit(self, info) -> None:
         self._events.append({"t": round(self.mgr.now, 3), "source": info.source, "target": info.target,
-                             "damage": info.damage, "critical": info.is_critical, "dodged": info.is_dodged,
-                             "ability": info.ability})
+                             "damage": info.damage, "critical": info.is_critical,
+                             "dodged": info.is_dodged or getattr(info, "missed", False), "ability": info.ability})
 
     def _battle(self, until, limit: float) -> dict:
         """Крутит бой, пока until() не скажет «хватит» (или limit). Опыт - за каждое убийство."""

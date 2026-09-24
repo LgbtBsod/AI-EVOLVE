@@ -110,7 +110,13 @@ def is_stat(name: str) -> bool:
         if name.startswith(pfx):
             name = name[len(pfx):]
             break
-    return name in KNOWN_STATS
+    return name in KNOWN_STATS or name in registry_stats()
+
+
+def registry_stats() -> set[str]:
+    """Статы, объявленные в lua_content/effect_rules.lua (defaults): единственный реестр новых статов, без копии здесь."""
+    from .runtime import rules
+    return set(rules()["defaults"])
 
 
 # ---------------------------------------------------------------- descriptors

@@ -12,6 +12,7 @@ use crate::analytics;
 use crate::qa;
 use crate::lua_content;
 use crate::tactics;
+use crate::combat;
 use crate::simulation::pathfinding::{self as pathing, Algorithm, CostGrid};
 use image::DynamicImage;
 
@@ -31,6 +32,8 @@ fn rust_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyFlowField>()?;
     m.add_function(wrap_pyfunction!(py_find_path, m)?)?;
     m.add_function(wrap_pyfunction!(py_flow_field, m)?)?;
+    m.add_function(wrap_pyfunction!(py_resolve_hit, m)?)?;
+    m.add_function(wrap_pyfunction!(py_resolve_hits, m)?)?;
     // Aliases for cleaner Python API
     m.add("WorldGenerator", m.getattr("PyWorldGenerator")?)?;
     m.add("SimulationEnv", m.getattr("PySimulationEnv")?)?;
@@ -707,4 +710,59 @@ impl PyFlowField {
     fn directions(&self, py: Python<'_>) -> Vec<i32> {
         py.detach(|| self.inner.directions())
     }
+}
+
+// ============================================================================
+// Damage pipeline FFI (src/effects/damage.py)
+// ============================================================================
+
+/// One hit through the damage kernel (rust_core/src/combat). `params` = 16 numbers in the order of
+/// `damage.PARAMS`, `rolls` = 5 numbers (NaN = not drawn yet), `consts` = 11 numbers of damage.lua.
+/// Returns (need, hit, dodged, blocked, crit, damage_before, armor_ignored, armor_reduced, resisted,
+/// blocked_amount, final); need != 0 = "draw roll need-1 and call again".
+#[pyfunction]
+#[pyo3(name = "resolve_hit")]
+fn py_resolve_hit(
+    params: Vec<f64>,
+    rolls: Vec<f64>,
+    consts: Vec<f64>,
+) -> PyResult<(i64, i64, i64, i64, i64, f64, f64, f64, f64, f64, f64)> {
+    let bad = pyo3::exceptions::PyValueError::new_err;
+    let p = combat::Params::from_slice(&params).map_err(bad)?;
+    let c = combat::Consts::from_slice(&consts).map_err(bad)?;
+    let r: [f64; combat::N_ROLLS] = rolls
+        .try_into()
+        .map_err(|v: Vec<f64>| bad(format!("rolls: expected {} numbers, got {}", combat::N_ROLLS, v.len())))?;
+    let o = combat::resolve_hit(&p, &c, &r);
+    Ok((
+        o.need, o.hit as i64, o.dodged as i64, o.blocked as i64, o.crit as i64, o.damage_before, o.armor_ignored,
+        o.armor_reduced, o.resisted, o.blocked_amount, o.finalv,
+    ))
+}
+
+/// Many hits from column buffers (buffer protocol, f64): 16 parameter columns, 5 roll columns, the 11
+/// constants. Returns 11 `bytes` (native-endian f64 columns, `array('d').frombytes`) in the order of
+/// `damage.OUT_FIELDS`.
+#[pyfunction]
+#[pyo3(name = "resolve_hits")]
+fn py_resolve_hits<'py>(
+    py: Python<'py>,
+    params: Vec<Bound<'py, PyAny>>,
+    rolls: Vec<Bound<'py, PyAny>>,
+    consts: Vec<f64>,
+) -> PyResult<Vec<Bound<'py, pyo3::types::PyBytes>>> {
+    let bad = pyo3::exceptions::PyValueError::new_err;
+    let c = combat::Consts::from_slice(&consts).map_err(bad)?;
+    let params = params.iter().map(|col| buf::<f64>(py, col)).collect::<PyResult<Vec<_>>>()?;
+    let rolls = rolls.iter().map(|col| buf::<f64>(py, col)).collect::<PyResult<Vec<_>>>()?;
+    let pc: Vec<&[f64]> = params.iter().map(|v| v.as_slice()).collect();
+    let rc: Vec<&[f64]> = rolls.iter().map(|v| v.as_slice()).collect();
+    let cols = py.detach(|| combat::resolve_hits(&pc, &rc, &c)).map_err(bad)?;
+    Ok(cols
+        .iter()
+        .map(|col| {
+            let bytes: Vec<u8> = col.iter().flat_map(|v| v.to_ne_bytes()).collect();
+            pyo3::types::PyBytes::new(py, &bytes)
+        })
+        .collect())
 }

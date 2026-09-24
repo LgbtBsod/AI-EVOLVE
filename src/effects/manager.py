@@ -37,6 +37,7 @@ take_damage (шипы) помечается reflect и сам реакций н�
 """
 from __future__ import annotations
 
+import itertools
 import logging
 import math
 import operator
@@ -44,6 +45,7 @@ import random
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Optional, Protocol
 
+from . import damage
 from .ops import OpCall, Periodic, Tracked, apply_op, replace_contribution_game
 from .runtime import EffectRuntime, Unit, buff_fields, resolve_value, rules
 
@@ -84,15 +86,29 @@ class World(Protocol):
 @dataclass
 class HitInfo:
     """Попадание. Поля совместимы с DamageInfo старой боевой системы
-    (регистратор боя в tools/probe_runtime.py читает source/target/damage/...)."""
+    (регистратор боя в tools/probe_runtime.py читает source/target/damage/...).
+    Стадии конвейера урона (docs/DAMAGE_PIPELINE.md) - в полях ниже: что сняли броня, сопротивление и блок."""
     source: str
     target: str
     damage: float
     is_critical: bool = False
     is_dodged: bool = False
     ability: str = ""
-    blocked: bool = False       # неуязвимость (iframe)
+    invulnerable: bool = False  # неуязвимость цели (iframe): урона нет
     killed: bool = False
+    missed: bool = False        # промах по меткости (accuracy против evasion)
+    blocked: bool = False       # блок цели (шанс block_chance): урон срезан
+    hit_type: str = "physical"  # тип урона (lua_content/damage.lua)
+    damage_before: float = 0.0  # урон после множителей и крита, до брони / сопротивления / блока
+    armor_reduced: float = 0.0
+    resisted: float = 0.0
+    blocked_amount: float = 0.0
+    armor_ignored: float = 0.0  # очков брони, снятых пробитием
+
+    @property
+    def landed(self) -> bool:
+        """Удар дошёл до цели (не уклонение и не промах); неуязвимость - отдельно (invulnerable)."""
+        return not (self.is_dodged or self.missed)
 
 
 @dataclass
@@ -173,6 +189,7 @@ class EntityState:
         self.extra_effects: list[dict] = []       # действующие части расходников (Тоник ярости)
         self.perk_effects: list[dict] = []        # перки характеристик (lua_content/perks.lua)
         self._equipment_stats: Tracked = Tracked(self)
+        self.innate: dict[str, float] = dict(getattr(entity, "innate_stats", None) or {})   # статы вида (бестиарий `stats`)
         self._external: Tracked = Tracked(self)   # ключ -> (до, {стат: вклад})
         self.applied: dict[str, float] = {}
         self.cooldowns: dict[str, float] = {}      # способность -> когда готова
@@ -260,7 +277,7 @@ class EntityState:
         allocated = getattr(self.entity, "attributes", None) or {}
         for attr in rules()["attributes"]:
             new[attr] = float(allocated.get(attr, 0.0))   # очки уровня; предметы/эффекты - поверх
-        for k, v in self.equipment_stats.items():
+        for k, v in itertools.chain(self.innate.items(), self.equipment_stats.items()):
             new[k] = new.get(k, 0.0) + v
         for until, layer in self.external.values():
             if until > now:
@@ -755,7 +772,8 @@ class EffectManager:
     # OpHost: примитивы для обработчиков ops.py (сущности игры: урон, кулдауны, мир) ----------------------
     @staticmethod
     def _flags(o: dict, tags: tuple) -> set:
-        return set(o.get("flags") or ()) | ({"reflect"} if "reflect" in tags else set())
+        """Флаги удара: флаги операции + reflect + тип урона (первый тег-тип способности, если он не тип по умолчанию)."""
+        return set(o.get("flags") or ()) | ({"reflect"} if "reflect" in tags else set()) | damage.type_flags(tags)
 
     def op_stat_prefix(self, cx: OpCall, tgt: EntityState) -> str:
         return "enemy_" if tgt is not cx.source else ""
@@ -969,27 +987,37 @@ class EffectManager:
             hc.sync(e.health, getattr(e, "max_health", e.health))
 
     # ---------------------------------------------------------------- damage
+    def _hit_params(self, st: EntityState, tgt_st: EntityState, amount: float, flags: set, kind: str) -> tuple:
+        """Один удар -> входы ядра (damage.PARAMS): поля сущностей (крит, уклонение, броня) и статы Unit."""
+        src, tgt, cfg = st.entity, tgt_st.entity, damage.config()
+        mine, theirs = st.unit._eff, tgt_st.unit._eff
+        crit_mult = float(getattr(src, "critical_damage", cfg.crit_mult_default) or cfg.crit_mult_default)
+        return (amount, float(damage.flag_bits(flags, theirs("broken") > 0.0)),
+                mine("accuracy"), theirs("evasion"), float(getattr(tgt, "dodge_chance", 0.0) or 0.0),
+                theirs("block_chance"), theirs("block_reduction"), float(getattr(src, "critical_chance", 0.0) or 0.0),
+                crit_mult, mine("damage_" + kind), theirs("resist_" + kind), mine("resist_pen"),
+                float(getattr(tgt, "defense", 0.0) or 0.0), mine("penetration_pct"), mine("penetration_flat"),
+                theirs("damage_taken"))
+
     def _damage(self, st: EntityState, tgt_st: EntityState, amount: float, flags: set, ability: str,
                 tags: tuple) -> Optional[HitInfo]:
-        """Единый урон: уклонение -> крит -> броня -> iframe -> HP -> лайфстил -> события."""
+        """Единый урон: конвейер damage.py (меткость, уклонение, блок, крит, тип, броня + пробитие, сопротивление,
+        итоговые модификаторы) -> iframe -> HP -> лайфстил -> события."""
         src, tgt = st.entity, tgt_st.entity
         if not is_alive(tgt) or amount <= 0:
             return None
         info = HitInfo(entity_id(src), entity_id(tgt), 0.0, ability=ability)
-        certain = {"true_damage", "unavoidable", "periodic"} & flags
-        if not certain and self.rng.random() < float(getattr(tgt, "dodge_chance", 0.0) or 0.0):
-            info.is_dodged = True
+        kind = damage.type_of_flags(flags)
+        out = damage.roll_hit(self._hit_params(st, tgt_st, amount, flags, kind), self.rng, damage.config().consts)
+        damage.fill_info(info, out, kind)
+        if not info.landed:
             self._notify(info)
-            self.emit(tgt, "dodge", other=src)
+            if info.is_dodged:
+                self.emit(tgt, "dodge", other=src)
             return info
-        if "no_crit" not in flags and "periodic" not in flags and \
-                self.rng.random() < float(getattr(src, "critical_chance", 0.0) or 0.0):
-            info.is_critical = True
-            amount *= float(getattr(src, "critical_damage", 1.5) or 1.5)
-        if "true_damage" not in flags:
-            amount = max(1.0, amount - float(getattr(tgt, "defense", 0.0) or 0.0))
+        amount = out.final
         if tgt_st.invulnerable(self.now):
-            info.blocked = True
+            info.invulnerable = True
             self._notify(info)
             return info
         amount = min(amount, tgt_st.resource("hp"))
@@ -997,6 +1025,12 @@ class EffectManager:
         info.damage = amount
         info.killed = not is_alive(tgt)
         self._notify(info)
+        self._after_hit(st, tgt_st, info, flags, tags)
+        return info
+
+    def _after_hit(self, st: EntityState, tgt_st: EntityState, info: HitInfo, flags: set, tags: tuple) -> None:
+        """Лайфстил и события после нанесённого урона (attack_hit, crit, take_damage, kill, die)."""
+        src, tgt, amount = st.entity, tgt_st.entity, info.damage
         is_attack = "attack" in tags
         if is_attack and float(getattr(src, "lifesteal", 0.0) or 0.0) > 0:
             self._heal(st, "hp", amount * float(src.lifesteal) / 100.0)
@@ -1012,7 +1046,6 @@ class EffectManager:
             src.kills = int(getattr(src, "kills", 0) or 0) + 1
             self.emit(src, "kill", other=tgt, last_damage=amount)
             self.emit(tgt, "die", other=src, last_damage=amount)
-        return info
 
     # ---------------------------------------------------------------- describe
     def describe(self, entity) -> dict:
