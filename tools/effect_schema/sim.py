@@ -329,10 +329,10 @@ class EffectRuntime:
         return b is not None and b.get("until", 1e18) > self._now
 
     def _amplify(self, ef: dict, ctx: dict) -> float:
-        """meta.amplify {when | while_buff, factor, every, of}: множитель
+        """Effect.amplify {when | while_buff, factor, every, of}: множитель
         бонусов эффекта factor^floor(of/every), пока выполнено условие `when`
         (предикат ctx, напр. "ctx.hp <= 1") и/или активен бафф while_buff."""
-        amp = (ef.get("meta") or {}).get("amplify")
+        amp = ef.get("amplify")
         if not amp:
             return 1.0
         if amp.get("when") and not eval_pred(amp["when"], ctx):

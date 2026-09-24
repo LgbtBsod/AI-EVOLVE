@@ -55,6 +55,21 @@ def validate_effect(ef: dict, path: str = "effect") -> list[str]:
         pv = tr.get(pk) if isinstance(tr, dict) else None
         if isinstance(pv, str) and pv:
             errs += _validate_pred(pv, f"{path}.trigger.{pk}")
+    amp = ef.get("amplify")
+    if amp is not None:
+        if not isinstance(amp, dict):
+            err("amplify must be a table {when, every, of, factor}")
+        else:
+            if not isinstance(amp.get("every"), (int, float)) or amp["every"] <= 0:
+                err("amplify.every must be a positive number")
+            if not isinstance(amp.get("factor"), (int, float)):
+                err("amplify.factor must be a number")
+            if not isinstance(amp.get("of"), str) or not amp["of"]:
+                err("amplify.of must name a ctx field (e.g. hp_missing_below_40)")
+            if not amp.get("when") and not amp.get("while_buff"):
+                err("amplify needs `when` (predicate) or `while_buff`")
+            if isinstance(amp.get("when"), str):
+                errs += _validate_pred(amp["when"], f"{path}.amplify.when")
     ops = ef.get("ops")
     if not isinstance(ops, list) or not ops:
         err("ops must be a non-empty list")

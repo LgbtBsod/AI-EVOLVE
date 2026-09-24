@@ -219,6 +219,11 @@ class Effect:
     duration: Optional[dict] = None                  # Value/Scale dict, nil = пока триггер true
     cooldown: Optional[dict] = None
     stacks: Optional[dict] = None
+    # Усиление ВСЕХ бонусов (mod add/sub) эффекта: пока `when` истинно,
+    # множитель factor^floor(ctx[of] / every). Lost My Self: при HP = 1 бонусы
+    # x2 за каждые 10% ниже 40% -> {when="ctx.hp <= 1", every=10,
+    # of="hp_missing_below_40", factor=2}. Универсально - не поле под предмет.
+    amplify: Optional[dict] = None
     meta: Optional[dict] = None                      # name/description/icon... для UI
 
     def to_json(self) -> dict:
@@ -226,7 +231,7 @@ class Effect:
                              "ops": [o.to_json() for o in self.ops]}
         if self.tags:
             d["tags"] = list(self.tags)
-        for k in ("duration", "cooldown", "stacks", "meta"):
+        for k in ("duration", "cooldown", "stacks", "amplify", "meta"):
             v = getattr(self, k)
             if v:
                 d[k] = v
@@ -240,7 +245,7 @@ class Effect:
             ops=[Op.from_json(o) for o in d.get("ops", [])],
             tags=list(d.get("tags", [])),
             duration=d.get("duration"), cooldown=d.get("cooldown"),
-            stacks=d.get("stacks"), meta=d.get("meta"),
+            stacks=d.get("stacks"), amplify=d.get("amplify"), meta=d.get("meta"),
         )
 
     # -- convenience -----------------------------------------------------

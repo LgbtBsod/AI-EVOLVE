@@ -38,14 +38,13 @@ def _lost_my_self():
             Op(kind="mod", target="self", stat="lifesteal", op="add",
                value=Value(flat=0), scale=sc(v_flat=5)),
         ],
+        # При HP = 1 ВСЕ бонусы эффекта x2 за каждые 10% HP ниже 40%
+        # (3 шага -> x8). Условие - именно 1 HP, щит не обязателен: подойдёт
+        # любой другой iframe/щит (решение геймдизайна)
+        amplify={"when": "ctx.hp <= 1", "every": 10, "of": "hp_missing_below_40", "factor": 2},
         meta={"name": "Lost My Self",
               "description": "Below 40% HP: berserk power scaling with missing HP; "
-                             "at exactly 1 HP every bonus x2 per missing 10%.",
-              # При HP = 1 ВСЕ бонусы эффекта x2 за каждые 10% HP ниже 40%
-              # (3 шага -> x8). Условие - именно 1 HP, щит не обязателен: подойдёт
-              # любой другой iframe/щит (решение геймдизайна)
-              "amplify": {"when": "ctx.hp <= 1", "factor": 2, "every": 10,
-                          "of": "hp_missing_below_40"}},
+                             "at exactly 1 HP every bonus x2 per missing 10%."},
     )
 
 

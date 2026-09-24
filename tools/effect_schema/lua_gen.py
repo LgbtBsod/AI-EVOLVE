@@ -162,7 +162,7 @@ def render_effect(ef, indent: int = 0) -> str:
         d["_trigger_when"] = when
     else:
         d["trigger"] = trd
-    for k in ("duration", "cooldown", "stacks", "meta"):
+    for k in ("duration", "cooldown", "stacks", "amplify", "meta"):
         if ef.get(k):
             d[k] = ef[k]
     d["ops"] = ef.get("ops", [])
