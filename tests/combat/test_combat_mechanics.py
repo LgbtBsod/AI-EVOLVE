@@ -152,6 +152,10 @@ class TestCombatMechanics(unittest.TestCase):
     
     def test_06_break_damage_bonus(self):
         """Тест бонуса урона по цели в брейке"""
+        # Сравнение про бонус брейка: случайный крит в одном из двух вызовов
+        # делал тест флейки (~10% падений), поэтому криты здесь выключены
+        self.player.stats.crit_chance_percent = 0.0
+
         # Сначала брейкаем врага
         self.enemy.stats.current_stagger = self.enemy.stats.base_stagger_max * 1.1
         self.enemy.break_state = BreakState.BROKEN
@@ -168,7 +172,7 @@ class TestCombatMechanics(unittest.TestCase):
         )
         
         # В брейке урон должен быть больше
-        self.assertGreater(damage_normal, damage_no_break * 0.9)
+        self.assertGreater(damage_normal, damage_no_break)
         print(f"✅ Break Damage Bonus: работает")
     
     def test_07_friendly_fire(self):

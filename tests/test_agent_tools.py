@@ -223,10 +223,7 @@ class TestRealGame:
         finals = []
         for i in range(2):
             out = tmp_path / f"run{i}"
-            # --no-invariants: тест про детерминизм; инварианты сейчас ловят реальный
-            # баг HP > max_health (docs/DEV_PROBE_AUDIT.md) и сделали бы статус FAIL
-            proc = _run(["tools/agent_play.py", "--seed", "5", "--no-invariants", "--out", str(out), self.SCRIPT],
-                        tmp_path)
+            proc = _run(["tools/agent_play.py", "--seed", "5", "--out", str(out), self.SCRIPT], tmp_path)
             assert proc.returncode == 0, proc.stdout + proc.stderr
             assert "RESULT status=OK" in proc.stdout
             assert len(proc.stdout.splitlines()) < 25  # компактный вывод
@@ -234,15 +231,14 @@ class TestRealGame:
             finals.append((session["final"], session["kills_list"]))
         assert finals[0] == finals[1]  # побитово одинаковые прогоны при одном seed
 
-    def test_invariants_catch_hp_over_max(self, tmp_path):
-        """Регрессионный сторож: пока HealthComponent не синхронизирован с
-        max_health героя, инвариант обязан это ловить (поменять на OK после фикса)."""
+    def test_no_invariant_violations_in_a_fight(self, tmp_path):
+        """Регрессия HP > max_health: HealthComponent героя создавался до того,
+        как класс выставлял max_health, и перезаписывал HP (149/120)."""
         proc = _run(["tools/agent_play.py", "--seed", "7", "--out", str(tmp_path / "inv"), "spawn enemy x10; wait 20"],
                     tmp_path)
         session = json.loads((tmp_path / "inv" / "session.json").read_text(encoding="utf-8"))
-        ids = {v["id"] for v in session["invariants"]}
-        assert ids <= {"HERO_HP_OVER_MAX"}, ids
-        assert ("INVARIANT" in proc.stdout) == bool(ids)
+        assert session["invariants"] == [], session["invariants"]
+        assert "INVARIANT" not in proc.stdout
 
     def test_agent_play_failure_prints_repro(self, tmp_path):
         proc = _run(["tools/agent_play.py", "--out", str(tmp_path / "f"), "wait 1; expect kills>=99"], tmp_path)

@@ -171,13 +171,12 @@ class TestBloodPriceAttackRoom(unittest.TestCase):
         self.assertTrue(hero.alive)
         self.assertAlmostEqual(hero.current_hp, 1.0, delta=TOL)
         self.assertIn("last_will", hero.buffs)
-        # duration base=5, scale every=10 of hp_missing_below_40 value flat=5 factor=2
-        # аналитика: 5 + floor(30/10) * 5 * 2 = 35
+        # Щит - ровно 5 с (решение геймдизайна, tests/test_lost_my_self_spec.py);
+        # "x2 за каждые 10%" усиливает бонусы Lost My Self, а не длительность
         steps = int(max(0.0, 40.0 - hero.stat("hp_pct")) // 10)
-        expected_until = 5.0 + steps * 5.0 * 2.0
         self.assertEqual(steps, 3)
-        self.assertAlmostEqual(hero.buffs["last_will"]["until"],
-                               expected_until, delta=TOL)
+        self.assertAlmostEqual(hero.buffs["last_will"]["until"], 5.0, delta=TOL)
+        self.assertIn("iframe", hero.buffs["last_will"]["flags"])
         self.assertAlmostEqual(hero.buffs["last_will"]["cooldown"], 30.0, delta=TOL)
         # deal-оп идёт ПОСЛЕ fail-ветки: hp уже 1, но deal бьёт по врагу
         dmg = (1.5 + 1.5 * 3) / 100.0 * 1000.0
@@ -221,8 +220,8 @@ class TestBloodPriceAttackRoom(unittest.TestCase):
         rt.refresh_passives()
         rt.fire_event("attack")
         self.assertIn("last_will", hero.buffs)
-        until = hero.buffs["last_will"]["until"]     # 35 по аналитике
-        self.assertAlmostEqual(until, 35.0, delta=TOL)
+        until = hero.buffs["last_will"]["until"]     # щит ровно 5 с
+        self.assertAlmostEqual(until, 5.0, delta=TOL)
         rt.tick(t=until + 1.0, dt=0.0)               # past until
         self.assertNotIn("last_will", hero.buffs)
 
@@ -416,11 +415,25 @@ class TestUiLogicFullCycle(unittest.TestCase):
         # kill-событие: манекен умирает/возрождается, kills+1
         self.assertEqual(steps[1]["kills"], 1)
         self.assertAlmostEqual(steps[1]["dummy_hp"], 200.0, delta=TOL)
-        # атака 2: strength 100+5*1=105 (mod не влияет на прямой урон),
-        # heal 8 => 516
+        # атака 2: heal 8 => 516 (mod strength не влияет на прямой урон)
         self.assertAlmostEqual(steps[2]["hero_hp"], 516.0, delta=TOL)
+        # Бонус силы по шаблону: +5 и +1 за kill (cap 10) - ТЕКУЩЕЕ значение
+        # 5 + kills, а не сумма по ударам (раньше ожидалось 5, а рантайм
+        # копил 5 + 6 = 11 и рос бы с каждой атакой без предела).
         mods = out["room"]["summary"]["mods"]
-        self.assertAlmostEqual(mods.get("strength", 0.0), 5.0, delta=TOL)
+        self.assertAlmostEqual(mods.get("strength", 0.0), 6.0, delta=TOL)
+
+    def test_vampires_fang_bonus_tracks_kills_not_hits(self):
+        """Повторные удары без убийств не наращивают бонус силы."""
+        def strength_after(events):
+            out = self._full_cycle_item(
+                "vampires_fang",
+                {"hero_hp": 500.0, "base_stats": {"strength": 100.0},
+                 "dummy_max_hp": 10000.0, "events": events})
+            return out["room"]["summary"]["mods"].get("strength", 0.0)
+        self.assertAlmostEqual(strength_after(["attack 10"]), 5.0, delta=TOL)
+        self.assertAlmostEqual(strength_after(["attack 10"] * 5), 5.0, delta=TOL)
+        self.assertAlmostEqual(strength_after(["attack 10", "kill", "kill", "attack 10"]), 7.0, delta=TOL)
 
     def test_mantle_of_thorns_full_cycle(self):
         """Реталиация: 20% от ТЕКУЩЕГО hp героя уроном по атакующему."""

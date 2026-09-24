@@ -76,17 +76,19 @@
 | `agent_play --scenario NAME` | именованные заготовки сценариев | — |
 | `dev_probe_diff --frames` | сравнение скриншотов двух прогонов: текстом + картинка только изменившихся кадров | — |
 
-### Находки второй волны (баги игры/тестов, не исправлены — вне рамок)
+### Найдено инструментами — и исправлено
 
-- **HP героя выше максимума** (инвариант `HERO_HP_OVER_MAX`, фаззер ужал до `spawn enemy`):
-  `Character.__init__` создаёт `HealthComponent(max_health=class_stats.health)` до
-  `_setup_character_class()`, который ставит `max_health = 120`; `take_damage()` копирует
-  здоровье компонента в `self.health` → 149/120. Реген в компонент не синхронизируется.
-- **Флейки-тест** `tests/combat/test_combat_mechanics.py::test_06_break_damage_bonus` — падает ~10%
-  (несидированный RNG крита в `src/core/combat_mechanics.py`).
-- **Тренировочная комната**: 2 падения в `ui_logic.run_training_room` — модификаторы статов
-  накапливаются лишний раз (strength 24 вместо 20, Vampire's Fang 11 вместо 5) в двухслойной
-  модели модов `tools/effect_schema/sim.py` (`fire_event` / `refresh_passives`).
+| Баг | Как нашли | Исправление | Сторож-тест |
+|---|---|---|---|
+| **HP героя выше максимума** (149/120): `HealthComponent` создавался до того, как класс выставлял `max_health`, а `take_damage()` копировал устаревшее HP компонента (реген/лечение/level-up компонент не видел) | инвариант `HERO_HP_OVER_MAX`, фаззер ужал до `spawn enemy` | `HealthComponent.sync()` перед расчётом урона и после настройки класса | `combat_smoke_test: test_hero_hp_never_exceeds_max_after_hits`, `test_agent_tools: test_no_invariant_violations_in_a_fight` |
+| **Герой застревает в `seeking_exit`** (5/5 seed): ИИ идёт к ближайшей точке выхода, эхо-тропа при точно известном выходе не перестраивается — первая путевая точка навсегда оставалась ближайшей | гипотеза `HERO_STUCK`, `agent_play … story` | пройденные путевые точки убираются (`_consume_reached_echo_points`) — герой доходит до выхода и проходит уровни | golden `idle_explore`, `qa.py sweep "wait 120"` |
+| **Флейки-тест** `test_06_break_damage_bonus` (~10%) — несидированный крит | `qa.py test` → FLAKY | калькулятор принимает RNG; в сравнении криты выключены, проверка усилена (строго больше) | 50/50 прогонов |
+| **Тренировочная комната: моды** — пассивный «+20% силы» считался от уже усиленной силы (петля 20→24), событийные моды копились по ударам (Vampire's Fang 5+6=11 и рост без предела) | известные падения | пассивы от base+событий; вклад событийной операции заменяется, а не суммируется | `test_training_room_effectschema` (+ новый `test_vampires_fang_bonus_tracks_kills_not_hits`) |
+| **Lost My Self против описания геймдизайнера**: крит/крит-урон/вампиризм считались % от стата (вампиризм при базе 0 не рос вовсе), щит 35 с вместо 5, нет неуязвимости, kill не продлевал щит, кулдаун 30 с сбрасывался | исполняемая спека по описанию дизайнера | пункты вместо %, щит 5 с с флагом `iframe`, продление по `extend.on`, кулдаун в рантайме; при HP = 1 все бонусы ×2 за шаг (×8) | `tests/test_lost_my_self_spec.py` — по каталогу **и** по Lua `lua_content/items/sorrow_of_berserk.lua` |
+
+Удалено: `lua_content/items/contracts/sorrow_of_berserk.lua` — никем не загружался, не загрузился бы
+(`require("uuid")`) и противоречил дизайну (множитель до ×512). Вместо него — сгенерированный и проверенный
+`lua_content/items/sorrow_of_berserk.lua`.
 
 ### Тренировочная комната — проверено
 
@@ -94,7 +96,7 @@
 |---|---|
 | `tools/training_room.py`, `training_room_demo.py` | работают; **исправлено**: Lua-конфиг манекенов не читался (заглушка) — теперь `lupa.lua55`; вывод 139/367 → 29/45 строк (`--verbose` для полного); отчёты больше не пишутся в отслеживаемую `training_room_output/` |
 | `tests/test_training_room.py` | 13/13 (раньше не собирался — путь `/workspace`) |
-| `tests/test_training_room_effectschema.py` | 38/40 — 2 бага симуляции модов (выше) |
+| `tests/test_training_room_effectschema.py` | 41/41 (2 бага симуляции модов исправлены, см. выше) |
 | `tools/effect_schema` CLI | работает (`validate/build/templates/new`) |
 | `tools/web_builder/app.py` | работает с `--web` (HTTP 200); **исправлено**: README давал неверную команду, `flet`/`flet-web` добавлены в `tools/requirements-dev.txt` |
 

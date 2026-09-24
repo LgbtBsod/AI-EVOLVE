@@ -394,6 +394,24 @@ def test_effect_tick_heal_clamps_to_max_health():
     check("a heal tick clamps at max_health instead of overshooting", player.health == player.max_health)
 
 
+def test_hero_hp_never_exceeds_max_after_hits():
+    """Регрессия: HealthComponent героя создавался до того, как класс
+    выставлял max_health (warrior 120), и первый удар ставил HP 149/120;
+    реген/лечение компонент не видел и следующий удар откатывал HP назад."""
+    game = make_game()
+    player = make_player(game)
+    player.take_damage(1.0)
+    check("first hit keeps hero HP <= max_health", player.health <= player.max_health)
+    player.health = player.max_health - 30  # как будто реген/лечение изменили HP в обход компонента
+    before = player.health
+    player.take_damage(10.0)
+    check("next hit starts from the current HP, not the component's stale value",
+          before - 10.0 <= player.health < before)
+    player.add_experience(player.experience_to_next_level)  # level-up: max_health +15, полное лечение
+    player.take_damage(1.0)
+    check("after level-up a hit lands on the new max_health", player.max_health - 1.0 <= player.health < player.max_health)
+
+
 def test_stealth_attack_applies_poison_via_combat_system():
     # Previously _stealth_attack computed damage by hand and called
     # target.take_damage() directly, bypassing CombatSystem entirely (no
@@ -451,6 +469,7 @@ TESTS = [
     test_buff_modifies_combat_stats,
     test_effect_tick_damage_respects_death_latch,
     test_effect_tick_heal_clamps_to_max_health,
+    test_hero_hp_never_exceeds_max_after_hits,
     test_stealth_attack_applies_poison_via_combat_system,
     test_time_based_enemy_scaling_applies_on_spawn,
 ]

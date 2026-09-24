@@ -312,9 +312,12 @@ class ImmortalEnemy:
 class AdvancedCombatCalculator:
     """Многопоточный калькулятор урона со всеми механиками"""
     
-    def __init__(self):
+    def __init__(self, rng=None):
         self.lock = Lock()
-        
+        # Любой объект с .random() (RNGManager, random.Random(seed), заглушка в
+        # тестах); по умолчанию - модуль random, как и раньше
+        self.rng = rng if rng is not None else random
+
     def calculate_damage(self, attacker, target, damage_type: DamageType = DamageType.PHYSICAL, 
                         is_skill: bool = False, is_magic: bool = False) -> Tuple[float, Dict]:
         """
@@ -375,7 +378,7 @@ class AdvancedCombatCalculator:
         details["elemental_bonus"] = elemental_bonus
         
         # 5. Crit Calculation
-        is_crit = random.random() * 100 < attacker.stats.crit_chance_percent
+        is_crit = self.rng.random() * 100 < attacker.stats.crit_chance_percent
         crit_mult = 1.0
         if is_crit:
             crit_mult = attacker.stats.crit_damage_percent / 100.0

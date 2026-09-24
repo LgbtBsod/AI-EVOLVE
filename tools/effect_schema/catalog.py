@@ -25,19 +25,27 @@ def _lost_my_self():
         ops=[
             Op(kind="mod", target="self", stat="strength", op="add", value=Value(pct=20)),
             Op(kind="mod", target="self", stat="stamina", op="add", value=Value(pct=10)),
+            # крит, крит-урон и вампиризм - ПУНКТЫ (10% -> 15%), а не % от
+            # текущего значения: иначе при базе 0 вампиризм не рос вовсе
             Op(kind="mod", target="self", stat="crit_chance", op="add",
-               value=Value(pct=5), scale=sc(v_pct=5)),
+               value=Value(flat=5), scale=sc(v_flat=5)),
             Op(kind="mod", target="self", stat="crit_dmg", op="add",
-               value=Value(pct=10), scale=sc(v_pct=10)),
+               value=Value(flat=10), scale=sc(v_flat=10)),
             Op(kind="mod", target="self", stat="aspd", op="add",
                value=Value(pct=5), scale=sc(v_pct=10)),
             Op(kind="mod", target="self", stat="hp_regen", op="add",
                value=Value(flat=0), scale=sc(v_flat=20)),
             Op(kind="mod", target="self", stat="lifesteal", op="add",
-               value=Value(pct=0), scale=sc(v_pct=5)),
+               value=Value(flat=0), scale=sc(v_flat=5)),
         ],
         meta={"name": "Lost My Self",
-              "description": "Below 40% HP: berserk power scaling with missing HP."},
+              "description": "Below 40% HP: berserk power scaling with missing HP; "
+                             "at exactly 1 HP every bonus x2 per missing 10%.",
+              # При HP = 1 ВСЕ бонусы эффекта x2 за каждые 10% HP ниже 40%
+              # (3 шага -> x8). Условие - именно 1 HP, щит не обязателен: подойдёт
+              # любой другой iframe/щит (решение геймдизайна)
+              "amplify": {"when": "ctx.hp <= 1", "factor": 2, "every": 10,
+                          "of": "hp_missing_below_40"}},
     )
 
 
@@ -53,10 +61,10 @@ def _lost_my_self_attack():
                fail=[
                    Op(kind="set", target="self", stat="hp", op="set",
                       value=Value(flat=1)),
+                   # Щит Last Will: неуязвимость ровно 5 с (flag iframe),
+                   # повторно - не чаще раза в 30 с, каждый kill под щитом +5 с
                    Op(kind="buff", target="self", buff_id="last_will",
-                      duration={"base": 5,
-                                "scale": {"every": 10, "of": "hp_missing_below_40",
-                                          "value": {"flat": 5}, "factor": 2}},
+                      duration={"flat": 5}, flags=["iframe"],
                       cooldown={"flat": 30},
                       extend={"on": "kill", "flat": 5}),
                ]),

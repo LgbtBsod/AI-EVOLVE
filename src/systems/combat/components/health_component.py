@@ -98,6 +98,18 @@ class HealthComponent(BaseComponent, IHealthComponent):
         self._max_health = value
         self._current_health = min(self._current_health * ratio, value)
     
+    def sync(self, current_health: float, max_health: float) -> None:
+        """Выставить состояние извне, когда источник правды - владелец.
+
+        Character хранит health/max_health сам (их меняют реген, лечение,
+        level-up, настройка класса); компонент перед расчётом урона
+        подтягивается к ним, иначе его устаревшие значения перезаписывали
+        здоровье героя (HP 149/120 после первого удара)."""
+        if max_health > 0:
+            self._max_health = max_health
+        self._current_health = max(0.0, min(current_health, self._max_health))
+        self._is_dead = self._current_health <= 0
+
     def reset(self) -> None:
         """Полное восстановление здоровья."""
         self._current_health = self._max_health

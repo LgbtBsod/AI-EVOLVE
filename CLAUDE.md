@@ -50,6 +50,10 @@ Rules of thumb:
 - Tests that wait on game timers: mark them `pytestmark = pytest.mark.virtual_time` (tests/conftest.py)
   instead of real `time.sleep` — the toughness suite went from 68 s to 0.1 s.
 - Known pre-existing failures live in `tests/qa_known_failures.json`; `qa.py test` reports them as known.
+- Item mechanics: the designer's words are encoded as executable specs (e.g. `tests/test_lost_my_self_spec.py`,
+  run against the catalog AND the Lua item in `lua_content/items/`). Change the spec first, then the item;
+  regenerate the Lua with `tools/effect_schema` (`ui_logic.to_lua`).
+- After an intended gameplay change: `qa.py golden` shows what moved, then `qa.py golden --record`.
 - Default dev map: enemies spawn ~160u from the hero and rarely reach him — a run without
   `spawn enemy` usually has no combat at all (hypothesis `NO_COMBAT`).
 
