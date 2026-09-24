@@ -21,7 +21,7 @@ setup(
         "build_apps": {
             "gui_apps": {"ai-evolve": "main.py"},
             # Data files the game opens at runtime (checked with an audit hook)
-            "include_patterns": ["config/*.json"],
+            "include_patterns": ["config/*.json", "lua_content/**/*.lua", "assets/**/*"],
             "plugins": ["pandagl", "p3openal_audio"],
             "platforms": ["win_amd64", "manylinux2014_x86_64", "macosx_11_0_universal2"],
             "log_filename": "$USER_APPDATA/AI-EVOLVE/output.log",
