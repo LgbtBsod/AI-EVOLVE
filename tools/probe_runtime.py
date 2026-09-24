@@ -83,8 +83,13 @@ class VirtualTime(types.ModuleType):
     def __init__(self, clock):
         super().__init__("time")
         self._clock = clock
-        self._wall0 = _real_time.time()
-        self._perf0 = _real_time.perf_counter()
+        if os.environ.get("AI_EVOLVE_CLOCK_BASE") == "fixed":
+            # experiment: the virtual clock must not depend on the process start time
+            self._wall0 = 1_800_000_000.0
+            self._perf0 = 1000.0
+        else:
+            self._wall0 = _real_time.time()
+            self._perf0 = _real_time.perf_counter()
 
     def now(self):
         return self._clock.getFrameTime()

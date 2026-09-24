@@ -11,6 +11,9 @@ on:
       pairs:
         description: "Same-seed pairs per variant"
         default: "20"
+      clock_base:
+        description: "Virtual clock base: real (process start time) or fixed"
+        default: "real"
       script:
         description: "agent_play script"
         default: "spawn enemy x2; until kills>=1 max 40; observe; expect kills>=1; expect alive; wait 5"
@@ -34,6 +37,8 @@ jobs:
           python-version: "3.14"
       - run: python -m pip install -r requirements-dev.txt
       - name: Same-seed pairs (normal, ASLR off where available, hash seed 0)
+        env:
+          AI_EVOLVE_CLOCK_BASE: ${{ inputs.clock_base }}
         run: python tools/qa.py determinism "${{ inputs.script }}" --pairs ${{ inputs.pairs }} --variants normal,aslr-off,hashseed0
       - uses: actions/upload-artifact@v7
         if: always()
