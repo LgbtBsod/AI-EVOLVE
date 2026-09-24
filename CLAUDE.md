@@ -48,8 +48,12 @@ Rules of thumb:
   (`sql "SELECT ..."` for anything custom).
 - `--fast` + a seed (agent_play defaults to seed 1) = byte-for-byte reproducible run. Every
   failing run prints a `repro:` command; each run dir also has `repro.sh`.
-- The player's controls are the only levers agent_play exposes: `spawn enemy|trap|chest` (keys
-  1/2/3), `attack` (space), `interact` (e). Key map: `lua_content/dev_tools.lua` → `agent.player_keys`.
+- The player's controls are the only levers agent_play exposes: `spawn enemy|trap|chest|boss` (keys
+  1/2/3/4), `attack` (space), `interact` (e), `emotion calm|rage|fear|curiosity|greed|resolve` (F1-F6)
+  and `direct north|south|east|west|chest|exit|npc|none` (arrows, C/X/N/Z). Emotion and directive
+  shift the hero's interest (utility choice in `src/gameplay/hero_drive.py`), they never command him;
+  `observe` shows `mood/directive/goal/stance`. Keys: `lua_content/dev_tools.lua` → `agent.player_keys`
+  and `lua_content/hero_mind.lua`.
 - Turn-based interactive play: run `python tools/agent_play.py --serve --port 8765` in the
   background, then `curl -s localhost:8765/do -d 'wait 5; observe'`, `curl -s -X POST localhost:8765/quit`.
 - Named scenario templates: `agent_play.py --list-scenarios`, `--scenario swarm` (lua_content/qa.lua).

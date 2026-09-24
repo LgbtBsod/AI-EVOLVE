@@ -78,9 +78,16 @@ class HeroMind:
         return self.baseline is not None and combat_power(self.hero) >= self.baseline * EMPOWERED_RATIO
 
     # ---------------------------------------------------------------- decisions
+    def _drive(self):
+        return getattr(self.hero, "drive", None)      # эмоция игрока (src/gameplay/hero_drive.py)
+
+    def low_hp(self) -> float:
+        drive = self._drive()
+        return drive.retreat_hp if drive is not None else LOW_HP
+
     def should_retreat(self) -> bool:
-        """Спрашивает ИИ боя героя вместо жёсткого «ниже 30% - беги»."""
-        return self.hp_frac() <= LOW_HP and self.stance != "press"
+        """Спрашивает ИИ боя героя вместо жёсткого «ниже 30% - беги» (страх - раньше, ярость - позже)."""
+        return self.hp_frac() <= self.low_hp() and self.stance != "press"
 
     def update(self, dt: float, in_combat: bool, now: float) -> None:
         frac = self.hp_frac()
@@ -89,9 +96,14 @@ class HeroMind:
             self.baseline = p if self.baseline is None else 0.9 * self.baseline + 0.1 * p
         ep = self.episode
         if ep is None:
-            if in_combat and frac <= LOW_HP and self.hero.is_alive():
+            if in_combat and frac <= self.low_hp() and self.hero.is_alive():
                 ctx = 1 if self.empowered() else 0
                 arm = self.bandit.select(ctx, None)
+                drive = self._drive()
+                # ярость подталкивает давить, но не решает за героя: учится он на том, что выбрал
+                if drive is not None and STANCES[arm] == "retreat" and drive.press_bias > 0 \
+                        and ((self.episodes * 7919 + int(now * 10)) % 100) / 100.0 < drive.press_bias:
+                    arm = STANCES.index("press")
                 self.episode = {"ctx": ctx, "arm": arm, "t0": now, "dealt": 0.0, "taken": 0.0, "kills": 0,
                                 "calm": 0.0}
                 self._set_stance(STANCES[arm])
@@ -117,7 +129,9 @@ class HeroMind:
     def _set_stance(self, stance: Optional[str]) -> None:
         self.stance = stance
         if self.inventory_brain is not None:
-            self.inventory_brain.heal_at = HEAL_AT.get(stance or "retreat", 0.35)
+            drive = self._drive()
+            calm = drive.heal_at if drive is not None else HEAL_AT["retreat"]
+            self.inventory_brain.heal_at = HEAL_AT["press"] if stance == "press" else calm
 
     def _close(self, died: bool) -> float:
         ep, self.episode = self.episode, None

@@ -829,6 +829,12 @@ class Character(BaseEntity):
             self._move_away_from_enemy(nearest_enemy, dt)
             return
 
+        drive = getattr(self, "drive", None)
+        if drive is not None:        # эмоция и подсказки игрока: выбор цели по полезности
+            self._update_ai_driven(drive, nearest_enemy, items, dt, exit_position, vision_range,
+                                   known_exit_positions, hint_positions)
+            return
+
         if nearest_enemy and self.get_distance_to(nearest_enemy) <= self.attack_range:
             # Враг в зоне атаки - атакуем
             self.ai_state = "fighting"
@@ -879,6 +885,61 @@ class Character(BaseEntity):
         self.target_enemy = None
         self._explore_area(dt)
     
+
+    def _update_ai_driven(self, drive, nearest_enemy, items, dt, exit_position, vision_range,
+                          known_exit_positions, hint_positions):
+        """Цель - по полезности (src/gameplay/hero_drive.py): база из ситуации x вес эмоции
+        + интерес подсказки игрока. Подсказка тянет, но не приказывает: враг рядом важнее."""
+        import random
+        from src.gameplay.hero_drive import Option
+        now = getattr(getattr(self.game, "effect_manager", None), "now", None)
+        now = time.perf_counter() if now is None else now
+        options = []
+        if nearest_enemy is not None:
+            d = self.get_distance_to(nearest_enemy)
+            if d <= 12.0:
+                options.append(Option("fight", (nearest_enemy.x, nearest_enemy.y), max(0.2, 1.0 - d / 15.0)))
+        item = self._find_nearest_item(items)
+        if item is not None:
+            ix, iy = self._extract_item_position(item)
+            if ix is not None:
+                d = math.hypot(self.x - ix, self.y - iy)
+                if d <= 30.0:
+                    options.append(Option("loot", (ix, iy), 0.3 + 0.7 * (1.0 - d / 30.0)))
+        exit_target = self._select_best_exit_target(known_exit_positions=known_exit_positions,
+                                                    exit_position=exit_position, vision_range=vision_range)
+        if exit_target:
+            options.append(Option("exit", tuple(exit_target[:2]), 1.0))
+        hint = self._select_best_hint_target(hint_positions)
+        if hint:
+            options.append(Option("hint", tuple(hint[:2]), 1.0))
+        options.append(Option("explore", None, 1.0))
+        choice = drive.choose(options, (self.x, self.y), now)
+        goal = choice.goal if choice else "explore"
+        if goal == "fight":
+            self.ai_state = "fighting"
+            self.target_enemy = nearest_enemy
+            if self.get_distance_to(nearest_enemy) <= self.attack_range:
+                self.attack(nearest_enemy)
+            else:
+                self._move_towards_enemy(nearest_enemy, dt)
+            return
+        self.target_enemy = None
+        if goal in ("loot", "exit", "hint"):
+            self.ai_state = {"loot": "looting", "exit": "seeking_exit", "hint": "seeking_hint"}[goal]
+            self.move_towards(choice.target[0], choice.target[1], dt)
+            return
+        self.ai_state = "exploring"
+        if drive.direction() is not None:       # подсказана сторона: идти туда шаг за шагом
+            target = getattr(self, "_directed_target", None)
+            if target is None or getattr(self, "_explore_directive", None) != drive.directive \
+                    or math.hypot(self.x - target[0], self.y - target[1]) <= 1.0:
+                target = drive.explore_target((self.x, self.y), random)
+                self._directed_target, self._explore_directive = target, drive.directive
+            self.move_towards(target[0], target[1], dt)
+            return
+        self._directed_target = None
+        self._explore_area(dt)
 
     def _select_best_hint_target(self, hint_positions=None):
         """Выбор ближайшей позиции подсказки (карта/NPC)."""

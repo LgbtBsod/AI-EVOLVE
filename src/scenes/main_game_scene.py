@@ -427,7 +427,9 @@ class EnhancedGameScene:
         player.inventory = self.hero_inventory
         from src.gameplay.progression import HeroGrowth
         self.hero_growth = HeroGrowth(player.character_class)
+        from src.gameplay.hero_drive import HeroDrive
         from src.gameplay.hero_mind import HeroMind, mind_path
+        player.drive = HeroDrive()
         player.mind = HeroMind(player, mind_path(), inventory_brain=self.hero_inventory_brain)
         cat = catalog()
         weapon = {"mage": "apprentice_staff", "rogue": "worn_dagger"}.get(player.character_class, "rusty_sword")
@@ -1270,6 +1272,33 @@ class EnhancedGameScene:
             if pressed and not was_pressed:
                 action()
             self._action_key_state[action_key] = pressed
+
+        # Эмоция и подсказки: не приказ, а сдвиг интереса героя (src/gameplay/hero_drive.py)
+        drive = getattr(self.player, "drive", None)
+        if drive is not None:
+            from src.gameplay.hero_drive import player_keys
+            for key, (kind, name) in player_keys().items():
+                pressed = bool(keys.get(key, False))
+                if pressed and not self._action_key_state.get(key, False):
+                    self.nudge_hero(kind, name)
+                self._action_key_state[key] = pressed
+
+    def nudge_hero(self, kind, name):
+        """Игрок сменил эмоцию героя или дал подсказку."""
+        drive = getattr(self.player, "drive", None) if self.player is not None else None
+        if drive is None:
+            return False
+        now = self.effects.now if self.effects is not None else self.game_time
+        if kind == "emotion" and drive.set_emotion(name):
+            if self.hero_inventory_brain is not None:
+                self.hero_inventory_brain.heal_at = drive.heal_at
+            self.log_message(f"Эмоция: {drive.mood.get('name', name)}. {drive.mood.get('thought', '')}".strip())
+            return True
+        if kind == "directive" and drive.set_directive(name, now):
+            spec = drive.cfg["directives"].get(name) or {}
+            self.log_message(f"Подсказка герою: {spec.get('name', name)}" if drive.directive else "Подсказка снята")
+            return True
+        return False
 
     def _attack_nearest_enemy(self):
         """Атака ближайшего врага"""
