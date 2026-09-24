@@ -31,6 +31,7 @@ modules nobody imports (~18k LOC) and `qa.py docs` marks stale .md reports — d
 | Numbers across runs / "did my fix help" | `python tools/probe_db.py stats` · `why` · `predict` · `compare RUN_A` · `trend kills` | ms |
 | Which tests to run for my diff | `python tools/qa.py test --changed` (parallel shards; prints only NEW failures, auto-detects flaky ones) | ~1-4 s |
 | Did gameplay behaviour change at all | `python tools/qa.py golden` (deterministic scenarios vs `tests/golden/`) | ~2 s |
+| Why do two same-seed runs differ | `python tools/qa.py determinism "SCRIPT" --pairs 6` (paired traced runs x variants normal/aslr-off/hashseed0 -> first divergent frame, RNG-vs-state order, field + ULP distance, hypotheses, clock/entropy leak list; `--diff A B` for two `agent_play --trace-frames` files; rules in `lua_content/qa.lua`) | ~10 s |
 | Hunt bugs automatically | `python tools/qa.py fuzz` (random player actions + per-frame invariants → minimal repro script) | ~10 s |
 | Balance / "how often does X happen" | `python tools/qa.py sweep "SCRIPT" --seeds 16` (distribution + bootstrap CI) | ~3 s |
 | Visual regression between two probe runs | `python tools/dev_probe_diff.py --before A --after B --frames` (image only for changed frames) | s |

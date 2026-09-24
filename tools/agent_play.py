@@ -209,6 +209,110 @@ class ErrorCollector(logging.Handler):
             self.errors.append(line)
 
 
+def hex_float(v):
+    """Bit-exact rendering of a numeric state value: float.hex() with trailing zeros of the mantissa
+    stripped (float.fromhex reads it back). bool/None/str pass through; ints are hex'd as floats so an
+    int-vs-float type flip cannot masquerade as a value change."""
+    if isinstance(v, bool) or v is None or isinstance(v, str):
+        return v
+    try:
+        mantissa, exp = float(v).hex().partition("p")[::2]
+    except (TypeError, ValueError):
+        return str(v)
+    return f"{mantissa.rstrip('0')}p{exp}" if exp else mantissa
+
+
+def hash_state(state):
+    """Short blake2b hex over the canonical (sorted, compact) JSON of a trace state."""
+    import hashlib
+    return hashlib.blake2b(json.dumps(state, sort_keys=True, separators=(",", ":")).encode("utf-8"),
+                           digest_size=6).hexdigest()
+
+
+class FrameTracer:
+    """--trace-frames FILE (opt-in, off by default): one JSON line per simulated frame.
+
+        {"f": frame, "t": virtual seconds (exact float), "h": hash of t + world, "r": "py:mgr:np", "s": world}
+
+    `s` is the world at full precision (floats as float.hex()): hero x/y/hp/mana/stamina/ai/lvl/xp and
+    every enemy in scene order (id = first-seen ordinal, NOT entity_id: those are uuid4/addresses and
+    differ between processes by design). `s` is omitted while it equals the previous frame (readers
+    carry it forward). `r` = hashes of random.getstate(), of the project RNGManager and of numpy's
+    global state ("-" when unreachable). Two traces of the same script are diffed by
+    `qa.py determinism --diff A B` down to the first frame, the RNG-vs-state order and the exact field.
+    """
+
+    def __init__(self, path, game):
+        self.game = game
+        self.frame = 0
+        self._prev_wh = None
+        self._seen = {}   # id(obj) -> (obj, label): strong refs keep addresses from being reused
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        self._file = open(path, "w", encoding="utf-8", newline="\n")
+
+    def _label(self, entity):
+        hit = self._seen.get(id(entity))
+        if hit is None:
+            hit = self._seen[id(entity)] = (entity, f"e{len(self._seen) + 1}")
+        return hit[1]
+
+    def snapshot(self):
+        scene = runtime.get_scene(self.game)
+        player = getattr(scene, "player", None) if scene is not None else None
+        hero = None
+        if player is not None:
+            hero = {"x": hex_float(player.x), "y": hex_float(player.y), "hp": hex_float(player.health),
+                    "mana": hex_float(getattr(player, "mana", None)),
+                    "stamina": hex_float(getattr(player, "stamina", None)),
+                    "ai": getattr(player, "ai_state", None), "lvl": getattr(player, "level", None),
+                    "xp": hex_float(getattr(player, "experience", None))}
+        enemies = [{"id": self._label(e), "ty": str(runtime.entity_type_of(e, False)), "x": hex_float(e.x),
+                    "y": hex_float(e.y), "hp": hex_float(e.health)}
+                   for e in (getattr(scene, "enemies", None) or [])]
+        return {"hero": hero, "en": enemies}
+
+    @staticmethod
+    def rng_hashes():
+        import hashlib
+        import random
+
+        def short(obj):
+            return hashlib.blake2b(repr(obj).encode("utf-8"), digest_size=4).hexdigest()
+
+        py = short(random.getstate())
+        mgr = "-"
+        try:
+            from src.core import rng_manager
+            default = getattr(rng_manager, "_default_rng", None)  # not get_default_rng(): must not create one
+            if default is not None:
+                mgr = short(default.state)
+        except Exception:  # noqa: BLE001 - the tracer must never break the run it observes
+            pass
+        npr = "-"
+        numpy = sys.modules.get("numpy")
+        if numpy is not None:
+            try:
+                st = numpy.random.get_state()
+                npr = short((st[0], st[1].tobytes(), st[2], st[3], st[4]))
+            except Exception:  # noqa: BLE001
+                pass
+        return f"{py}:{mgr}:{npr}"
+
+    def record(self, now):
+        world = self.snapshot()
+        wh = hash_state(world)
+        rec = {"f": self.frame, "t": now, "h": hash_state([hex_float(now), wh]), "r": self.rng_hashes()}
+        if wh != self._prev_wh:
+            rec["s"] = world
+        self._prev_wh = wh
+        self.frame += 1
+        self._file.write(json.dumps(rec, separators=(",", ":")) + "\n")
+
+    def close(self):
+        if not self._file.closed:
+            self._file.close()
+
+
 class PlaySession:
     def __init__(self, args, out_dir):
         self.args = args
@@ -229,6 +333,8 @@ class PlaySession:
         self.invariants = InvariantChecker(inv_cfg) if inv_cfg["enabled"] and not args.no_invariants else None
         runtime.combat_recorder(self.game, self.rt.now, self.events)
         self._state_log = (out_dir / "state.jsonl").open("w", encoding="utf-8")
+        # opt-in: per-frame bit-exact trace for `qa.py determinism` (None = zero cost)
+        self.tracer = FrameTracer(args.trace_frames, self.game) if getattr(args, "trace_frames", None) else None
         self.game.taskMgr.add(self._per_frame, "agent_play_frame", sort=100)
         self.game.taskMgr.doMethodLater(args.sample_interval, self._sample_task, "agent_play_sample")
         self._record_sample()
@@ -249,6 +355,8 @@ class PlaySession:
     # --- game-side tasks
     def _per_frame(self, task):
         now = self.rt.now()
+        if self.tracer is not None:
+            self.tracer.record(now)
         self.kills.update(self.game, now)
         player = getattr(self.scene(), "player", None)
         ai = getattr(player, "ai_state", None) if player is not None else None
@@ -454,6 +562,8 @@ class PlaySession:
     def finish(self, script_text):
         report, hyps, fc = self.report_lines(limit=3)
         self._state_log.close()
+        if self.tracer is not None:
+            self.tracer.close()
         m = self.metrics()
         failed = [e for e in self.expects if not e[1]]
         violations = self.invariants.report() if self.invariants is not None else []
@@ -511,6 +621,8 @@ class PlaySession:
         return status, lines
 
     def close(self):
+        if self.tracer is not None:
+            self.tracer.close()
         self.rt.close()
 
 
@@ -608,6 +720,9 @@ def parse_args(argv=None):
     parser.add_argument("--out", default=None, help="output dir (default dev_probe_output/play_<time>_xxxx)")
     parser.add_argument("--verbose", "-v", action="store_true", help="print PASS lines and the full report")
     parser.add_argument("--no-invariants", action="store_true", help="skip per-frame world invariant checks")
+    parser.add_argument("--trace-frames", metavar="FILE", default=None,
+                        help="write one JSON line per simulated frame (state + RNG hashes, bit-exact floats); "
+                             "diff two traces with `qa.py determinism --diff A B` (off by default)")
     args = parser.parse_args(argv)
     scenarios = {sc["name"]: sc for sc in qa_settings()["scenarios"]}
     if args.list_scenarios:

@@ -1,0 +1,43 @@
+name: Determinism probe
+
+# Manual. Runs `qa.py determinism` (same-seed pairs compared frame by frame) on all three
+# OSes. Use it when a test like test_agent_play_is_deterministic flakes on CI only: the
+# console shows the first divergent frame, which channel diverged first (RNG or state),
+# the size of the difference (float-level vs logic-level) and hypotheses; the artifact has
+# the full traces and repro_determinism.sh.
+on:
+  workflow_dispatch:
+    inputs:
+      pairs:
+        description: "Same-seed pairs per variant"
+        default: "20"
+      script:
+        description: "agent_play script"
+        default: "spawn enemy x2; until kills>=1 max 40; observe; expect kills>=1; expect alive; wait 5"
+
+jobs:
+  determinism:
+    name: determinism (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.14"
+      - run: python -m pip install -r requirements-dev.txt
+      - name: Same-seed pairs (normal, ASLR off where available, hash seed 0)
+        run: python tools/qa.py determinism "${{ inputs.script }}" --pairs ${{ inputs.pairs }} --variants normal,aslr-off,hashseed0
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: determinism-${{ matrix.os }}
+          path: dev_probe_output/qa/determinism_*
+          if-no-files-found: warn

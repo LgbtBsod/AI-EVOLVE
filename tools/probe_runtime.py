@@ -98,6 +98,8 @@ class VirtualTime(types.ModuleType):
     monotonic = perf_counter
 
     def __getattr__(self, name):
+        if _LEAKS is not None:  # opt-in leak recorder (AI_EVOLVE_LEAK_REPORT); passive, changes nothing
+            _LEAKS.passthrough(name, sys._getframe(1))
         return getattr(_real_time, name)
 
 
@@ -191,6 +193,220 @@ def seed_everything(seed):
         pass
 
 
+# ---------------------------------------------------------------------------
+# Leak recorder (opt-in: env AI_EVOLVE_LEAK_REPORT=<report.json>, used by `qa.py determinism`)
+# ---------------------------------------------------------------------------
+
+_LEAKS = None  # LeakRecorder while recording, else None (VirtualTime.__getattr__ checks it)
+
+# time.* names that are constants/pure helpers, not clocks: never a leak
+_TIME_BENIGN = frozenset({"struct_time", "timezone", "altzone", "daylight", "tzname", "strptime", "mktime",
+                          "get_clock_info"})
+_TIME_SHIMMED = ("time", "perf_counter", "monotonic")     # VirtualTime implements these itself
+_TIME_NOARG_NOW = ("localtime", "gmtime", "ctime")        # current real time only when called without arguments
+
+
+class LeakRecorder:
+    """Records where game code (src.*, main) touches nondeterminism that the virtual clock and the seeds
+    do NOT cover, with caller file:line and counts:
+
+      time.<name>      VirtualTime.__getattr__ passthroughs (time_ns, perf_counter_ns, process_time, sleep, ...)
+      time.<name> real direct calls of the REAL time/perf_counter/monotonic (`from time import x` bypasses the shim)
+      datetime.now/utcnow/today, os.urandom, uuid.uuid1/uuid4,
+      random.Random() / random.SystemRandom() built without a seed, threading.Thread.start (target name)
+
+    Passive: uses sys.monitoring (CALL events, filtered to game code and switched off per call site
+    after the first harmless call), never patches a function, so the run behaves exactly as without it.
+    Limitation: a call site that first calls something harmless and only later a leaking callable
+    (dynamic dispatch) is not seen. Written as JSON at exit; `roots` is for tests."""
+
+    TOOL_IDS = (3, 4)
+
+    def __init__(self, path, roots=None):
+        self.path = Path(path)
+        self.roots = tuple(os.path.normcase(str(r)) for r in (roots or (ROOT / "src", ROOT / "main.py")))
+        self.counts = {}       # (kind, where, func, detail, via) -> n
+        self.notes = []
+        self._files = {}       # co_filename -> bool (is game code)
+        self._pass_sites = {}  # (code, lineno) -> time attr name already recorded via __getattr__
+        self._tool = None
+        self._targets = {}
+        import threading
+        self._lock = threading.Lock()
+
+    # --- classification
+    def is_game_file(self, filename):
+        hit = self._files.get(filename)
+        if hit is None:
+            path = os.path.normcase(os.path.abspath(filename)) if filename and not filename.startswith("<") else ""
+            hit = self._files[filename] = bool(path) and any(
+                path == root or path.startswith(root + os.sep) for root in self.roots)
+        return hit
+
+    def _where(self, frame):
+        code = frame.f_code
+        path = Path(code.co_filename)
+        try:
+            shown = path.resolve().relative_to(ROOT).as_posix()
+        except (ValueError, OSError):
+            shown = path.as_posix()
+        return f"{shown}:{frame.f_lineno}", getattr(code, "co_qualname", code.co_name)
+
+    def record(self, kind, frame, detail=""):
+        where, func = self._where(frame)
+        caller = frame.f_back  # who asked: `RNGManager.__init__` alone says little, its constructor does
+        via = self._where(caller)[0] if caller is not None and self.is_game_file(caller.f_code.co_filename) else ""
+        with self._lock:
+            key = (kind, where, func, detail, via)
+            self.counts[key] = self.counts.get(key, 0) + 1
+
+    def passthrough(self, name, frame):
+        """VirtualTime.__getattr__ fell through to the real `time` for `name`."""
+        if name.startswith("__") or name in _TIME_BENIGN or not self.is_game_file(frame.f_code.co_filename):
+            return
+        self._pass_sites[(frame.f_code, frame.f_lineno)] = name
+        self.record(f"time.{name}", frame)
+
+    def _build_targets(self):
+        import datetime
+        import random
+        import secrets
+        import threading
+        import uuid
+        t = {}
+        for name in ("time_ns", "perf_counter_ns", "monotonic_ns", "process_time", "process_time_ns",
+                     "thread_time", "thread_time_ns", "sleep", *_TIME_SHIMMED):
+            fn = getattr(_real_time, name, None)
+            if fn is not None:
+                t[id(fn)] = ("time." + name + (" (real clock, bypasses the virtual one)" if name in _TIME_SHIMMED else ""),
+                             name)
+        for name in _TIME_NOARG_NOW:
+            t[id(getattr(_real_time, name))] = (f"time.{name}()", "noarg")
+        t[id(os.urandom)] = ("os.urandom", "")
+        t[id(uuid.uuid1)] = ("uuid.uuid1", "")
+        t[id(uuid.uuid4)] = ("uuid.uuid4", "")
+        t[id(random.Random)] = ("random.Random() unseeded", "unseeded")
+        t[id(random.SystemRandom)] = ("random.SystemRandom()", "")
+        for name in ("token_bytes", "token_hex", "token_urlsafe"):
+            t[id(getattr(secrets, name))] = (f"secrets.{name}", "")
+        self._seed_func, self._global_inst = random.Random.seed, getattr(random, "_inst", None)
+        self._dt_types = (datetime.datetime, datetime.date)
+        self._thread_start = threading.Thread.start
+        self._targets = t
+
+    def classify(self, fn, arg0, missing, code=None, offset=0):
+        """-> (kind, detail) for a call to `fn` that leaks, else None."""
+        hit = self._targets.get(id(fn))
+        if hit is not None:
+            kind, mode = hit
+            if mode == "unseeded":
+                return (kind, "") if arg0 is missing or arg0 is None else None
+            if mode == "noarg":
+                return (kind, "") if arg0 is missing or arg0 is None else None
+            return kind, ""
+        owner = getattr(fn, "__self__", None)
+        if owner is not None and (owner is self._dt_types[0] or owner is self._dt_types[1]) \
+                and getattr(fn, "__name__", "") in ("now", "utcnow", "today"):
+            return f"{owner.__name__}.{fn.__name__}", ""
+        if fn is self._thread_start:  # `t.start()` is reported as (function, self) with self in arg0
+            owner = arg0
+        elif getattr(fn, "__func__", None) is not self._thread_start:
+            # `random.seed()` arrives unpacked as (Random.seed, the hidden global instance): arg0 cannot
+            # tell a seed argument from none, the CALL's oparg (argument count) can
+            if fn is self._seed_func and arg0 is self._global_inst and code is not None and code.co_code[offset + 1] == 0:
+                return "random.seed() unseeded", ""
+            return None
+        target = getattr(owner, "_target", None)
+        return "threading.Thread.start", getattr(target, "__qualname__", None) or getattr(owner, "name", "?")
+
+    # --- sys.monitoring
+    def install(self):
+        mon = getattr(sys, "monitoring", None)
+        if mon is None:
+            self.notes.append("sys.monitoring unavailable (Python < 3.12): only time.* passthroughs are recorded")
+            return False
+        for tool in self.TOOL_IDS:
+            try:
+                mon.use_tool_id(tool, "ai-evolve-leaks")
+            except ValueError:
+                continue
+            self._tool = tool
+            break
+        else:
+            self.notes.append("no free sys.monitoring tool id: only time.* passthroughs are recorded")
+            return False
+        self._build_targets()
+        missing = mon.MISSING
+        disable = mon.DISABLE
+
+        def on_call(code, offset, fn, arg0):
+            if not self.is_game_file(code.co_filename):
+                return disable
+            hit = self.classify(fn, arg0, missing, code, offset)
+            if hit is None:
+                return disable
+            frame = sys._getframe(1)
+            kind, detail = hit
+            if kind.startswith("time.") and self._pass_sites.get((frame.f_code, frame.f_lineno)) == kind[5:]:
+                return None  # already counted through VirtualTime.__getattr__ (`time.x()` on the shim)
+            self.record(kind, frame, detail)
+            return None
+
+        mon.register_callback(self._tool, mon.events.CALL, on_call)
+        mon.set_events(self._tool, mon.events.CALL)
+        return True
+
+    def uninstall(self):
+        mon = getattr(sys, "monitoring", None)
+        if mon is not None and self._tool is not None:
+            mon.set_events(self._tool, 0)
+            mon.register_callback(self._tool, mon.events.CALL, None)
+            mon.free_tool_id(self._tool)
+            self._tool = None
+
+    # --- report
+    def static_bindings(self):
+        """Game modules holding the REAL time functions/module under another name: never virtualised."""
+        found = []
+        for name, module in list(sys.modules.items()):
+            if module is None or not self.is_game_file(getattr(module, "__file__", None) or ""):
+                continue
+            for attr, value in list(vars(module).items()):
+                if value is _real_time and attr != "time":
+                    found.append({"module": name, "name": attr, "what": "alias of the real `time` module"})
+                elif getattr(value, "__module__", None) == "time" and callable(value) and not isinstance(value, type):
+                    found.append({"module": name, "name": attr, "what": f"real time.{getattr(value, '__name__', '?')}"})
+        return found
+
+    def report(self):
+        findings = [{"kind": k, "where": w, "func": f, "detail": d, "via": v, "count": n}
+                    for (k, w, f, d, v), n in sorted(self.counts.items(), key=lambda kv: (-kv[1], kv[0]))]
+        return {"schema": 1, "pid": os.getpid(), "findings": findings, "static": self.static_bindings(),
+                "notes": self.notes}
+
+    def write(self):
+        import json
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self.path.write_text(json.dumps(self.report(), indent=1), encoding="utf-8")
+        except OSError:
+            pass  # a report that cannot be written must not fail the run
+
+
+def start_leak_recorder():
+    """Starts the recorder when env AI_EVOLVE_LEAK_REPORT names an output file (idempotent)."""
+    global _LEAKS
+    path = os.environ.get("AI_EVOLVE_LEAK_REPORT")
+    if not path or _LEAKS is not None:
+        return _LEAKS
+    import atexit
+    rec = LeakRecorder(path)
+    rec.install()
+    _LEAKS = rec
+    atexit.register(rec.write)
+    return rec
+
+
 class Runtime:
     """Что вернул boot_game(): игра + часы (симуляционные или настоящие)."""
 
@@ -248,6 +464,7 @@ def boot_game(render="none", fast=True, fps=DEFAULT_FPS, seed=None, notify_log=N
     сразу в игровом мире, БД в памяти (saves/ не засоряется)."""
     configure_engine(render=render, fast=fast, fps=fps, notify_log=notify_log)
     seed_everything(seed)
+    start_leak_recorder()  # no-op unless AI_EVOLVE_LEAK_REPORT is set
 
     patcher = None
     if fast:
