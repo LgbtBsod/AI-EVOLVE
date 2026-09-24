@@ -20,6 +20,7 @@ DEFAULTS = {
         "low_hp_fraction": 0.2, "pinned_seconds": 5.0, "stuck_seconds": 8.0, "stuck_distance": 0.5,
         "close_range": 5.0, "zero_damage_ratio": 0.2, "crit_min_hits": 40, "crit_min_chance": 0.05,
         "pressure_per_min": 4.0, "forecast_window_min": 5.0, "forecast_window_max": 15.0,
+        "forecast_recent_s": 3.0,
         "hypotheses_shown": 5,
     },
     "agent": {
@@ -61,6 +62,9 @@ def _lua_to_py(obj):
     if isinstance(obj, bytes):
         return obj.decode("utf-8")
     return obj
+
+
+lua_to_py = _lua_to_py  # публичное имя для других инструментов (training_room)
 
 
 def _merge(base, override):

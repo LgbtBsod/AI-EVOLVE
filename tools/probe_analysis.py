@@ -308,12 +308,24 @@ def forecast(samples, events, ctx=None):
         win = max(cfg["forecast_window_min"], min(cfg["forecast_window_max"], (t_end - alive[0]["t"]) * 0.4))
         tail = [s for s in alive if s["t"] >= t_end - win]
         fit = kernels.linear_fit([float(s["t"]) for s in tail], [float(s["player"]["hp"]) for s in tail])
+        hp_now = tail[-1]["player"]["hp"]
         if fit:
             slope = fit[0]
             res["hp_slope_per_s"] = round(slope, 2)
             res["hp_window_s"] = round(win, 1)
             if slope < -0.05:
-                res["death_eta_s"] = round(tail[-1]["player"]["hp"] / -slope, 1)
+                res["death_eta_s"] = round(hp_now / -slope, 1)
+                res["eta_basis"] = f"HP trend over last {win:.0f}s"
+        # Бэктест (6 seed, смерть в рое врагов): тренд HP по окну опаздывает -
+        # урон в бою нарастает; темп урона по боевым событиям за последние
+        # forecast_recent_s секунд даёт ошибку ~8% времени жизни против ~34%.
+        recent = cfg.get("forecast_recent_s", 3.0)
+        taken = sum(e["damage"] for e in events
+                    if e["target"] == pid and not e["dodged"] and t_end - recent < e["t"] <= t_end)
+        if taken > 0:
+            res["recent_dps_taken"] = round(taken / recent, 2)
+            res["death_eta_s"] = round(hp_now / (taken / recent), 1)
+            res["eta_basis"] = f"damage taken in the last {recent:g}s"
         xp_pts = [(float(s["t"]), float(s["player"]["xp"])) for s in tail if s["player"].get("xp") is not None]
         xp_fit = kernels.linear_fit([p[0] for p in xp_pts], [p[1] for p in xp_pts]) if len(xp_pts) >= 2 else None
         last = tail[-1]["player"]
@@ -348,7 +360,7 @@ def forecast(samples, events, ctx=None):
         res["hits_to_kill_by_type"] = {k: round(sum(v) / len(v), 1) for k, v in htk.items()}
 
     if "death_eta_s" in res:
-        res["outlook"] = f"hero projected to die in ~{res['death_eta_s']:.0f}s at the current damage rate"
+        res["outlook"] = f"hero projected to die in ~{res['death_eta_s']:.0f}s ({res['eta_basis']})"
     elif "hp_slope_per_s" in res:
         res["outlook"] = "hero HP stable or recovering at the current pressure"
     return res
@@ -359,8 +371,8 @@ def format_forecast(fc):
         return ["- not enough samples"]
     lines = []
     if "outlook" in fc:
-        lines.append(f"- outlook: {fc['outlook']} (linear fit over last {fc.get('hp_window_s')}s, "
-                     f"HP {fc.get('hp_slope_per_s'):+}/s)")
+        lines.append(f"- outlook: {fc['outlook']}; HP trend {fc.get('hp_slope_per_s'):+}/s over {fc.get('hp_window_s')}s"
+                     + (f", recent damage {fc['recent_dps_taken']}/s" if "recent_dps_taken" in fc else ""))
     if "dps_dealt" in fc:
         lines.append(f"- DPS dealt/taken: {fc['dps_dealt']}/{fc['dps_taken']}")
     if "enemy_trend_per_min" in fc:

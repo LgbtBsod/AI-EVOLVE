@@ -37,6 +37,7 @@ despawns enemies nearest dealt taken attacks hits crits dodges traps chests.
 
 Примеры:
     python tools/agent_play.py "spawn enemy x3; until kills>=3 or dead max 90; observe; expect alive"
+    python tools/agent_play.py --list-scenarios ; python tools/agent_play.py --scenario swarm
     python tools/agent_play.py --script scenario.play --seed 7
     python tools/agent_play.py --serve --port 8765      # пошаговая игра по HTTP:
         curl -s localhost:8765/do -d 'spawn enemy; wait 5; observe'
@@ -575,9 +576,11 @@ def parse_args(argv=None):
                                      epilog=__doc__.split("\n\n", 2)[2])
     parser.add_argument("script", nargs="?", help="inline commands separated by ';'")
     parser.add_argument("--script", dest="script_file", help="file with one command per line")
+    parser.add_argument("--scenario", help="run a named scenario template from lua_content/qa.lua (script + seed)")
+    parser.add_argument("--list-scenarios", action="store_true", help="print the scenario templates and exit")
     parser.add_argument("--serve", action="store_true", help="turn-based HTTP control instead of a script")
     parser.add_argument("--port", type=int, default=8765)
-    parser.add_argument("--seed", type=int, default=1, help="RNG seed (default 1: runs are reproducible)")
+    parser.add_argument("--seed", type=int, default=None, help="RNG seed (default 1, or the scenario's seed)")
     parser.add_argument("--render", choices=runtime.RENDER_MODES, default=rt_cfg["render"],
                         help="none (default, no GPU, fastest) | offscreen (screenshots, needs OpenGL) | window")
     parser.add_argument("--fps", type=int, default=rt_cfg["fps"], help="fixed simulation step, frames per game second")
@@ -586,8 +589,19 @@ def parse_args(argv=None):
     parser.add_argument("--verbose", "-v", action="store_true", help="print PASS lines and the full report")
     parser.add_argument("--no-invariants", action="store_true", help="skip per-frame world invariant checks")
     args = parser.parse_args(argv)
+    scenarios = {sc["name"]: sc for sc in qa_settings()["scenarios"]}
+    if args.list_scenarios:
+        return args
+    if args.scenario:
+        if args.scenario not in scenarios:
+            parser.error(f"unknown scenario {args.scenario!r}; known: {', '.join(scenarios)}")
+        sc = scenarios[args.scenario]
+        args.script = args.script or sc["script"]
+        args.seed = sc["seed"] if args.seed is None else args.seed
+    if args.seed is None:
+        args.seed = 1
     if not args.serve and not (args.script or args.script_file):
-        parser.error("give a script (inline or --script FILE) or --serve")
+        parser.error("give a script (inline or --script FILE), --scenario NAME or --serve")
     return args
 
 
@@ -597,6 +611,10 @@ def main(argv=None):
         # спарклайны и кириллица иначе роняют print()
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     args = parse_args(argv)
+    if args.list_scenarios:
+        for sc in qa_settings()["scenarios"]:
+            print(f"{sc['name']:16s} seed={sc['seed']:<3} {sc['script']}")
+        return 0
     script_text = ""
     if not args.serve:
         script_text = Path(args.script_file).read_text(encoding="utf-8") if args.script_file else args.script

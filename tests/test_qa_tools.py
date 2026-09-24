@@ -91,11 +91,11 @@ class TestQaKernels:
 # ---------------------------------------------------------------- async pool
 
 def test_pool_keeps_order_and_runs_in_parallel():
-    jobs = [python_job(f"j{i}", "-c", f"import time; time.sleep(0.3); print({i})") for i in range(4)]
+    jobs = [python_job(f"j{i}", "-c", f"import time; time.sleep(1.0); print({i})") for i in range(4)]
     start = time.perf_counter()
     results = run_many(jobs, jobs=4)
     assert [r.stdout.strip() for r in results] == ["0", "1", "2", "3"]
-    assert time.perf_counter() - start < 1.1  # 4 x 0.3 с параллельно, а не 1.2 с подряд
+    assert time.perf_counter() - start < 3.0  # 4 x 1 с параллельно, а не >= 4 с подряд
 
 
 def test_pool_stop_when_skips_the_tail():

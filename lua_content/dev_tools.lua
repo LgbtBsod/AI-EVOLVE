@@ -25,6 +25,7 @@ return {
     pressure_per_min = 4.0,    -- рост числа врагов (в минуту) для ENEMY_PRESSURE
     forecast_window_min = 5.0, -- окно линейной экстраполяции HP (секунды)
     forecast_window_max = 15.0,
+    forecast_recent_s = 3.0,   -- окно темпа урона для ETA смерти (бэктест: ошибка ~8% против ~34% у тренда HP)
     hypotheses_shown = 5,      -- сколько гипотез печатать (остальные - в JSON)
   },
 

@@ -48,7 +48,11 @@ from core.cas_engine import (
     DamageProfile, DefenseProfile
 )
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+# WARNING по умолчанию: INFO-лог на каждый удар (~120 строк за демо) - чистые
+# токены для агента; подробный лог - `--verbose`
+_LOG_LEVEL = logging.INFO if "--verbose" in sys.argv else logging.WARNING
+logging.basicConfig(level=_LOG_LEVEL, format='%(asctime)s [%(levelname)s] %(message)s')
+logging.getLogger().setLevel(_LOG_LEVEL)  # basicConfig - no-op, если импорты выше уже настроили logging
 logger = logging.getLogger("TrainingRoom")
 
 
@@ -440,8 +444,10 @@ class TrainingRoom:
     Управляет манекенами, сценариями тестирования и генерацией отчётов
     """
     
-    def __init__(self, output_dir: str = "training_room_output"):
-        self.output_dir = Path(output_dir)
+    def __init__(self, output_dir: Optional[str] = None):
+        # Отчёты - в git-игнорируемый dev_probe_output/ (раньше каждый запуск
+        # дописывал файлы в отслеживаемую training_room_output/ и пачкал репо)
+        self.output_dir = Path(output_dir) if output_dir else _ROOT / "dev_probe_output" / "training_room"
         self.output_dir.mkdir(parents=True, exist_ok=True)
         
         self.mannequins: Dict[str, Mannequin] = {}
@@ -457,27 +463,53 @@ class TrainingRoom:
         self.lua_configs = self._load_lua_configs()
         
     def _load_lua_configs(self) -> Dict[str, Any]:
-        """Загрузка конфигураций из Lua файлов"""
+        """lua_content/training_room/*.lua через lupa.lua55 (стандарт проекта).
+
+        Файлы объявляют глобальные таблицы (mannequins, scenarios, item_sets,
+        thresholds) - они и возвращаются: {file_stem: {global: value}}.
+        Раньше здесь стояла заглушка `configs[stem] = {}` - Lua не читался вовсе,
+        а манекены брали захардкоженные значения."""
         configs = {}
-        lua_path = (_ROOT / 'lua_content' / 'training_room')
-        
-        if lua_path.exists():
-            # Парсинг Lua файлов (упрощённо, в продакшене использовать lupa)
-            for lua_file in lua_path.glob('*.lua'):
-                logger.info(f"Loading Lua config: {lua_file.name}")
-                # Здесь будет парсинг Lua
-                configs[lua_file.stem] = {}
-        else:
-            logger.warning(f"Lua configs not found at {lua_path}, using defaults")
-            
+        lua_path = _ROOT / 'lua_content' / 'training_room'
+        if not lua_path.exists():
+            logger.warning(f"Lua config directory not found: {lua_path}")
+            return configs
+        try:
+            import lupa.lua55 as lua
+            from probe_settings import lua_to_py
+        except ImportError:
+            logger.warning("lupa not installed - mannequins use built-in defaults")
+            return configs
+        for lua_file in sorted(lua_path.glob('*.lua')):
+            runtime = lua.LuaRuntime()
+            try:
+                returned = runtime.execute(lua_file.read_text(encoding='utf-8'))
+            except Exception as exc:
+                logger.warning(f"Lua config {lua_file.name} failed: {exc}")
+                continue
+            g = runtime.globals()
+            data = {name: lua_to_py(g[name]) for name in ("mannequins", "scenarios", "item_sets", "thresholds")
+                    if g[name] is not None}
+            if returned is not None and not data:
+                data = lua_to_py(returned)
+            configs[lua_file.stem] = data
+            logger.info(f"Loaded Lua config: {lua_file.name} ({', '.join(data)})")
         return configs
-        
+
     def create_mannequin(self, name: str, mannequin_type: MannequinType = MannequinType.DUMMY,
                         custom_config: Optional[MannequinConfig] = None,
                         equipment: Optional[List[ItemDefinition]] = None) -> Mannequin:
         """Создание манекена с опциональной экипировкой"""
+        lua_mannequins = self.lua_configs.get("mannequins", {}).get("mannequins", {})
         if custom_config:
             config = custom_config
+        elif mannequin_type.value in lua_mannequins:
+            try:
+                config = MannequinConfig.from_lua_config(lua_mannequins[mannequin_type.value])
+                config.name = name
+            except (ValueError, KeyError) as exc:
+                logger.warning(f"Lua mannequin '{mannequin_type.value}' invalid ({exc}); using defaults")
+                config = MannequinConfig(name, mannequin_type)
         else:
             # Конфигурация по типу
             configs = {

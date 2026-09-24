@@ -11,6 +11,13 @@ optional at runtime — every tool has a Python fallback); settings/content in `
 - Optional: `uv pip install -r tools/requirements-dev.txt` (Pillow/OpenCV image extras),
   `uv pip install ./rust_core` (Rust kernels, needs cargo; ~13x faster analysis).
 
+## Start here
+
+`python tools/qa.py brief` (10 lines: env, what your diff affects, recent runs) and
+`python tools/qa.py doctor` (missing deps + exact fix command). Before reading a big file:
+`python tools/qa.py ctx path/to/file.py` (outline, importers, covering tests). `qa.py dead` lists
+modules nobody imports (~18k LOC) and `qa.py docs` marks stale .md reports — don't read those.
+
 ## Verify changes cheaply — pick the first tool that answers the question
 
 | Question | Command | Cost |
@@ -21,6 +28,13 @@ optional at runtime — every tool has a Python fallback); settings/content in `
 | Long unattended run + anomaly hunt | `python tools/dev_probe.py --render none --fast --seed 1 --duration 120 --action-at 1:1` | <1 s |
 | Anything visual (rendering, labels, HUD) | `xvfb-run -a python tools/dev_probe.py --headless --fast --seed 1 --screenshot-interval 10` then Read `contact_sheet.jpg` only | a few s |
 | Numbers across runs / "did my fix help" | `python tools/probe_db.py stats` · `why` · `predict` · `compare RUN_A` · `trend kills` | ms |
+| Which tests to run for my diff | `python tools/qa.py test --changed` (parallel shards; prints only NEW failures, auto-detects flaky ones) | ~1-4 s |
+| Did gameplay behaviour change at all | `python tools/qa.py golden` (deterministic scenarios vs `tests/golden/`) | ~2 s |
+| Hunt bugs automatically | `python tools/qa.py fuzz` (random player actions + per-frame invariants → minimal repro script) | ~10 s |
+| Balance / "how often does X happen" | `python tools/qa.py sweep "SCRIPT" --seeds 16` (distribution + bootstrap CI) | ~3 s |
+| Visual regression between two probe runs | `python tools/dev_probe_diff.py --before A --after B --frames` (image only for changed frames) | s |
+| Why did the hero AI do that | `agent_play "...; story"` (compressed ai_state transitions) | <1 s |
+| Performance hot spots | `python tools/qa.py perf "spawn enemy x10; wait 60"` | 2 s |
 
 Rules of thumb:
 - Read only the `RESULT` line + printed hypotheses first; open `summary.md` / `session.json`
@@ -32,6 +46,10 @@ Rules of thumb:
   1/2/3), `attack` (space), `interact` (e). Key map: `lua_content/dev_tools.lua` → `agent.player_keys`.
 - Turn-based interactive play: run `python tools/agent_play.py --serve --port 8765` in the
   background, then `curl -s localhost:8765/do -d 'wait 5; observe'`, `curl -s -X POST localhost:8765/quit`.
+- Named scenario templates: `agent_play.py --list-scenarios`, `--scenario swarm` (lua_content/qa.lua).
+- Tests that wait on game timers: mark them `pytestmark = pytest.mark.virtual_time` (tests/conftest.py)
+  instead of real `time.sleep` — the toughness suite went from 68 s to 0.1 s.
+- Known pre-existing failures live in `tests/qa_known_failures.json`; `qa.py test` reports them as known.
 - Default dev map: enemies spawn ~160u from the hero and rarely reach him — a run without
   `spawn enemy` usually has no combat at all (hypothesis `NO_COMBAT`).
 
@@ -43,11 +61,15 @@ Rules of thumb:
 - `tools/probe_kernels.py` — Rust/Python kernels; data crosses as columnar buffers
   (`array('d')`, `HeroTable` struct-of-arrays → one `scan_hero` FFI call).
 - `rust_core/src/analytics/` — those kernels in Rust; `rust_core/src/probe/` — frame analysis.
-- `lua_content/dev_tools.lua` — thresholds, agent limits, DB path; `lua_content/probe_config.lua` — frame analysis.
+- `lua_content/dev_tools.lua` — thresholds, agent limits, DB path; `lua_content/qa.lua` — scenarios, fuzz
+  weights, invariants, sweep; `lua_content/probe_config.lua` — frame analysis.
+- `tools/qa.py` + `qa_graph.py` (import graph), `qa_pool.py` (asyncio subprocess pool),
+  `probe_invariants.py`; Rust `QaKernels` (graph reachability, bootstrap stats, trajectory hashes).
 - Outputs go to `dev_probe_output/` (git-ignored), DB at `dev_probe_output/probe.sqlite`
   (override with env `AI_EVOLVE_PROBE_DB`).
 
 ## Tests
 
-`python -m pytest -q tests/test_agent_tools.py` (3 s) covers the agent tools incl. determinism on the
-real game; `cd rust_core && cargo test` + `pytest rust_core/tests/test_ffi.py` for Rust.
+`python tools/qa.py test` runs everything in ~4 s. `tests/test_agent_tools.py` + `tests/test_qa_tools.py`
+cover the tooling incl. determinism on the real game; `cd rust_core && cargo test` +
+`pytest rust_core/tests/test_ffi.py` for Rust.
