@@ -198,6 +198,12 @@ class EntityState:
         self.periodic: list[dict] = []             # DoT/HoT на этой сущности
         self.zones: dict[str, bool] = {}           # hp_cross
         self.vision_vs: dict[Any, tuple[float, str, float]] = {}  # ключ -> (до, id цели, вклад в обзор на неё)
+        # --- слои примитивов аудита (mark/absorb/learn/adapt), как у Unit тренировочной комнаты ---
+        self.marks: dict[str, dict] = {}            # mark_id -> {stacks, until}
+        self.spells: list[str] = []                 # выученные/скопированные техники (learn)
+        self.adapt_stacks: dict[str, int] = {}      # damage_type -> число адаптаций (Mahoraga)
+        self.absorbed_kinetic: float = 0.0          # поглощённый кинетический урон (Playful Cloud)
+        self.absorbed_until: float = 0.0            # до какого момента окно поглощения
         self.weapon_ability: Optional[str] = None  # удар надетого оружия (item.attack)
         self.runtime = EffectRuntime(self.unit, [], enemy=Unit("nobody"))
         if not hasattr(entity, "lifesteal"):
@@ -747,7 +753,15 @@ class EffectManager:
                     continue
                 if arc and s is not st and not _in_arc(st.entity, primary, s.entity, arc):
                     continue
-                out.append(s.entity)
+                # untargetable: цель невыбираема селекторами (Toji для six_eyes/en); на себя действует всегда
+                by = str(o.get("by", "all"))
+                for bid in list(s.unit.buffs):
+                    if bid.startswith("untargetable:") and s.unit.buffs[bid].get("until", 1e18) > self.now:
+                        scope = bid.split(":", 1)[1]
+                        if scope == "all" or tgt in scope.split(","):
+                            break
+                else:
+                    out.append(s.entity)
             return out
         return []
 

@@ -40,7 +40,26 @@ OP_KINDS = {
     "kill",         # убить цель
     "summon",       # призвать существ: summon = тип, count = сколько (менеджер эффектов)
     "move",         # переместить: mode = charge | knockback | pull | blink | strafe, distance
+
+    # --- примитивы боя (аудит Сукуна/Годжо/Тоджи): все через существующие поля Op ---
+    "resist",       # временный резист типа урона: damage_type + value (+ duration) -> mod resist_<тип>
+    "immune",       # иммунитет типа / статуса / эффекта-действия: damage_type|status|effect + value -> 100% resist / block
+    "mark",         # метка на цели: mark_id + value + duration; stack-правило max_stacks; ctx.mark_<id> для scale
+    "detonate",     # взорвать метки: mark_id + value/scale (по ref mark_<id>) -> deal true_damage и обнуление
+    "purge",        # снять эффекты по фильтру: filter {kind="buff"|"debuff"|"mark"|"all", tag=...}
+    "nullify",      # отменить активные силы цели: what {"abilities","effects","barriers"} -> блок кастов на duration
+    "cancel_technique",  # Копьё Неба: прервать ТЕКУЩУЮ технику при касании (+ nullify на duration)
+    "block",        # запрет действия/способности: stat=<действие> ("cursed_technique","domain_expansion",...)
+    "absorb_damage",# Поглощающее Облако: копить входящий урон в self.absorbed_kinetic за окно window
+    "binding_vow",  # обет: cost (чем платим) + gain ops (что получаем); vow_id -> метка для purge/ссылок
+    "sever",        # разрыв связи (душа-тело, техника): what + duration -> блок регена/техники цели
+    "untargetable", # невыбираемость селекторами до duration (Todji для six_eyes/en/divination)
+    "learn",        # скопировать технику: from=ctx.observed_technique -> постоянная способность (Sukuna/Mahoraga)
+    "adapt",        # адаптация Махораги: после попадания по типу - permanent resist_<тип> += rate*stacks
 }
+
+# kinds, которые пишутся контентом как planned-обработчики над buff-слоем (op_buff переиспользуется хостом)
+BUFF_BACKED_KINDS = {"block", "nullify", "cancel_technique", "untargetable", "sever", "binding_vow"}
 
 MOVE_MODES = {"charge", "knockback", "pull", "blink", "strafe"}
 
