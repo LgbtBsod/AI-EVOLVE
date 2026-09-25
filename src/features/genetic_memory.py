@@ -51,7 +51,7 @@ class GeneticMemorySystem(BaseComponent):
             # Oldest memories fade
             self.memory_pool.pop(0)
             
-        self.logger.debug(f"Memory recorded: {skill} from {entity_id}")
+        logging.getLogger(__name__).debug(f"Memory recorded: {skill} from {entity_id}")
 
     def trigger_echo(self, current_entity: Any, context: list[str]) -> dict[str, Any] | None:
         """
@@ -82,7 +82,7 @@ class GeneticMemorySystem(BaseComponent):
             "message": f"Echo of {best_memory.ancestor_id}: {best_memory.skill_name} activated!"
         }
         
-        self.logger.info(f"ANCESTRAL ECHO: {bonus['message']}")
+        logging.getLogger(__name__).info(f"ANCESTRAL ECHO: {bonus['message']}")
         return bonus
 
     def on_update(self, dt: float):

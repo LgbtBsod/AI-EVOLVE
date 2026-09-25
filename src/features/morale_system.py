@@ -31,9 +31,11 @@ class MoraleSystem(BaseComponent):
     Manages unit morale. High casualties or surprise attacks lower morale.
     Victories and leadership boost it.
     """
-    def __init__(self):
+    def __init__(self, event_bus: EventSystem | None = None):
         super().__init__(ComponentType.SYSTEM, Priority.NORMAL)
         self.unit_morale: dict[str, MoraleStats] = {}
+        # Шина событий внедряется извне (у EventSystem нет синглтона .instance)
+        self.event_bus = event_bus
         
     def on_start(self):
         logging.info("Morale System initialized.")
@@ -76,16 +78,17 @@ class MoraleSystem(BaseComponent):
             logging.info(f"Unit {unit_id} morale changed to {stats.state.value} ({reason})")
             
             # Broadcast event for AI behavior adjustment
-            if EventSystem.instance:
-                EventSystem.instance.trigger_event(Event(
-                    event_type="MORALE_CHANGED",
-                    data={
+            if self.event_bus:
+                self.event_bus.emit(
+                    "MORALE_CHANGED",
+                    {
                         "unit_id": unit_id,
                         "state": stats.state.value,
                         "morale": stats.current_morale,
                         "reason": reason
-                    }
-                ))
+                    },
+                    source="MoraleSystem"
+                )
                 
     def get_performance_modifier(self, unit_id: str) -> float:
         """Get combat performance modifier based on morale."""
@@ -135,11 +138,12 @@ class MoraleSystem(BaseComponent):
             else:
                 stats.state = MoraleState.BROKEN
                 
-            if old_state != stats.state and EventSystem.instance:
-                EventSystem.instance.trigger_event(Event(
-                    event_type="MORALE_CHANGED",
-                    data={"unit_id": unit_id, "state": stats.state.value, "morale": stats.current_morale, "reason": "passive_change"}
-                ))
+            if old_state != stats.state and self.event_bus:
+                self.event_bus.emit(
+                    "MORALE_CHANGED",
+                    {"unit_id": unit_id, "state": stats.state.value, "morale": stats.current_morale, "reason": "passive_change"},
+                    source="MoraleSystem"
+                )
 
     def _on_update(self, delta_time: float) -> None:
         """Implementation of abstract method."""
