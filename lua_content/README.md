@@ -25,8 +25,28 @@ lua_content/
 │   ├── prefixes.lua      # Префиксы ("Огненный", "Ледяной")
 │   ├── roots.lua         # Корни ("Клинок", "Молот")
 │   └── suffixes.lua      # Суффиксы ("+1", "Мастера")
-└── config.lua            # Общий конфиг для всех модулей
+├── config.lua            # Общий конфиг для всех модулей
+├── ARCHITECTURE.md       # КАРТА движка: слои, Timeline+Registry, стыковка Lua⇄Python
+├── registry.lua          # реестры: layers(+priority), kinds→handler, damage_types,
+│                         #   flags, triggers, selectors, value_sources, load_order
+├── schema.lua            # справочник полей Effect/Op/Value/Scale/Trigger/Condition
+├── kinds/                # ВСЕ kind'ы по слоям (effect_core/rules/state/world/
+│   │                     #   temporal/meta/ontological/social/entity)
+│   └── all.lua           # карта loader'а: файл→слой, уже реализованные ядром
+├── schemas/              # схемы валидации namespace'ов (B.5)
+│   ├── stats.lua  resources.lua  statuses.lua  effects.lua
+├── timeline/             # конфиг журнала (логика — src/core/timeline.py)
+│   ├── event_kinds.lua   # кто что пишет (A.8), irreversible-политика (A.4)
+│   └── snapshots.lua     # периодичность, compaction (A.9), rng-детерминизм (A.10)
+├── effects/              # полные регистрационные дефиниции
+│   └── lost_my_self.lua  # берсерк через resources+stats+statuses+effects (B.10)
+└── statuses/
+    └── core_statuses.lua # базовые статусы реестра (stun/burn/amaterasu/infinity...)
 ```
+
+Полная архитектура движка (слои Effect/Rules/State/World/Temporal/Meta/
+Ontological/Social/Entity/Narrative, Timeline как источник истины, Registry как
+расширяемость без правки ядра) — в `ARCHITECTURE.md` и `docs/EFFECT_SCHEMA.md`.
 
 ## Пример: кирпич предмета
 ```lua

@@ -2,5 +2,5 @@
 __pycache__/
 *.pyc
 
-# Cache directories
-.cache/
+# Editor/IDE
+.vscode/
