@@ -1,15 +1,2 @@
-# Compiled and build artifacts
-__pycache__/
-*.pyc
-
-# Dependencies and caches
-.pytest_cache/
-.mypy_cache/
-
-# Editor/IDE files
-.vscode/
-.idea/
-
-# System/Environment files
-.env
-.env.local
+# QA cache
+dev_probe_output/.qa_cache/

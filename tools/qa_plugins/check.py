@@ -95,11 +95,33 @@ def load_registry(cfg: dict | None = None, python_dir: Path | None = None) -> di
 
 # ---------------------------------------------------------------- files, selection
 
+def _glob_re(glob: str) -> str:
+    """Translate a watch glob to regex: '**/' matches zero or more segments, '*' one segment."""
+    out, i = [], 0
+    while i < len(glob):
+        if glob.startswith("**/", i):
+            out.append("(?:.*/)?")       # zero or more leading directories
+            i += 3
+        elif glob.startswith("/**", i):
+            out.append("/.*")            # everything below
+            i += 3
+        elif glob[i:i + 2] == "**":
+            out.append(".*")
+            i += 2
+        elif glob[i] == "*":
+            out.append("[^/]*")
+            i += 1
+        elif glob[i] == "?":
+            out.append("[^/]")
+            i += 1
+        else:
+            out.append(re.escape(glob[i]))
+            i += 1
+    return "".join(out)
+
+
 def gmatch(path: str, glob: str) -> bool:
-    try:
-        return PurePosixPath(path).full_match(glob)
-    except AttributeError:               # Python < 3.13
-        return fnmatch.fnmatch(path, glob)
+    return re.fullmatch(_glob_re(glob), path) is not None
 
 
 def watches_of(chk: R.Check) -> tuple:
