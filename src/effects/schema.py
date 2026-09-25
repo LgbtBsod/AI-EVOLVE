@@ -56,6 +56,35 @@ OP_KINDS = {
     "untargetable", # невыбираемость селекторами до duration (Todji для six_eyes/en/divination)
     "learn",        # скопировать технику: from=ctx.observed_technique -> постоянная способность (Sukuna/Mahoraga)
     "adapt",        # адаптация Махораги: после попадания по типу - permanent resist_<тип> += rate*stacks
+
+    # --- примитивы спецификации Махораги (ЧАСТЬ 2 справочника; runtime: src/core/adaptation.py) ---
+    # ядро адаптации
+    "unadapt",            # сброс адаптации к феномену: memory_key/sign -> освобождает слот колеса
+    "reset_adaptation",   # полный сброс колеса (wheel=0, память очищается)
+    "use_learned_technique",  # применить украденную технику: from=spells, pick=highest_threat|random|last
+    "observe_phenomenon",     # зарегистрировать попадание феномена в AdaptationState (без урона — observe)
+    "register_phenomenon",    # записать подпись феномена в реестр/память носителя
+    # фракция / агро
+    "set_faction",        # faction = "feral" | ... (FactionManager)
+    "set_aggro",          # aggro_mode = имя режима (nearest_any | threat_first | random_feral)
+    "set_targeting",      # targeting = TargetingSpec {mode, filter, switch_on, switch_interval}
+    "retarget",           # сменить текущую цель (target_ref = id|nil)
+    "clear_aggro",        # сбросить агро и цель
+    # эскалация
+    "escalate",           # escalate_delta (или value.flat): +N к колесу/уровню эскалации
+    "deescalate",         # откат эскалации на N (для rewind-механик)
+    "trigger_true_form",  # активация истинной формы (обычно на wheel_max)
+    # колесо (визуал + счётчик)
+    "rotate_wheel",       # wheel_delta (или value.delta): оборот колеса; порог -> on_wheel_max
+    "display_wheel",      # показать состояние колеса (UI; mode="golden" в true form)
+    "halt_wheel",         # остановить вращение (визуал; счётчик не трогается)
+}
+
+# поля Op из спецификации Махораги (ЧАСТЬ 3.1) — расширенные опциональные поля
+MAHORAGA_OP_FIELDS = {
+    "phenomenon", "faction", "aggro_mode", "targeting", "wheel_delta",
+    "escalation_delta", "threshold", "permanent", "memory_key",
+    "source_filter", "exclude_self", "exclude_owner", "max_stacks",
 }
 
 # kinds, которые пишутся контентом как planned-обработчики над buff-слоем (op_buff переиспользуется хостом)

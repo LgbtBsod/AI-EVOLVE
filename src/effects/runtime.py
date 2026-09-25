@@ -293,6 +293,7 @@ class Unit:
         self.adapt_stacks: dict[str, int] = {}    # damage_type -> число адаптаций (Mahoraga)
         self.absorbed_kinetic: float = 0.0        # Поглощающее Облако: копящийся кинетический урон
         self.absorbed_until: float = 0.0          # до какого момента окно поглощения
+        self.external: dict[str, Any] = {}        # внешние слои: mahoraga (колесо), aggro (фракция/цель)
         self.alive = True
         self.kills = 0
 
@@ -372,6 +373,11 @@ class Unit:
         c["absorbed_kinetic"] = self.absorbed_kinetic
         for mid, m in self.marks.items():          # mark_<id> для scale/when (detonate по стакам)
             c[f"mark_{mid}"] = float(m.get("stacks", 0.0)) if m.get("until", 1e18) > self._now else 0.0
+        # колесо Махораги как ctx-поля: scale {of="wheel"} / when "wheel >= 8" (src/core/adaptation.py)
+        wh = self.external.get("mahoraga") or {}
+        c["wheel"] = float(wh.get("wheel", 0))
+        c["escalation_level"] = float(wh.get("escalation_level", wh.get("wheel", 0)))
+        c["true_form"] = 1.0 if wh.get("true_form") else 0.0
         if extra:
             c.update(extra)
         return c
@@ -958,6 +964,22 @@ class EffectRuntime:
 
     def op_refresh(self, cx: OpCall, tgt: Unit) -> None:
         tgt.touch()                                 # пересчёт кэша _eff после purge/правок слоёв
+
+    # --- протокол Махораги (ops.OpHost; состояние в tgt.external, см. src/core/adaptation.py) ---
+    def op_adaptation(self, cx: OpCall, tgt: Unit) -> dict:
+        return tgt.external.setdefault("mahoraga", {})
+
+    def set_adaptation(self, cx: OpCall, tgt: Unit, state: dict) -> None:
+        tgt.external["mahoraga"] = state
+
+    def op_aggro(self, cx: OpCall, tgt: Unit) -> dict:
+        return tgt.external.setdefault("aggro", {})
+
+    def set_aggro(self, cx: OpCall, tgt: Unit, **kv: Any) -> None:
+        tgt.external["aggro"] = dict(kv)
+
+    def op_nested_ops(self, cx: OpCall, tgt: Unit, ops: list) -> None:
+        self.op_nested(cx, ops, ".nested", True)
 
 
     # helpers -----------------------------------------------------------------
