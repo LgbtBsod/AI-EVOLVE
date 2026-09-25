@@ -892,6 +892,50 @@ class EffectManager:
     def op_note(self, cx: OpCall, what: str, *args) -> None:
         """В игре лога операций нет (его ведёт только тренировочная комната)."""
 
+    # --- примитивы новых kinds (mark/absorb/learn/adapt), как у EffectRuntime тренировочной комнаты ---
+    def op_marks(self, tgt: EntityState) -> dict:
+        return tgt.marks
+
+    def op_grant_mark(self, cx: OpCall, tgt: EntityState, mid: str, stacks: float, until: float) -> None:
+        tgt.marks[mid] = {"stacks": stacks, "until": until}
+
+    def op_spells(self, tgt: EntityState) -> list:
+        return tgt.spells
+
+    def op_adapt_stacks(self, tgt: EntityState) -> dict:
+        return tgt.adapt_stacks
+
+    def op_absorb_add(self, cx: OpCall, tgt: EntityState, amount: float, window: float) -> None:
+        if self.now > tgt.absorbed_until:             # новое окно: счётчик обнуляется
+            tgt.absorbed_kinetic = 0.0
+        tgt.absorbed_kinetic += amount
+        tgt.absorbed_until = max(tgt.absorbed_until, self.now) + window
+
+    def op_apply_mod_op(self, cx: OpCall, tgt: EntityState, o: dict) -> None:
+        tgt.runtime.op_apply_mod_op(cx, tgt.unit, o)   # тот же событийный слой mod-вкладов
+
+    def op_refresh(self, cx: OpCall, tgt: EntityState) -> None:
+        tgt.refresh(self.now)
+
+    # --- протокол Махораги (ops.OpHost; состояние в unit.external, см. src/core/adaptation.py) ---
+    def op_adaptation(self, cx: OpCall, tgt: EntityState) -> dict:
+        return tgt.unit.external.setdefault("mahoraga", {})
+
+    def set_adaptation(self, cx: OpCall, tgt: EntityState, state: dict) -> None:
+        tgt.unit.external["mahoraga"] = state
+
+    def op_aggro(self, cx: OpCall, tgt: EntityState) -> dict:
+        return tgt.unit.external.setdefault("aggro", {})
+
+    def set_aggro(self, cx: OpCall, tgt: EntityState, **kv: Any) -> None:
+        tgt.unit.external["aggro"] = dict(kv)
+
+    def op_nested_ops(self, cx: OpCall, tgt: EntityState, ops: list) -> None:
+        """on_adapt/on_max поддеревья: те же цели, что у родительской операции."""
+        ent = tgt.entity
+        primary = cx.primary if (cx.primary is not None and self.state(cx.primary) is not None) else ent
+        self._run_ops(cx.source, ops, primary, f"{cx.src}.nested", cx.tags, cx.hits, center=None, radius=0.0)
+
     def _duration(self, d, ctx) -> float:
         if isinstance(d, (int, float)):
             return float(d)

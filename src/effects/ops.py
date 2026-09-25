@@ -21,6 +21,8 @@ import math
 from dataclasses import dataclass
 from typing import Any, Callable, NamedTuple, Optional, Protocol
 
+from src.core.adaptation import WHEEL_MAX_DEFAULT
+
 # ---------------------------------------------------------------- dirty tracking
 
 
@@ -271,11 +273,70 @@ class OpHost(Protocol):
     def op_absorb_add(self, cx: OpCall, tgt: Any, amount: float, window: float) -> None: ...  # absorbed_kinetic
     def op_apply_mod_op(self, cx: OpCall, tgt: Any, o: dict) -> None: ...  # mod-механика для resist/immune/adapt
     def op_refresh(self, cx: OpCall, tgt: Any) -> None: ...               # пересчёт статов цели после правок
+    def op_damage_taken(self, cx: OpCall, tgt: Any) -> float: ...         # сколько урона обработчик уже нанёс цели
+    # --- протокол Махораги (src/core/adaptation.py; поля external["mahoraga"] / external["aggro"] ---
+    def op_adaptation(self, cx: OpCall, tgt: Any) -> dict: ...  # сериализуемое состояние колеса/памяти цели
+    def set_adaptation(self, cx: OpCall, tgt: Any, state: dict) -> None: ...
+    def op_aggro(self, cx: OpCall, tgt: Any) -> dict: ...       # {faction, aggro_mode, targeting, target}
+    def set_aggro(self, cx: OpCall, tgt: Any, **kv: Any) -> None: ...
+    def op_nested_ops(self, cx: OpCall, tgt: Any, ops: list) -> None: ...  # on_adapt/on_max поддеревья
+
+
+# ---------------------------------------------------------------- shared helpers (Mahoraga specs)
+
+def _threshold_ok(h: OpHost, cx: OpCall, tgt: Any, thr: dict, hits: int, sign: str, st: dict) -> bool:
+    """ThresholdSpec (ЧАСТЬ 3.3): hits/damage_total/wheel_min/custom — все заданные условия сразу."""
+    if not thr:
+        return True
+    if hits < int(thr.get("hits", 1) or 1):
+        return False
+    dt = float(thr.get("damage_total", 0.0) or 0.0)
+    if dt and _damage_dealt_to(h, cx, tgt) + float(st.get("damage_seen", {}).get(sign, 0.0)) < dt:
+        return False
+    if int(st.get("wheel", 0)) < int(thr.get("wheel_min", 0) or 0):
+        return False
+    custom = thr.get("custom")
+    if custom and not ctx_get(custom, {**cx.ctx, "wheel": st.get("wheel", 0), "phenomenon_hits": hits}):
+        return False
+    return True
 
 
 # ---------------------------------------------------------------- handlers: one per op kind
 
 Handler = Callable[[OpHost, OpCall, Any, dict, float], None]
+
+
+def _nested(h: OpHost, cx: OpCall, tgt: Any, ops_: list) -> None:
+    """Поддерево одной операцией (on_adapt/on_max/cost/gain): общий путь через op_nested_ops хоста."""
+    for sub in ops_ or []:
+        h.op_nested_ops(cx, tgt, [sub])
+
+
+def _damage_dealt_to(h: OpHost, cx: OpCall, tgt: Any) -> float:
+    """Урон, уже нанесённый ЦЕЛИ в этом вызове (hits от deal/use_learned) — порог damage_total."""
+    return h.op_damage_taken(cx, tgt)
+
+
+def _phenomenon_signature(o: dict, cx: OpCall) -> str:
+    """PhenomenonSpec (ЧАСТЬ 3.2): id_formula или damage_type..':'..(technique_id or 'basic')."""
+    from src.core.adaptation import SignatureHasher
+    p = o.get("phenomenon") or {}
+    dmg_ctx = {"damage_type": p.get("damage_type") or cx.ctx.get("last_damage_type") or "physical",
+               "technique_id": p.get("technique_id") or cx.ctx.get("observed_technique")}
+    formula = p.get("id_formula")
+    if isinstance(formula, str) and ":" in formula and not any(c in formula for c in "()"):
+        # литеральный шаблон "damage_type..':'..technique_id" из справочника
+        dt, _, tech = (formula.split("..':'..") + [""])[:2]
+        dt = dmg_ctx["damage_type"] if "damage_type" in dt else (dt.strip("'\"") or dt)
+        tech = dmg_ctx["technique_id"] or "basic" if "technique_id" in tech else (tech.strip("'\"") or "basic")
+        return f"{dt}:{tech}"
+    gran = p.get("granularity", "exact")
+    sign = SignatureHasher().signature(dmg_ctx, gran)
+    flags = p.get("source_flag") or cx.ctx.get("last_damage_flags")
+    if flags and gran == "exact":       # составной феномен true_damage+imaginary_mass — отдельная подпись
+        fl = "+".join(sorted(flags)) if isinstance(flags, (list, tuple, set)) else str(flags)
+        sign = f"{sign}#{fl}"
+    return sign
 
 
 def op_deal(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
@@ -548,18 +609,232 @@ def op_learn(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
 
 
 def op_adapt(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
-    """Адаптация Махораги: после попадания по типу - permanent resist_<тип> += rate за стек адаптаций."""
-    dt = o.get("to") or o.get("damage_type") or cx.ctx.get("last_damage_type") or "physical"
-    rate = float(o.get("rate", 20.0))
-    stacks = h.op_adapt_stacks(tgt)
-    stacks[dt] = stacks.get(dt, 0) + 1
-    total = min(rate * stacks[dt], 100.0)
-    h.op_apply_mod_op(cx, tgt, {"kind": "mod", "stat": _resist_stat({"damage_type": dt}),
-                                "op": "max", "value": {"flat": total}})
-    h.op_note(cx, "adapt", tgt, dt, stacks[dt])
+    """Ядро адаптации (adapt из справочника): подпись феномена -> порог -> wheel+1 + on_adapt."""
+    from src.core.adaptation import AdaptationState
+    st = AdaptationState.from_dict(_mahoraga_state(h, cx, tgt))
+    thr = o.get("threshold") or {}
+    if o.get("exclude_self", True) and cx.src == getattr(tgt, "name", None):
+        h.op_note(cx, "adapt_excluded", tgt, sign := _phenomenon_signature(o, cx))  # cannot_adapt_to_self
+        return
+    sign = _phenomenon_signature(o, cx)
+    adapted = st.observe(sign, tick=int(cx.t), amount=_damage_dealt_to(h, cx, tgt), source_id=cx.src) \
+        and _threshold_ok(h, cx, tgt, thr, st.progress.get(sign, 0), sign, st.to_dict())
+    if adapted:
+        for sub in o.get("on_adapt") or []:
+            _nested(h, cx, tgt, [sub])
+        if st.at_max:
+            for sub in o.get("on_max") or [{"kind": "trigger_true_form"}]:
+                _nested(h, cx, tgt, [sub])
+    tech = cx.ctx.get("observed_technique")
+    if tech and o.get("learned_use", True):
+        st.learn(str(tech))                                    # learn_technique в составе adapt
+    h.set_adaptation(cx, tgt, st.to_dict())
+    h.op_refresh(cx, tgt)
+    h.op_note(cx, "adapt", tgt, sign, st.wheel)
 
 
 # ЕДИНАЯ таблица диспетчеризации: ключи = schema.OP_KINDS (тест: tests/test_ops_table.py)
+
+def _mahoraga_state(h: OpHost, cx: OpCall, tgt: Any) -> dict:
+    """Состояние Махораги цели как сериализуемый dict (src/core/adaptation.AdaptationState)."""
+    st = h.op_adaptation(cx, tgt)
+    if not st.get("initialized"):
+        st = dict(st)
+        st.update({"initialized": True, "wheel_max": WHEEL_MAX_DEFAULT, "wheel": 0,
+                   "known_phenomena": [], "progress": {}, "adaptation_power": {},
+                   "learned_techniques": [], "true_form": False})
+        h.set_adaptation(cx, tgt, st)
+    return st
+
+
+def op_unadapt(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """Сброс адаптации к феномену: memory_key (или ctx.phenomenon_id); освобождает слот колеса."""
+    from src.core.adaptation import AdaptationState
+    st = AdaptationState.from_dict(_mahoraga_state(h, cx, tgt))
+    sign = o.get("memory_key") or o.get("sign") or cx.ctx.get("phenomenon_id") or ""
+    changed = st.unadapt(str(sign))
+    h.set_adaptation(cx, tgt, st.to_dict())
+    h.op_refresh(cx, tgt)
+    h.op_note(cx, "unadapt", tgt, sign, changed)
+
+
+def op_reset_adaptation(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """Полный сброс колеса (wheel=0, память очищается; true form — только через deescalate)."""
+    from src.core.adaptation import AdaptationState
+    st = AdaptationState.from_dict(_mahoraga_state(h, cx, tgt))
+    st.reset()
+    h.set_adaptation(cx, tgt, st.to_dict())
+    h.op_refresh(cx, tgt)
+    h.op_note(cx, "reset_adaptation", tgt)
+
+
+def op_observe_phenomenon(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """Наблюдение феномена без урона: тот же путь SignatureHasher -> observe (порог hits)."""
+    from src.core.adaptation import SignatureHasher
+    st = _mahoraga_state(h, cx, tgt)
+    dmg_ctx = {"damage_type": o.get("damage_type") or cx.ctx.get("last_damage_type") or "physical",
+               "technique_id": o.get("technique_id") or cx.ctx.get("observed_technique")}
+    sign = SignatureHasher().signature(dmg_ctx)
+    hit = int(st.get("progress", {}).get(sign, 0)) + 1
+    st.setdefault("progress", {})[sign] = hit
+    st["last_damage_signature"] = sign
+    thr = int((o.get("threshold") or {}).get("hits", 1) or 1)
+    if hit >= thr and sign not in st["known_phenomena"]:
+        st["known_phenomena"].append(sign)
+        st["adaptation_power"][sign] = float((o.get("max_immunity") or {}).get("pct", 100.0))
+        st["wheel"] = min(int(st.get("wheel", 0)) + 1, int(st.get("wheel_max", WHEEL_MAX_DEFAULT)))
+        for sub in o.get("on_adapt") or []:
+            h.op_nested_ops(cx, tgt, [sub])
+    h.set_adaptation(cx, tgt, st)
+    h.op_note(cx, "observe_phenomenon", tgt, sign, hit)
+
+
+def op_register_phenomenon(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """Записать подпись феномена в память носителя (без порога/колеса — просто знание)."""
+    st = _mahoraga_state(h, cx, tgt)
+    sign = str(o.get("memory_key") or o.get("sign") or cx.ctx.get("phenomenon_id") or "")
+    if sign and sign not in st["known_phenomena"]:
+        st["known_phenomena"].append(sign)
+        st.setdefault("first_seen_tick", {})[sign] = int(cx.t)
+    h.set_adaptation(cx, tgt, st)
+    h.op_note(cx, "register_phenomenon", tgt, sign)
+
+
+def op_use_learned_technique(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """Применить украденную технику: pick = highest_threat | random | last; deal с adapt_damage."""
+    spells = h.op_spells(tgt)
+    if not spells:
+        h.op_note(cx, "use_learned_none", tgt)
+        return
+    pick = o.get("pick", "last")
+    if pick == "random":
+        tech = spells[int(cx.ctx.get("rng_roll", 0)) % len(spells)]
+    elif pick == "highest_threat":
+        tech = max(spells, key=lambda s: float(cx.ctx.get(f"threat_{s}", 0.0)))
+    else:
+        tech = spells[-1]
+    boost = 1.0 + resolve_value(o.get("adapt_damage"), cx.ctx, default=0.0) / 100.0 \
+        if isinstance(o.get("adapt_damage"), dict) else 1.0 + float(o.get("adapt_damage") or 0.0) / 100.0
+    base = o.get("value") or {"flat": amount}
+    if isinstance(base, dict):
+        base = {**base, "pct": float(base.get("pct", 100.0)) * boost} if "pct" in base else base
+    h.op_nested_ops(cx, tgt, [{"kind": "deal", "target": o.get("tech_target", "enemy"),
+                               "stat": "hp", "op": "sub", "value": base,
+                               "flags": list(o.get("flags") or []) + [f"learned:{tech}"]}])
+    h.op_note(cx, "use_learned_technique", tgt, tech)
+
+
+def op_set_faction(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    ag = h.op_aggro(cx, tgt)
+    ag["faction"] = str(o.get("faction") or o.get("stat") or "neutral")
+    h.set_aggro(cx, tgt, **ag)
+    h.op_note(cx, "set_faction", tgt, ag["faction"])
+
+
+def op_set_aggro(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    ag = h.op_aggro(cx, tgt)
+    ag["aggro_mode"] = str(o.get("aggro_mode") or o.get("mode") or "nearest_any")
+    if o.get("targeting"):
+        ag["targeting"] = o["targeting"]
+    h.set_aggro(cx, tgt, **ag)
+    h.op_note(cx, "set_aggro", tgt, ag["aggro_mode"])
+
+
+def op_set_targeting(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    ag = h.op_aggro(cx, tgt)
+    ag["targeting"] = o.get("targeting") or {k: o[k] for k in
+                                             ("mode", "filter", "switch_on", "switch_interval", "prefer")
+                                             if k in o}
+    h.set_aggro(cx, tgt, **ag)
+    h.op_note(cx, "set_targeting", tgt)
+
+
+def op_retarget(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    ag = h.op_aggro(cx, tgt)
+    ag["target"] = o.get("target_ref")
+    h.set_aggro(cx, tgt, **ag)
+    h.op_note(cx, "retarget", tgt, ag["target"])
+
+
+def op_clear_aggro(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    ag = h.op_aggro(cx, tgt)
+    ag["target"] = None
+    ag.pop("threat", None)
+    h.set_aggro(cx, tgt, **ag)
+    h.op_note(cx, "clear_aggro", tgt)
+
+
+def op_rotate_wheel(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """Оборот колеса: wheel_delta (или value.delta/flat); на wheel_max -> on_max (trigger_true_form)."""
+    st = _mahoraga_state(h, cx, tgt)
+    delta = o.get("wheel_delta")
+    if delta is None:
+        v = o.get("value") or {}
+        delta = v.get("delta", v.get("flat", amount or 1))
+    wheel_max = int(st.get("wheel_max", WHEEL_MAX_DEFAULT))
+    st["wheel"] = max(0, min(wheel_max, int(st.get("wheel", 0)) + int(delta)))
+    h.set_adaptation(cx, tgt, st)
+    if st["wheel"] >= wheel_max and not st.get("true_form"):
+        for sub in o.get("on_max") or [{"kind": "trigger_true_form"}]:
+            h.op_nested_ops(cx, tgt, [sub])
+    h.op_note(cx, "rotate_wheel", tgt, st["wheel"])
+
+
+def _escalate_delta(o: dict, amount: float) -> int:
+    d = o.get("escalation_delta")
+    if d is None:
+        v = o.get("value") or {}
+        d = v.get("flat", amount or 1)
+    return int(d)
+
+
+def op_escalate(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """Эскалация: escalation_level += delta (обычно синхронно колесу)."""
+    st = _mahoraga_state(h, cx, tgt)
+    st["escalation_level"] = max(0, int(st.get("escalation_level", st.get("wheel", 0)))
+                                 + _escalate_delta(o, amount))
+    h.set_adaptation(cx, tgt, st)
+    h.op_note(cx, "escalate", tgt, st["escalation_level"])
+
+
+def op_deescalate(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """Откат эскалации (rewind-механики): уровень вниз, true form спадает до порога."""
+    st = _mahoraga_state(h, cx, tgt)
+    st["escalation_level"] = max(0, int(st.get("escalation_level", 0)) - _escalate_delta(o, amount))
+    if st["escalation_level"] < int(st.get("wheel_max", WHEEL_MAX_DEFAULT)):
+        st["true_form"] = False
+    h.set_adaptation(cx, tgt, st)
+    h.op_note(cx, "deescalate", tgt, st["escalation_level"])
+
+
+def op_trigger_true_form(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """Истинная форма: флаг + поддеревья ops (mod статов ×3, transform, display_wheel golden)."""
+    st = _mahoraga_state(h, cx, tgt)
+    if st.get("true_form"):
+        return
+    st["true_form"] = True
+    h.set_adaptation(cx, tgt, st)
+    for sub in o.get("ops") or []:
+        h.op_nested_ops(cx, tgt, [sub])
+    h.op_note(cx, "trigger_true_form", tgt)
+
+
+def op_display_wheel(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """UI-хук: показать состояние колеса (mode='golden' в true form); счётчик не трогается."""
+    st = _mahoraga_state(h, cx, tgt)
+    st["wheel_display"] = {"visible": True, "mode": o.get("mode", "default")}
+    h.set_adaptation(cx, tgt, st)
+    h.op_note(cx, "display_wheel", tgt, st["wheel"], o.get("mode"))
+
+
+def op_halt_wheel(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """Остановить вращение колеса (визуал); счётчик адаптаций сохраняется."""
+    st = _mahoraga_state(h, cx, tgt)
+    st["wheel_display"] = {"visible": bool(st.get("wheel_display", {}).get("visible")), "mode": "halted"}
+    h.set_adaptation(cx, tgt, st)
+    h.op_note(cx, "halt_wheel", tgt, st["wheel"])
+
+
 OP_HANDLERS: dict[str, Handler] = {
     "deal": op_deal, "heal": op_heal, "drain": op_drain, "set": op_set, "mod": op_mod,
     "buff": op_buff, "extend": op_extend, "remove_buff": op_remove_buff,
@@ -568,6 +843,14 @@ OP_HANDLERS: dict[str, Handler] = {
     "purge": op_purge, "nullify": op_nullify, "cancel_technique": op_cancel_technique,
     "block": op_block, "absorb_damage": op_absorb_damage, "binding_vow": op_binding_vow,
     "sever": op_sever, "untargetable": op_untargetable, "learn": op_learn, "adapt": op_adapt,
+    # Махорага (ЧАСТЬ 2/7.1 справочника)
+    "unadapt": op_unadapt, "reset_adaptation": op_reset_adaptation,
+    "use_learned_technique": op_use_learned_technique,
+    "observe_phenomenon": op_observe_phenomenon, "register_phenomenon": op_register_phenomenon,
+    "set_faction": op_set_faction, "set_aggro": op_set_aggro, "set_targeting": op_set_targeting,
+    "retarget": op_retarget, "clear_aggro": op_clear_aggro,
+    "escalate": op_escalate, "deescalate": op_deescalate, "trigger_true_form": op_trigger_true_form,
+    "rotate_wheel": op_rotate_wheel, "display_wheel": op_display_wheel, "halt_wheel": op_halt_wheel,
 }
 
 
