@@ -10,6 +10,7 @@ seed. A trace has one line per simulated frame: `h` = hash of the bit-exact worl
 
     melee_three same frames=74
     swarm DIFF first_frame=118 field=h frames=1390/1390
+    golem_guard new frames=740 (no BEFORE trace)            # a scenario added after the BEFORE run: not a diff
 
 `field` is what diverged first (h state, r RNG, len = one trace is shorter); exit 0 all same, 1 any DIFF, 2 tool error.
 """
@@ -65,6 +66,8 @@ def load(path: Path) -> list[tuple[str, str]]:
 
 
 def compare_one(before: Path, after: Path) -> str:
+    if after.exists() and not before.exists():        # a scenario added after the BEFORE run: nothing to compare with
+        return f"new frames={len(load(after))} (no BEFORE trace)"
     if not before.exists() or not after.exists():
         return f"DIFF first_frame=-1 field=missing ({'before' if not before.exists() else 'after'} trace absent)"
     a, b = load(before), load(after)
