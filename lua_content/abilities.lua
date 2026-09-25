@@ -101,5 +101,94 @@ return {
     { id = "war_cry", name = "Боевой клич", tags = { "skill" }, cooldown = 15, needs_target = true, range = 8.0,
       ops = { { kind = "mod", target = "self", stat = "attack_damage", op = "add", value = { pct = 30 },
                 duration = { flat = 6 } } } },
+
+    -- ------------------------------------------------------------ проклятая энергия: Sukuna vs Gojo
+    -- Общие навыки постановки боя «Рёмен Сукуна vs Сатору Годжо» (см. lua_content/bosses.lua).
+    -- Тип урона задаётся первым известным тегом из lua_content/damage.lua (fire, ice ...);
+    -- тег "cursed" — тематическая метка (урон физический), а «Разрыв» режет броню (defense)
+    -- цели, открывая её под последующие проклятые техники.
+    { id = "cursed_bolt", name = "Сгусток проклятой энергии", tags = { "attack", "spell", "cursed" },
+      range = 9.0, cooldown = 2.5, cost = { mana = 12 },
+      ops = { { kind = "deal", target = "enemy", stat = "hp", op = "sub",
+                value = { pct = 90, of = "spell_power" } } } },
+    -- Двухрукая техника «Разрыв»: дальние режущие удары, снижают броню цели на 6 с
+    { id = "dismantle", name = "Разрыв", tags = { "attack", "skill", "cursed" },
+      range = { pct = 250, of = "attack_range" }, cooldown = 4, cost = { stamina = 15 },
+      ops = { { kind = "deal", target = "enemy", stat = "hp", op = "sub",
+                value = { pct = 150, of = "attack_damage" } },
+              { kind = "mod", target = "enemy", stat = "defense", op = "add", value = { pct = -40 },
+                duration = { flat = 6 } } } },
+    -- Однорукая техника «Уничтожение»: замах по дуге перед собой, отбрасывает
+    { id = "world_cleave", name = "Уничтожение", tags = { "attack", "skill", "cursed" },
+      range = { pct = 160, of = "attack_range" }, cooldown = 7, cost = { stamina = 25 }, needs_target = true,
+      ops = { { kind = "deal", target = "area", center = "self", radius = 4.0, arc = 120, affects = "others",
+                stat = "hp", op = "sub", value = { pct = 130, of = "attack_damage" } },
+              { kind = "move", target = "enemy", mode = "knockback", distance = 4 } } },
+    -- «Стрела огня» (Казадза-но-Ю): поджигает, ожог жрёт здоровье истинным уроном
+    { id = "fire_arrow", name = "Стрела огня", tags = { "attack", "spell", "fire" },
+      range = 10.0, cooldown = 6, cost = { mana = 20 },
+      ops = { { kind = "deal", target = "enemy", stat = "hp", op = "sub",
+                value = { pct = 110, of = "spell_power" } },
+              { kind = "deal", target = "enemy", stat = "hp", op = "sub",
+                value = { pct = 20, of = "spell_power" }, every = 1, duration = { flat = 4 },
+                flags = { "true_damage" } } } },
+    -- Малый ранговый барьер: 3 с неуязвимости, отбрасывает всех, кто стоит вплотную
+    { id = "barrier_shrine", name = "Малый ранговый барьер", tags = { "skill", "buff" }, cooldown = 26,
+      when = "ctx.hp_pct < 55",
+      ops = { { kind = "buff", target = "self", buff_id = "sukuna.barrier_shrine", flags = { "iframe" },
+                duration = { flat = 3 } },
+              { kind = "move", target = "area", center = "self", radius = 3.0, affects = "others",
+                mode = "knockback", distance = 4 } } },
+    -- Расширение домена «Зловещий Храм»: открыт даже без закрытия сферы —
+    -- поле разрыва под целью косит всё живое в круге 6 с (герой может выйти за телеграф)
+    { id = "malevolent_shrine", name = "Домен: Зловещий Храм", tags = { "skill", "aoe", "domain", "cursed" },
+      range = 12, cooldown = 45, cast_time = 2.5, radius = 6.5,
+      ops = { { kind = "deal", target = "area", radius = 6.5, stat = "hp", op = "sub",
+                value = { pct = 60, of = "spell_power" }, every = 1, duration = { flat = 6 },
+                flags = { "true_damage" } } } },
+    -- «Бесконечность»: 4 с полной неуязвимости — между атакой и Годжо всегда бесконечность
+    { id = "infinity", name = "Бесконечность", tags = { "skill", "buff" }, cooldown = 30,
+      when = "ctx.hp_pct < 70",
+      ops = { { kind = "buff", target = "self", buff_id = "gojo.infinity", flags = { "iframe" },
+                duration = { flat = 4 } } } },
+    -- «Техника синей»: притянуть цель и сжать ударом
+    { id = "lapse_blue", name = "Синяя: притяжение", tags = { "skill", "spell", "cursed" }, range = 10,
+      cooldown = 8, cost = { mana = 25 },
+      ops = { { kind = "move", target = "enemy", mode = "pull", distance = 8 },
+              { kind = "deal", target = "enemy", stat = "hp", op = "sub",
+                value = { pct = 130, of = "spell_power" } } } },
+    -- «Техника красной» (обращённая): отталкивающий залп с жёстким отбросом
+    { id = "reversal_red", name = "Красная: отталкивание", tags = { "skill", "spell", "cursed" }, range = 8,
+      cooldown = 10, cost = { mana = 30 },
+      ops = { { kind = "deal", target = "enemy", stat = "hp", op = "sub",
+                value = { pct = 180, of = "spell_power" } },
+              { kind = "move", target = "enemy", mode = "knockback", distance = 8 } } },
+    -- «Фиолетовая: мнимая масса»: слияние синей и красной — сносит всё в круге, телеграф 2 с
+    { id = "hollow_purple", name = "Фиолетовая: мнимая масса", tags = { "skill", "spell", "aoe", "cursed" },
+      range = 14, cooldown = 22, cast_time = 2.0, radius = 3.5,
+      ops = { { kind = "deal", target = "area", radius = 3.5, stat = "hp", op = "sub",
+                value = { pct = 280, of = "spell_power" } } } },
+    -- Расширение домена «Беспредельная Пустота»: инфузия бесконечной информации —
+    -- мощный удар по кругу + стаскивает скорость атаки и передвижения жертв
+    { id = "unlimited_void", name = "Домен: Беспредельная Пустота", tags = { "skill", "spell", "domain", "cursed" },
+      range = 12, cooldown = 45, cast_time = 2.5, radius = 6.0,
+      ops = { { kind = "deal", target = "area", radius = 6.0, stat = "hp", op = "sub",
+                value = { pct = 320, of = "spell_power" } },
+              { kind = "mod", target = "area", radius = 6.0, stat = "aspd", op = "add", value = { pct = -50 },
+                duration = { flat = 5 } },
+              { kind = "mod", target = "area", radius = 6.0, stat = "move_speed", op = "add",
+                value = { pct = -40 }, duration = { flat = 5 } } } },
+    -- Обращённая техника: самоисцеление — целенаправленный поток энергии через сердце
+    { id = "reverse_heal", name = "Обращённая техника: самоисцеление", tags = { "heal", "skill", "cursed" },
+      cooldown = 16, cost = { mana = 30 }, when = "ctx.hp_pct < 60",
+      ops = { { kind = "heal", target = "self", stat = "hp", op = "add",
+                value = { pct = 18, of = "max_hp" } } } },
+    -- «Чёрная вспышка»: пиковый залп обоих доменов — мгновенная смерть или ничего
+    { id = "black_flash_pair", name = "Чёрная Вспышка", tags = { "attack", "spell", "lightning", "cursed" },
+      range = 12, cooldown = 25, cost = { mana = 40 },
+      ops = { { kind = "deal", target = "enemy", stat = "hp", op = "sub",
+                value = { pct = 260, of = "spell_power" } },
+              { kind = "mod", target = "enemy", stat = "damage_taken", op = "add", value = { pct = 20 },
+                duration = { flat = 5 } } } },
   },
 }

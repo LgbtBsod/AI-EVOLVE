@@ -1,2 +1,6 @@
-# QA cache
-dev_probe_output/.qa_cache/
+# Python compiled files
+__pycache__/
+*.pyc
+
+# Cache directories
+.cache/
