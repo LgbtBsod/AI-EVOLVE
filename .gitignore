@@ -1,9 +1,1 @@
-# Python compiled files
-__pycache__/
-*.pyc
-
-# Dev probe output and caches
-dev_probe_output/
-
-# Game saves and databases
-saves/
+(empty)

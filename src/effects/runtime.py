@@ -287,6 +287,12 @@ class Unit:
         self.pools: dict[str, float] = {}         # прочие ресурсы: mana, stamina
         self.refill()
         self.buffs: dict[str, dict] = {}          # buff_id -> {until, ...}
+        # --- новые слои примитивов аудита (mark/absorb/learn/adapt) ---
+        self.marks: dict[str, dict] = {}          # mark_id -> {stacks, until}
+        self.spells: list[str] = []               # выученные/скопированные техники (learn)
+        self.adapt_stacks: dict[str, int] = {}    # damage_type -> число адаптаций (Mahoraga)
+        self.absorbed_kinetic: float = 0.0        # Поглощающее Облако: копящийся кинетический урон
+        self.absorbed_until: float = 0.0          # до какого момента окно поглощения
         self.alive = True
         self.kills = 0
 
@@ -360,6 +366,12 @@ class Unit:
             "kills": float(self.kills),
         })
         c["hp_missing_below_40"] = _hp_missing_below_40(c)
+        # absorbed_kinetic: окно поглощения истекло -> накопленное сгорает (Playful Cloud отдаёт в удар)
+        if self.absorbed_until and self._now > self.absorbed_until:
+            self.absorbed_kinetic, self.absorbed_until = 0.0, 0.0
+        c["absorbed_kinetic"] = self.absorbed_kinetic
+        for mid, m in self.marks.items():          # mark_<id> для scale/when (detonate по стакам)
+            c[f"mark_{mid}"] = float(m.get("stacks", 0.0)) if m.get("until", 1e18) > self._now else 0.0
         if extra:
             c.update(extra)
         return c
@@ -432,6 +444,24 @@ _NOTES: dict[str, Callable[..., str]] = {
     "periodic": lambda kind, amount, every: f"{kind} over time {amount:.2f} every {every:g}s",
     "summon": lambda o: f"summon {o.get('summon')} x{o.get('count', 1)} (no world in training room)",
     "move": lambda o: f"move {o.get('mode')} (no world in training room)",
+    # новые kinds (аудит Сукуна/Годжо/Тоджи)
+    "resist": lambda tg, stat, amount: f"resist {stat} +{amount:.1f} -> {tg.name}",
+    "immune": lambda tg, stat, pct: f"immune {stat} {pct:.0f}% -> {tg.name}",
+    "immune_effect": lambda tg, what: f"immune effect {what} -> {tg.name}",
+    "mark": lambda tg, mid, stacks: f"mark {mid}={stacks:g} -> {tg.name}",
+    "detonate": lambda tg, mid, stacks: f"detonate {mid} ({stacks:g} stacks) -> {tg.name}",
+    "detonate_empty": lambda tg, mid: f"detonate {mid}: no marks on {tg.name}",
+    "purge": lambda tg, want, tag: f"purge {want}{'' if not tag else ':' + str(tag)} -> {tg.name}",
+    "nullify": lambda tg: f"nullify -> {tg.name}",
+    "cancel_technique": lambda tg: f"cancel_technique -> {tg.name}",
+    "block": lambda tg, what: f"block {what} -> {tg.name}",
+    "absorb_damage": lambda tg, amount, window: f"absorb {amount:.2f} (window {window:g}s) -> {tg.name}",
+    "binding_vow": lambda tg, vid: f"binding_vow {vid} -> {tg.name}",
+    "sever": lambda tg, what: f"sever {what} -> {tg.name}",
+    "untargetable": lambda tg, by: f"untargetable by {by} -> {tg.name}",
+    "learn": lambda tg, tech: f"learn {tech} -> {tg.name}",
+    "learn_nothing": lambda tg: f"learn: nothing observed -> {tg.name}",
+    "adapt": lambda tg, dt, stacks: f"adapt {dt} stack {stacks} -> {tg.name}",
 }
 
 
@@ -900,6 +930,34 @@ class EffectRuntime:
 
     def op_note(self, cx: OpCall, what: str, *args) -> None:
         self.log.append(f"t={cx.t:.1f} {cx.src} " + _NOTES[what](*args))
+
+    # --- примитивы новых kinds (ops.py: resist/immune/mark/detonate/purge/...) ---------
+    def op_marks(self, tgt: Unit) -> dict:
+        return tgt.marks
+
+    def op_grant_mark(self, cx: OpCall, tgt: Unit, mid: str, stacks: float, until: float) -> None:
+        tgt.marks[mid] = {"stacks": stacks, "until": until}
+
+    def op_spells(self, tgt: Unit) -> list:
+        return tgt.spells
+
+    def op_adapt_stacks(self, tgt: Unit) -> dict:
+        return tgt.adapt_stacks
+
+    def op_absorb_add(self, cx: OpCall, tgt: Unit, amount: float, window: float) -> None:
+        if cx.t > tgt.absorbed_until:               # новое окно: счётчик обнуляется
+            tgt.absorbed_kinetic = 0.0
+        tgt.absorbed_kinetic += amount
+        tgt.absorbed_until = max(tgt.absorbed_until, cx.t) + window
+
+    def op_apply_mod_op(self, cx: OpCall, tgt: Unit, o: dict) -> None:
+        # mod без duration: пассивный слой владельца (key по src+id операции - вклад заменяет прошлый)
+        key = (cx.src, id(o)) if cx.key is None else (cx.src, f"{cx.key[1]}:{id(o)}")
+        replace_contribution(self._op_contrib, key, tgt, o.get("stat"), lambda: self._apply_mod(o, cx.ctx, tgt))
+        tgt.clamp_resources()
+
+    def op_refresh(self, cx: OpCall, tgt: Unit) -> None:
+        tgt.touch()                                 # пересчёт кэша _eff после purge/правок слоёв
 
 
     # helpers -----------------------------------------------------------------

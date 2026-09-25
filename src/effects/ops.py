@@ -263,6 +263,15 @@ class OpHost(Protocol):
     def op_move(self, cx: OpCall, tgt: Any, o: dict) -> None: ...
     def op_note(self, cx: OpCall, what: str, *args: Any) -> None: ...     # строка лога (рантайм) / ничего (менеджер)
 
+    # --- примитивы новых kinds (resist/immune/mark/detonate/purge/nullify/...) ------
+    def op_marks(self, tgt: Any) -> dict: ...              # mark_id -> {stacks, until} (живые метки цели)
+    def op_grant_mark(self, cx: OpCall, tgt: Any, mid: str, stacks: float, until: float) -> None: ...
+    def op_spells(self, tgt: Any) -> list: ...             # id выученных/скопированных техник (learn/adapt)
+    def op_adapt_stacks(self, tgt: Any) -> dict: ...       # damage_type -> число адаптаций (Mahoraga)
+    def op_absorb_add(self, cx: OpCall, tgt: Any, amount: float, window: float) -> None: ...  # absorbed_kinetic
+    def op_apply_mod_op(self, cx: OpCall, tgt: Any, o: dict) -> None: ...  # mod-механика для resist/immune/adapt
+    def op_refresh(self, cx: OpCall, tgt: Any) -> None: ...               # пересчёт статов цели после правок
+
 
 # ---------------------------------------------------------------- handlers: one per op kind
 
@@ -352,11 +361,213 @@ def op_move(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
     h.op_move(cx, tgt, o)
 
 
+# ---------------------------------------------------------------- новые kinds: аудит Сукуна / Годжо / Тоджи
+
+
+def _resist_stat(o: dict) -> str:
+    """Тип урона операции -> стат resist_<тип>; "all" -> общий входящий урон (damage_taken)."""
+    dt = o.get("damage_type") or o.get("what") or "all"
+    return "damage_taken" if dt == "all" else f"resist_{dt}"
+
+
+def _timed(o: dict) -> bool:
+    """Есть duration - временный слой (external), нет - пассивный мод владельца."""
+    return o.get("duration") is not None
+
+
+def op_resist(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    m = {"kind": "mod", "stat": _resist_stat(o), "op": o.get("op") or "add", "value": o.get("value") or {"flat": amount}}
+    if _timed(o):
+        m["duration"] = o["duration"]
+    h.op_apply_mod_op(cx, tgt, m)
+    h.op_note(cx, "resist", tgt, m["stat"], amount)
+
+
+def op_immune(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    # иммунитет к типу урона = резист на 100% (конвейер гасит тип полностью);
+    # иммунитет к действию/эффекту ("heal_mana", "cursed_technique") = block того же слоя
+    what = o.get("effect") or o.get("status")
+    if what and not o.get("damage_type"):
+        bid = f"block:{what}"
+        b = h.op_buffs(tgt).get(bid)
+        until = max(b.get("until", cx.t) if b else cx.t, cx.t) + h.op_duration(o.get("duration"), cx.ctx)
+        h.op_buffs(tgt)[bid] = h.op_buff_record(cx, o, until, None)
+        h.op_note(cx, "immune_effect", tgt, what)
+        return
+    pct = 100.0 if not o.get("value") else min(100.0, amount)
+    m = {"kind": "mod", "stat": _resist_stat(o), "op": "max", "value": {"flat": pct}}
+    if _timed(o):
+        m["duration"] = o["duration"]
+    h.op_apply_mod_op(cx, tgt, m)
+    h.op_note(cx, "immune", tgt, m["stat"], pct)
+
+
+def op_mark(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    mid = o.get("mark_id") or o.get("stat")
+    if not mid:
+        return
+    marks = h.op_marks(tgt)
+    rec = marks.get(mid)
+    until = cx.t + h.op_duration(o.get("duration"), cx.ctx)
+    stacks = amount if amount > 0 else 1.0
+    if rec and rec.get("until", 0.0) > cx.t:      # stack-правило max_stacks (refresh по умолчанию)
+        stacks = min(stacks + rec["stacks"], float(o.get("max_stacks", stacks)))
+        until = max(until, rec["until"])
+    h.op_grant_mark(cx, tgt, mid, stacks, until)
+    h.op_note(cx, "mark", tgt, mid, stacks)
+
+
+def op_detonate(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    mid = o.get("mark_id")
+    marks = h.op_marks(tgt)
+    rec = marks.pop(mid, None) if mid else None
+    stacks = float(rec["stacks"]) if rec else 0.0
+    if mid is None:                                # без mark_id — взрыв всех живых меток
+        for k_, r_ in list(marks.items()):
+            if r_.get("until", 0.0) > cx.t:
+                stacks += float(r_["stacks"])
+            marks.pop(k_)
+    if stacks <= 0:
+        h.op_note(cx, "detonate_empty", tgt, mid)
+        return
+    d = {"kind": "deal", "target": "enemy", "stat": o.get("stat") or "hp", "op": "sub",
+         "flags": ["true_damage", "no_crit"]}
+    v = dict(o.get("value") or {"flat": 0.0})
+    base = float(v.get("flat", 0.0))
+    s = o.get("scale")                             # scale {every, value} -> плюс N шагов по стакам метки
+    if s:
+        steps = int(stacks // max(float(s.get("every", 1.0)), 1e-9))
+        sv = (s.get("value") or {}) if isinstance(s.get("value"), dict) else {"flat": s.get("value")}
+        v["flat"] = base + steps * float(sv.get("flat", 0.0)) * float(s.get("factor", 1.0))
+    else:
+        v["flat"] = base * stacks                  # без scale: базовый урон за каждую метку
+    d["value"] = v
+    h.op_nested(cx, [d], f".detonate({mid})", True)
+    h.op_note(cx, "detonate", tgt, mid, stacks)
+
+
+def op_purge(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    f = o.get("filter") or {}
+    want = f.get("kind") or f if isinstance(f, str) else f.get("kind", "buff")
+    tag = f.get("tag") if isinstance(f, dict) else None
+    buffs = h.op_buffs(tgt)
+    for bid in list(buffs):
+        rec = buffs[bid]
+        if rec.get("until", 1e18) <= cx.t:
+            continue
+        flags = rec.get("flags") or []
+        if tag and tag not in flags:
+            continue
+        if want in ("all", "buff") or (want == "debuff" and str(bid).startswith(("debuff", "block:", "nullified"))):
+            buffs.pop(bid)
+    if want in ("all", "mark"):
+        h.op_marks(tgt).clear()
+    h.op_refresh(cx, tgt)
+    h.op_note(cx, "purge", tgt, want, tag)
+
+
+def _disable_buff(h: OpHost, cx: OpCall, tgt: Any, bid: str, o: dict) -> None:
+    buffs = h.op_buffs(tgt)
+    prev = buffs.get(bid)
+    until = max(prev.get("until", cx.t) if prev else cx.t, cx.t) + h.op_duration(o.get("duration"), cx.ctx)
+    buffs[bid] = h.op_buff_record(cx, o, until, None)
+    h.op_after_buff(cx, tgt, bid, o)
+
+
+def op_nullify(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """Отмена активных сил: снять баффы и заблокировать способности на duration (Inverted Spear / домен-контр)."""
+    _disable_buff(h, cx, tgt, "nullified", o)
+    h.op_note(cx, "nullify", tgt)
+
+
+def op_cancel_technique(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """Копьё Неба: прерывает ТЕКУЩУЮ технику при касании; уже выпущенный снаряд летит."""
+    _disable_buff(h, cx, tgt, "technique_cancelled", o)
+    if o.get("duration"):
+        _disable_buff(h, cx, tgt, "nullified", o)
+    h.op_note(cx, "cancel_technique", tgt)
+
+
+def op_block(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """Запрет действия: stat/effect = "cursed_technique" | "domain_expansion" | "reverse_cursed_technique"..."""
+    what = o.get("stat") or o.get("effect") or o.get("what") or "actions"
+    _disable_buff(h, cx, tgt, f"block:{what}", o)
+    h.op_note(cx, "block", tgt, what)
+
+
+def op_absorb_damage(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    window = resolve_value(o.get("window"), cx.ctx) if isinstance(o.get("window"), dict) else float(o.get("window") or 0.5)
+    h.op_absorb_add(cx, tgt, max(amount, 0.0), max(window, 0.05))
+    h.op_note(cx, "absorb_damage", tgt, amount, window)
+
+
+def op_binding_vow(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """Обет: цена (cost ops) платится сразу, награда (gain ops) живёт пока действует метка обета."""
+    vid = o.get("vow_id") or o.get("id") or "vow"
+    _disable_buff(h, cx, tgt, f"vow:{vid}", o)     # метка: purge/ссылки видят активный обет
+    cost = o.get("cost_ops") or o.get("cost")
+    if cost:
+        h.op_nested(cx, cost if isinstance(cost, list) else [cost], f".vow({vid}).cost", True)
+    gain = o.get("gain_ops") or o.get("gain") or o.get("ops")
+    if gain:
+        h.op_nested(cx, gain if isinstance(gain, list) else [gain], f".vow({vid}).gain", True)
+    h.op_note(cx, "binding_vow", tgt, vid)
+
+
+def op_sever(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """Разрыв связи (Split Soul Katana): soul_body_link -> блок регена/исцеления цели на duration."""
+    what = o.get("what") or "technique_link"
+    _disable_buff(h, cx, tgt, f"severed:{what}", o)
+    if what in ("soul_body_link", "body_link"):
+        _disable_buff(h, cx, tgt, "block:heal", o)
+        h.op_apply_mod_op(cx, tgt, {"kind": "mod", "stat": "hp_regen", "op": "set", "value": {"flat": 0},
+                                    "duration": o.get("duration")})
+    h.op_note(cx, "sever", tgt, what)
+
+
+def op_untargetable(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """Невыбираемость селекторами (Toji для six_eyes/en/divination): флаг-бафф читает выбор целей."""
+    by = o.get("by") or "all"
+    by = ",".join(sorted(by)) if isinstance(by, (list, tuple)) else str(by)
+    _disable_buff(h, cx, tgt, f"untargetable:{by}", o)
+    h.op_note(cx, "untargetable", tgt, by)
+
+
+def op_learn(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """Скопировать технику (Sukuna <- Mahoraga): id из from или ctx.observed_technique; uses=-1 навсегда."""
+    src_ref = o.get("from")
+    tech = cx.ctx.get("observed_technique") if (not src_ref or src_ref == "ctx.observed_technique") else src_ref
+    tech = tech or o.get("ability_id") or o.get("id")
+    if not tech:
+        h.op_note(cx, "learn_nothing", tgt)
+        return
+    spells = h.op_spells(tgt)
+    if tech not in spells:
+        spells.append(str(tech))
+    h.op_note(cx, "learn", tgt, tech)
+
+
+def op_adapt(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """Адаптация Махораги: после попадания по типу - permanent resist_<тип> += rate за стек адаптаций."""
+    dt = o.get("to") or o.get("damage_type") or cx.ctx.get("last_damage_type") or "physical"
+    rate = float(o.get("rate", 20.0))
+    stacks = h.op_adapt_stacks(tgt)
+    stacks[dt] = stacks.get(dt, 0) + 1
+    total = min(rate * stacks[dt], 100.0)
+    h.op_apply_mod_op(cx, tgt, {"kind": "mod", "stat": _resist_stat({"damage_type": dt}),
+                                "op": "max", "value": {"flat": total}})
+    h.op_note(cx, "adapt", tgt, dt, stacks[dt])
+
+
 # ЕДИНАЯ таблица диспетчеризации: ключи = schema.OP_KINDS (тест: tests/test_ops_table.py)
 OP_HANDLERS: dict[str, Handler] = {
     "deal": op_deal, "heal": op_heal, "drain": op_drain, "set": op_set, "mod": op_mod,
     "buff": op_buff, "extend": op_extend, "remove_buff": op_remove_buff,
     "apply_effect": op_apply_effect, "kill": op_kill, "summon": op_summon, "move": op_move,
+    "resist": op_resist, "immune": op_immune, "mark": op_mark, "detonate": op_detonate,
+    "purge": op_purge, "nullify": op_nullify, "cancel_technique": op_cancel_technique,
+    "block": op_block, "absorb_damage": op_absorb_damage, "binding_vow": op_binding_vow,
+    "sever": op_sever, "untargetable": op_untargetable, "learn": op_learn, "adapt": op_adapt,
 }
 
 
