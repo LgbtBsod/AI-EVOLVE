@@ -1,31 +1,15 @@
-# Python compiled files
+# Compiled and build artifacts
 __pycache__/
-*.py[cod]
-*$py.class
+*.pyc
 
-# Testing and coverage
+# Dependencies and caches
 .pytest_cache/
-.coverage
-htmlcov/
-coverage/
+.mypy_cache/
 
-# Virtual environments (venvs made by Python < 3.13 don't ignore themselves)
-.venv/
-.venv-*/
-venv/
+# Editor/IDE files
+.vscode/
+.idea/
 
-# Build output
-target/
-build/
-dist/
-*.so
-*.pyd
-*.egg-info/
-
-# Runtime / dev-tool output
-saves/*.db
-saves/tactics_memory.json
-saves/hero_mind.json
-dev_probe_output/
-tools/dev_probe_baseline.json
-*.bak
+# System/Environment files
+.env
+.env.local

@@ -128,9 +128,17 @@ class EventSystem:
         """Shutdown the event system."""
         try:
             self._is_running = False
-            # Disconnect all signals
-            for signal in self._signals.values():
-                signal.disconnect()
+            # Disconnect all registered receivers from their signals
+            for event_type, subs in list(self._subscriptions.items()):
+                signal = self._signals.get(event_type)
+                if signal is None:
+                    continue
+                for _sub_id, handler in subs:
+                    try:
+                        signal.disconnect(handler)
+                    except Exception:
+                        # already disconnected - ignore
+                        pass
             self._signals.clear()
             self._subscriptions.clear()
             logger.info("EventSystem successfully shutdown")
