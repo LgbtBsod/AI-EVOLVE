@@ -2,5 +2,8 @@
 __pycache__/
 *.pyc
 
-# Editor/IDE
-.vscode/
+# Dev probe output and caches
+dev_probe_output/
+
+# Game saves and databases
+saves/
