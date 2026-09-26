@@ -28,6 +28,7 @@ from src.core.adaptation import WHEEL_MAX_DEFAULT
 from src.effects.control import CONTROL_HANDLERS
 from src.effects.perception import PERCEPTION_HANDLERS
 from src.effects.triggers import TRIGGER_HANDLERS
+from src.effects.zones import ZONE_HANDLERS
 
 # ---------------------------------------------------------------- spec kind names -> canon (lua_content/kind_aliases.lua)
 
@@ -1046,7 +1047,7 @@ OP_HANDLERS: dict[str, Handler] = {
     "escalate": op_escalate, "deescalate": op_deescalate, "trigger_true_form": op_trigger_true_form,
     "rotate_wheel": op_rotate_wheel, "display_wheel": op_display_wheel, "halt_wheel": op_halt_wheel,
     "stance": op_stance, "transform": op_transform, "timed_power_up": op_timed_power_up,
-    **CONTROL_HANDLERS, **PERCEPTION_HANDLERS, **TRIGGER_HANDLERS,
+    **CONTROL_HANDLERS, **PERCEPTION_HANDLERS, **TRIGGER_HANDLERS, **ZONE_HANDLERS,
 }
 
 

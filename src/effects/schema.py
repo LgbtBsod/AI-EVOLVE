@@ -44,6 +44,7 @@ OP_KINDS = {
     "transform",    # stance + stats (mod-ops, пока форма активна) + abilities {add, remove}
     "timed_power_up",  # временное усиление: transform со своей группой; duration обязателен, on_exit = расплата
     "on_lethal", "counter_delta", "delay",   # F4: перехват летального удара, отложенные ops (src/effects/triggers.py, docs/EFFECT_SCHEMA.md "Triggers")
+    "zone", "zone_mod", "rule_override",   # F5: зоны, ауры, реальности (src/effects/zones.py, docs/EFFECT_SCHEMA.md "Zones")
     "perceive", "reveal", "precognition",   # восприятие: данные на unit.external["perception"] (src/effects/perception.py, docs/EFFECT_SCHEMA.md "Perception")
     "hypnosis", "command", "possess", "dominance", "temptation", "tame",   # контроль цели (src/effects/control.py, docs/EFFECT_SCHEMA.md "Control")
 

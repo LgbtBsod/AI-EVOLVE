@@ -272,6 +272,13 @@ def primitive_effects() -> list[dict]:
             {"kind": "counter_delta", "target": "self", "value": {"flat": 50}},
             {"kind": "delay", "target": "self", "after": dur(1), "ops": [{"kind": "heal", "target": "self", "stat": "hp", "value": {"flat": 1}}]},
         ], "trigger"),
+        # зоны (src/effects/zones.py): зона с тиком и барьером, её правка, ограниченное переопределение правил
+        ev("prim.zones", "combat_start", [
+            {"kind": "zone", "target": "self", "id": "forge_zone", "radius": 5, "duration": dur(3), "affects": "enemies", "barrier": "open",
+             "tick": {"every": dur(1), "ops": [{"kind": "deal", "target": "enemy", "stat": "hp", "op": "sub", "value": {"flat": 1}}]}},
+            {"kind": "zone_mod", "target": "self", "id": "forge_zone", "radius": 6},
+            {"kind": "rule_override", "target": "self", "duration": dur(2), "rules": {"flags": ["no_crit"]}},
+        ], "zone"),
         # кража и применение техники
         ev("prim.learn", "use", [
             {"kind": "learn", "target": "self", "ability_id": "forge_technique"},

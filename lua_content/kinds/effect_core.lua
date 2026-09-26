@@ -58,10 +58,16 @@ return {
     "детонировать метки (Marksmanship / руны)"),
 
   -- зоны / ауры ----------------------------------------------------------------
-  k("zone", "planned", { "shape", "radius", "ops" }, { "duration", "tick", "affects" },
-    "зона с ops внутри (домен, лава, аматэрасу-поле)"),
-  k("aura", "planned", { "ops" }, { "radius", "filter" },
-    "постоянная аура вокруг носителя"),
+  k("zone", "op_zone", { "radius" }, { "id", "duration", "tick", "affects", "on_enter", "on_exit", "barrier", "guaranteed_hit", "shield",
+      "on_inside", "rules", "link", "follow", "to", "persist", "marble" },
+    "зона (центр = цель op или to=[x,y]; follow = за носителем): enter/exit/tick ops, барьер, sure-hit, щит; src/effects/zones.py"),
+  k("zone_mod", "op_zone_mod", { "id" }, { "radius", "affects", "barrier", "guaranteed_hit", "duration", "rules" },
+    "изменить параметры живой зоны кастера"),
+  k("rule_override", "op_rule_override", { "rules" }, { "duration", "zone", "id" },
+    "ограниченное переопределение констант урона (Consts) и флагов: на duration или в зоне; без границы - отказ"),
+  k("aura", "alias:zone", { "radius" }, { "follow" }, "alias of zone follow=true (kind_aliases.lua)"),
+  k("reality_marble", "alias:zone", { "radius" }, { "rules" }, "alias of zone marble=true: свои правила внутри"),
+  k("space_manipulation", "alias:zone", { "radius" }, { "on_inside" }, "alias of zone on_inside=[swap,teleport]: Room / Shambles"),
 
   -- существа --------------------------------------------------------------------
   k("summon", "op_summon", { "template" }, { "count", "duration", "stats_override" },

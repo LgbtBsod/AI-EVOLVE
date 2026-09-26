@@ -24,6 +24,10 @@ return {
     -- perception family (src/effects/perception.py)
     grant_vision = { canon = "mod", exact = true, params = { stat = "vision_range", op = "add" }, note = "mod vision_range add: can_see honours it" },
     dodge        = { canon = "precognition", exact = true, params = { negate = true, warn = false }, note = "precognition negate=true warn=false: the first hit per cooldown is dodged" },
+    -- space family (src/effects/zones.py): a zone with implied fields
+    aura               = { canon = "zone", exact = true, params = { follow = true }, note = "zone follow=true: a zone attached to its carrier" },
+    reality_marble     = { canon = "zone", exact = true, params = { marble = true }, note = "zone marble=true: `rules` (consts/flags) hold inside, own tick / on_enter ops" },
+    space_manipulation = { canon = "zone", exact = true, params = { on_inside = { "swap", "teleport" } }, note = "zone on_inside=[swap,teleport]: the owner swaps any two members (move swap with=<id>)" },
     debuff   = { canon = "buff", exact = false, note = "buff carries mods via a buff record; semantics differ" },
     erase    = { canon = "kill", exact = false, note = "kill is weaker: no removal from the world / memory" },
     copy_technique = { canon = "learn", exact = false, note = "learn needs observed_technique from perception" },

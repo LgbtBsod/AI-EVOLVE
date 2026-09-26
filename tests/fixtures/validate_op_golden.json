@@ -1,5 +1,5 @@
 {
-"n_lua": 512,
+"n_lua": 522,
 "cases": [
 [
 "\"x\"",
@@ -38,6 +38,14 @@
 []
 ],
 [
+"{\"affects\": \"enemies\", \"duration\": {\"flat\": 15}, \"id\": \"shrine\", \"kind\": \"zone\", \"radius\": 10, \"target\": \"self\", \"tick\": {\"every\": {\"flat\": 1}, \"ops\": [{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 6}}]}}",
+[]
+],
+[
+"{\"affects\": \"enemies\", \"duration\": {\"flat\": 15}, \"id\": \"shrine_slashes\", \"kind\": \"aura\", \"radius\": 4, \"target\": \"self\", \"tick\": {\"every\": {\"flat\": 0.5}, \"ops\": [{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 2}}]}}",
+[]
+],
+[
 "{\"affects\": \"others\", \"arc\": 110, \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": \"attack_range\", \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"ref\": \"ctx.attack_damage\"}}",
 []
 ],
@@ -51,6 +59,10 @@
 ],
 [
 "{\"affects\": \"others\", \"arc\": 180, \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": \"attack_range\", \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"ref\": \"ctx.attack_damage\"}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"barrier\": \"closed\", \"duration\": {\"flat\": 20}, \"guaranteed_hit\": true, \"id\": \"void\", \"kind\": \"reality_marble\", \"on_enter\": [{\"buff_id\": \"corpus_void_daze\", \"kind\": \"status\", \"target\": \"enemy\"}], \"radius\": 12, \"rules\": {\"consts\": {\"min_damage\": 5}, \"flags\": [\"no_crit\"]}, \"target\": \"self\"}",
 []
 ],
 [
@@ -147,6 +159,14 @@
 ],
 [
 "{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 9, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 520}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"duration\": {\"flat\": 30}, \"id\": \"infinity\", \"kind\": \"aura\", \"radius\": 3, \"shield\": {\"bypass\": \"bypass_infinity\"}, \"target\": \"self\"}",
+[]
+],
+[
+"{\"affects\": \"others\", \"duration\": {\"flat\": 30}, \"id\": \"ubw\", \"kind\": \"reality_marble\", \"on_enter\": [{\"count\": 1, \"kind\": \"summon\", \"summon\": \"blade_spirit\", \"target\": \"self\"}], \"radius\": 15, \"target\": \"self\", \"tick\": {\"every\": {\"flat\": 2}, \"ops\": [{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 4}}]}}",
 []
 ],
 [
@@ -836,6 +856,10 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 20}, \"id\": \"room\", \"kind\": \"space_manipulation\", \"radius\": 15, \"target\": \"self\"}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 20}, \"id\": \"sun_god\", \"kind\": \"transform\", \"stats\": [{\"kind\": \"mod\", \"op\": \"mul\", \"stat\": \"defense\", \"target\": \"self\", \"value\": {\"flat\": 1.5}}], \"target\": \"self\"}",
 []
 ],
@@ -1496,7 +1520,7 @@
 []
 ],
 [
-"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 40}}",
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 2}}",
 []
 ],
 [
@@ -1505,6 +1529,18 @@
 ],
 [
 "{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 40}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 40}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 4}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 6}}",
 []
 ],
 [
@@ -2236,6 +2272,10 @@
 []
 ],
 [
+"{\"kind\": \"mod\", \"op\": \"mul\", \"stat\": \"move_speed\", \"target\": \"self\", \"value\": {\"flat\": 0.5}}",
+[]
+],
+[
 "{\"kind\": \"mod\", \"op\": \"set\", \"stat\": \"move_speed\", \"target\": \"enemy\", \"value\": {\"flat\": 0}}",
 []
 ],
@@ -2333,9 +2373,7 @@
 ],
 [
 "{\"kind\": \"rule_override\", \"rules\": [\"block_physics\"], \"scope\": \"self\"}",
-[
-"op: unknown kind 'rule_override'"
-]
+[]
 ],
 [
 "{\"kind\": \"set\", \"op\": \"set\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 30}}",
@@ -2386,9 +2424,7 @@
 ],
 [
 "{\"kind\": \"zone\", \"ops\": [{\"flags\": [\"no_resurrection_guard\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemies\", \"value\": {\"of\": \"max_hp\", \"pct\": 4}}], \"radius\": 2, \"shape\": \"circle\", \"tick\": 1}",
-[
-"op: unknown kind 'zone'"
-]
+[]
 ],
 [
 "{}",

@@ -132,5 +132,30 @@ return {
       ops = { { kind = "delay", target = "enemy", after = { flat = 3 }, ops = { hit(40) } } } },
     { id = "corpus_delayed_blast_persist", family = "trigger", tags = { "spell" }, trigger = "cast", range = 30, needs_target = true,
       ops = { { kind = "delay", target = "enemy", after = { flat = 3 }, persist = true, ops = { hit(40) } } } },
+
+    -- ---- slice F5: SPACE family (family = "space"; src/effects/zones.py, docs/EFFECT_SCHEMA.md "Zones") ----
+    { id = "corpus_infinity", corpus = 1, family = "space", tags = { "spell" }, trigger = "cast", cooldown = 5,   -- aura: nearby attackers are nullified
+      ops = { { kind = "aura", target = "self", id = "infinity", radius = 3, duration = { flat = 30 }, affects = "others",
+                shield = { bypass = "bypass_infinity" } } } },
+
+    { id = "corpus_domain_void", corpus = 3, family = "space", tags = { "spell" }, trigger = "cast", cooldown = 120,
+      ops = { { kind = "reality_marble", target = "self", id = "void", radius = 12, duration = { flat = 20 }, affects = "others",
+                barrier = "closed", guaranteed_hit = true, rules = { consts = { min_damage = 5 }, flags = { "no_crit" } },
+                on_enter = { { kind = "status", target = "enemy", buff_id = "corpus_void_daze" } } } } },
+    { id = "corpus_void_daze", tags = { "debuff" }, ops = { { kind = "mod", target = "self", stat = "move_speed", op = "mul", value = { flat = 0.5 } } } },
+
+    { id = "corpus_malevolent_shrine", corpus = 4, family = "space", tags = { "spell" }, trigger = "cast", cooldown = 90,
+      ops = { { kind = "zone", target = "self", id = "shrine", radius = 10, duration = { flat = 15 }, affects = "enemies",
+                tick = { every = { flat = 1 }, ops = { hit(6) } } },
+              { kind = "aura", target = "self", id = "shrine_slashes", radius = 4, duration = { flat = 15 }, affects = "enemies",
+                tick = { every = { flat = 0.5 }, ops = { hit(2) } } } } },
+
+    { id = "corpus_room", corpus = 16, family = "space", tags = { "spell" }, trigger = "cast", cooldown = 30,
+      ops = { { kind = "space_manipulation", target = "self", id = "room", radius = 15, duration = { flat = 20 } } } },
+
+    { id = "corpus_unlimited_blade_works", corpus = 32, family = "space", tags = { "spell" }, trigger = "cast", cooldown = 120,   -- `copy` (steal slice) is not part of this row
+      ops = { { kind = "reality_marble", target = "self", id = "ubw", radius = 15, duration = { flat = 30 }, affects = "others",
+                on_enter = { { kind = "summon", target = "self", summon = "blade_spirit", count = 1 } },
+                tick = { every = { flat = 2 }, ops = { hit(4) } } } } },
   },
 }

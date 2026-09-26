@@ -29,6 +29,12 @@ def canon_kinds() -> set:
     return set(OP_HANDLERS)
 
 
+def _features() -> tuple:
+    sys.path.insert(0, str(ROOT))
+    from src.effects.zones import ZONE_FEATURES
+    return ZONE_FEATURES
+
+
 def alias_rows() -> dict:
     import lua_bridge
     return lua_bridge.load(ROOT / "lua_content" / "kind_aliases.lua").get("aliases") or {}
@@ -36,7 +42,7 @@ def alias_rows() -> dict:
 
 def blockers(ab: dict, known: set) -> list:
     """The spec kinds of an ability that `known` does not cover, plus its `lacks` additions (as `+name`)."""
-    return [k for k in ab["spec_kinds"] if k not in known] + [f"+{x}" for x in ab["lacks"]]
+    return [k for k in ab["spec_kinds"] if k not in known] + [f"+{x}" for x in ab["lacks"] if f"+{x}" not in known]
 
 
 def _pct(count: int, n: int) -> float:
@@ -51,6 +57,7 @@ def _shares(corpus: list, blocked: list, canon: set) -> dict:
 
 def compute(corpus: list, canon: set, aliases: dict) -> dict:
     with_al = canon | {k for k, v in aliases.items() if v.get("exact") and v.get("canon") in canon}
+    with_al |= {f"+{f}" for f in _features()}       # spec additions a canon kind provides (zone.sure_hit, zone.on_inside)
     n = len(corpus)
     blocked = [(ab, blockers(ab, with_al)) for ab in corpus]
     shares = _shares(corpus, blocked, canon)

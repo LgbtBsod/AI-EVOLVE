@@ -48,6 +48,7 @@ from typing import Any, Callable, Iterable, Optional, Protocol
 from . import damage
 from . import perception
 from . import triggers
+from . import zones
 from .control import release_control
 from .ops import OpCall, Periodic, Tracked, apply_op, form_abilities, replace_contribution_game
 from .runtime import EffectRuntime, Unit, buff_fields, resolve_value, rules
@@ -463,6 +464,8 @@ class EffectManager:
         self._depth = 0
         self._delayed: list[dict] = []   # F4 `delay`: {at, seq, caster, target, ops, persist, src, tags}
         self._delay_seq = 0
+        self._zones: list[dict] = []     # F5 zones (src/effects/zones.py), creation order
+        self._rules: list[dict] = []     # F5 timed rule_override layers {id, until, consts, flags}
         self._status_book: dict = {}     # (id сущности, status id) -> (стаки, до какого времени)
 
     # ---------------------------------------------------------------- registry
@@ -547,6 +550,7 @@ class EffectManager:
             if is_alive(tg.caster) and self.state(tg.caster):
                 self._execute(self.state(tg.caster), tg.ability, tg.target, center=(tg.x, tg.y))
         self._run_delayed()
+        zones.update(self)
 
     def _run_delayed(self) -> None:
         """F4 `delay`: due records in (at, seq) order; a dead caster cancels its record unless `persist`."""
@@ -1015,7 +1019,10 @@ class EffectManager:
         self._summon(cx.source, o, cx.ctx)
 
     def op_move(self, cx: OpCall, tgt: EntityState, o: dict) -> None:
-        self._move(cx.source, tgt, o, cx.primary)
+        if o.get("mode") == "swap" and o.get("with") is not None:      # F5 Room: swap the target with another member of the caster's zone
+            self._swap_within_zone(cx.source, tgt, o["with"])
+        else:
+            self._move(cx.source, tgt, o, cx.primary)
 
     # --- формы (ops.py stance/transform/timed_power_up): запись в unit.external["forms"], моды формы в st.external ---
     def op_forms(self, tgt: EntityState) -> dict:
@@ -1109,6 +1116,22 @@ class EffectManager:
         tgt.absorbed_until = max(tgt.absorbed_until, self.now) + window
 
     # F4 triggers (src/effects/triggers.py) -------------------------------------------------------------
+    # F5 zones (src/effects/zones.py) -------------------------------------------------------------------
+    def op_zones(self) -> list:
+        return self._zones
+
+    def op_rules(self) -> list:
+        return self._rules
+
+    def op_zone_add(self, rec: dict) -> None:
+        for old in [z for z in self._zones if z["id"] == rec["id"] and z["owner"] is rec["owner"]]:
+            zones.end(self, old)
+        self._zones.append(rec)
+
+    def constrain_move(self, entity, x: float, y: float) -> tuple[float, float]:
+        """Closed zone barriers applied to a wanted position (game movement may call it; `move` ops always do)."""
+        return zones.constrain(self, entity, x, y) if self._zones else (x, y)
+
     def op_triggers(self, tgt: EntityState) -> dict:
         return tgt.unit.external.setdefault("triggers", {})
 
@@ -1211,9 +1234,18 @@ class EffectManager:
         dest = fixed or MOVE_DEST.get(mode, _dest_blink)(geo, dist, self.rng)
         self._place(tgt_st.entity, *dest)
 
+    def _swap_within_zone(self, st, tgt_st, with_id) -> None:
+        other = zones.swap_partner(self, st.entity, tgt_st.entity, with_id)
+        if other is not None:
+            mine, theirs = position(tgt_st.entity), position(other)
+            self._place(other, *mine)
+            self._place(tgt_st.entity, *theirs)
+
     def _place(self, e, nx: float, ny: float) -> None:
         if self.world is not None and hasattr(self.world, "clamp_position"):
             nx, ny = self.world.clamp_position(nx, ny)
+        if self._zones:
+            nx, ny = zones.constrain(self, e, nx, ny)
         if hasattr(e, "move_to"):
             e.move_to(nx, ny)
         else:
@@ -1292,13 +1324,18 @@ class EffectManager:
         if not is_alive(tgt) or amount <= 0:
             return None
         info = HitInfo(entity_id(src), entity_id(tgt), 0.0, ability=ability)
-        if perception.try_negate(self, tgt_st, src, entity_id(src)):   # precognition: warned + the hit is dodged (once per cooldown)
+        nulled, flags, consts, sure = zones.pre_hit(self, src, tgt, flags)   # F5: shield / guaranteed_hit / rule layers
+        if nulled:
+            info.invulnerable = True
+            self._notify(info)
+            return info
+        if not sure and perception.try_negate(self, tgt_st, src, entity_id(src)):   # precognition: warned + the hit is dodged (once per cooldown)
             info.is_dodged = True
             self._notify(info)
             self.emit(tgt, "dodge", other=src)
             return info
         kind = damage.type_of_flags(flags)
-        out = damage.roll_hit(self._hit_params(st, tgt_st, amount, flags, kind), self.rng, damage.config().consts)
+        out = damage.roll_hit(self._hit_params(st, tgt_st, amount, flags, kind), self.rng, consts)
         damage.fill_info(info, out, kind)
         if not info.landed:
             self._notify(info)

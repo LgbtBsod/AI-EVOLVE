@@ -169,7 +169,7 @@ def _c_area(o, kind, path, ie):
         out.append("area center must be 'target' or 'self'")
     if o.get("arc") is not None and (not area or not 0 < float(o["arc"]) <= 360):
         out.append("arc (degrees, 0 < arc <= 360) is for target=area")
-    return out + _c_radius_affects(o, area)
+    return out + _c_radius_affects(o, area or kind == "zone")   # a zone has radius + affects like an area
 
 
 def _c_radius_affects(o, area):
