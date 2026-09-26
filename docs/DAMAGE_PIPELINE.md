@@ -52,3 +52,7 @@ A hit's damage type = the first tag of its ability/effect that names a type in `
 ### Measured single-hit cost
 2026-09-26, Windows, i5-11600KF, `python tools/bench_damage.py --hits 200000 --repeat 5` (neutral mix): Python twin 2.81 us/hit, Rust single-call 1.47 us/hit (x1.9 faster), Rust batch 0.21 us/hit.
 Rich mix: twin 2.64 us, Rust single 1.49 us. So the Rust path is NOT slower per single hit (kernel call only; extra FFI calls around it in `damage.py:251-289` are not in this number).
+
+## After the kernel: damage while CC'd (S2)
+
+`EffectManager._damage` applies `damage.cc_adjust(final, cc_damage_flat, cc_damage_reduction, row.cc_damage_mult * attacker cc_damage_mult)` = `max(0, (d - flat) * (1 - pct/100)) * mult` to the kernel's `final`, only when the target carries a CC status (`active_cc`). Python only (not in `resolve_hit`), so no Rust twin; defaults 0 / 0 / 1.0 return `final` unchanged. Stats are in `lua_content/effect_rules.lua`.

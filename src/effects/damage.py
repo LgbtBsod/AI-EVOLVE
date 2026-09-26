@@ -400,6 +400,14 @@ def flag_bits(flags: Any, broken: bool = False) -> int:
             | (F_CERTAIN if CERTAIN_FLAGS & flags else 0) | (F_BROKEN if broken else 0))
 
 
+def cc_adjust(final: float, flat: float, reduction_pct: float, mult: float) -> float:
+    """Hit on a CC'd target, after the kernel (docs/DAMAGE_PIPELINE.md): (d - flat) * (1 - pct/100) * mult, >= 0.
+    Defaults (0, 0, 1.0) return `final` unchanged."""
+    if not flat and not reduction_pct and mult == 1.0:
+        return final
+    return max(0.0, (final - flat) * (1.0 - reduction_pct / 100.0)) * mult
+
+
 def fill_info(info: Any, out: Outcome, kind: str) -> None:
     """Copy an Outcome into a HitInfo-like object (manager.HitInfo): the flags and the per-stage amounts."""
     info.is_dodged, info.missed = bool(out.dodged), not out.hit

@@ -30,6 +30,15 @@ def get_status(status_id: str) -> dict:
     return rows[row["alias"]] if row.get("alias") else row
 
 
+class Apply(NamedTuple):
+    """One application: `stacks` to add and the carrier's CC duration multiplier."""
+    stacks: int = 1
+    dur_mult: float = 1.0
+
+
+ONCE = Apply()
+
+
 class Plan(NamedTuple):
     stacks: int
     ops: list
@@ -62,32 +71,68 @@ def resisted(unit, status_id: str, roll) -> bool:
     return pct >= 100.0 or (pct > 0.0 and roll() * 100.0 < pct)
 
 
-def materialize(row: dict, stacks: int) -> list[dict]:
-    """The row's ops for `stacks`: value.flat += stack.add * stacks, row duration for timed ops without their own."""
+def row_duration(row: dict) -> float:
+    """How long the status lasts: the row number, else the longest timed op duration (blind/root/silence carry theirs on the op)."""
+    dur = row.get("duration")
+    if isinstance(dur, (int, float)):
+        return float(dur)
+    own = [float((o.get("duration") or {}).get("flat", 0.0)) for o in row.get("ops") or []
+           if o.get("kind") in TIMED_KINDS and isinstance(o.get("duration"), dict)]
+    return max(own, default=0.0)
+
+
+def duration_mult(unit, row: dict) -> float:
+    """Stat `cc_duration_mult` of the carrier (default 1.0, effect_rules.lua) for a CC row; other rows 1.0. <= 0 = immune."""
+    return max(0.0, float(unit._eff("cc_duration_mult"))) if row.get("cc") else 1.0
+
+
+def cc_ids(book: dict, unit_key, now: float) -> list[str]:
+    """Ids of the CC statuses active on a unit (book key = (unit_key, status id))."""
+    return [sid for (uk, sid), (_, until) in book.items()
+            if uk == unit_key and now < until and cc_priority(sid) is not None]
+
+
+def active_cc_row(book: dict, unit_key, now: float) -> dict | None:
+    """The winning (highest cc_priority) active CC row of a unit, None when free of CC."""
+    sid = cc_strongest(cc_ids(book, unit_key, now))
+    return get_status(sid) if sid else None
+
+
+def _timed_duration(o: dict, row_dur, dur_mult: float) -> None:
+    """A timed op without its own duration takes the row's; then x dur_mult."""
+    if o.get("kind") not in TIMED_KINDS:
+        return
+    if isinstance(row_dur, (int, float)) and o.get("duration") is None:
+        o["duration"] = {"flat": float(row_dur)}
+    if dur_mult != 1.0 and isinstance(o.get("duration"), dict):
+        o["duration"]["flat"] = float(o["duration"].get("flat", 0.0)) * dur_mult
+
+
+def materialize(row: dict, stacks: int, dur_mult: float = 1.0) -> list[dict]:
+    """The row's ops for `stacks`: value.flat += stack.add * stacks, row duration for timed ops without their own;
+    every timed duration x dur_mult (cc_duration_mult)."""
     add = float((row.get("stack") or {}).get("add", 0.0))
     dur = row.get("duration")
     out = []
     for o in copy.deepcopy(row.get("ops") or []):
         if add and isinstance(o.get("value"), dict):
             o["value"]["flat"] = float(o["value"].get("flat", 0.0)) + add * stacks
-        if isinstance(dur, (int, float)) and o.get("kind") in TIMED_KINDS and o.get("duration") is None:
-            o["duration"] = {"flat": float(dur)}
+        _timed_duration(o, dur, dur_mult)
         out.append(o)
     return out
 
 
-def plan(book: dict, key, row: dict, now: float, add: int = 1) -> Plan:
+def plan(book: dict, key, row: dict, now: float, how: Apply = ONCE) -> Plan:
     """Re-apply rule: stacks += add up to stack.max (1 without `stack`), the timer restarts; expired stacks are gone.
     `book[key] = (stacks, until)` is the host's memory."""
     prev, until = book.get(key, (0, 0.0))
     if now >= until:
         prev = 0
     cap = int((row.get("stack") or {}).get("max", 1))
-    stacks = max(1, min(prev + max(1, int(add)), cap))
-    dur = row.get("duration")
-    until = now + (float(dur) if isinstance(dur, (int, float)) else 0.0)
+    stacks = max(1, min(prev + max(1, int(how.stacks)), cap))
+    until = now + row_duration(row) * how.dur_mult
     book[key] = (stacks, until)
-    return Plan(stacks, materialize(row, stacks), until)
+    return Plan(stacks, materialize(row, stacks, how.dur_mult), until)
 
 
 def nullify_buffs(ops: list) -> tuple[str, ...]:

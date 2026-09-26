@@ -164,3 +164,19 @@ Goal: a limit crash or an agent hitting its call cap must cost ~nothing to conti
 - Relay protocol (goes into docs/agent_context/preamble.md and every role file's `HOOK relay` marker, and into `qa.py prompt`): an agent runs `qa.py ckpt` about every 10 tool calls and at its call cap (roles have `max_calls` in agent_kit.lua); at the cap it writes the handoff (`ckpt ... --next`), prints `RELAY: continue with qa.py resume` as its LAST line and stops; the caller starts a fresh agent with `qa.py prompt ROLE --task "continue: $(qa.py resume --brief)"`.
 - `qa.py tokens` (later step) reports relays per task; `agent_kit.lua` `planned = {"pack","ckpt"}` -> move `ckpt` to real.
 Acceptance: tests with tmp git repos (orphan detection, broken file detection, SAFE/RISKY/BROKEN, snapshot never changes the working tree, restore --apply, prune, hooks install idempotent, silent when clean), latency of `resume` on a clean tree < 300 ms, one output line per command via qa_report where a line is the contract.
+
+## Round 4 (owner request 2026-09-26: after the current plan, check and improve the existing token tools, add new ones)
+
+Evidence (session 43cb5326): main context 102k at turn 1 (owner-side plugin trim), 971 turns, cache_read 464M, cw 6.9M, out 1.1M; default workflow agent 67k cold start vs typed 12k (fixed: wf/guard); typed model routing already in `.claude/agents` (`qa.py route --list`). Candidates, in value order, each measured before/after with `qa.py tokens`:
+
+| # | Tool | What | Evidence / expected gain |
+|---|---|---|---|
+| R1 | usage ledger | `qa.py tokens` reports REAL billed usage (in / cache_write / cache_read / out from transcript `usage`, last usage per message.id) per session, agent, day and role; one `brief` line; today it only counts tool-result tokens | the 788k / 600k complaint was found with an ad-hoc script (scratchpad/wfcost.py); make it permanent |
+| R2 | estimate calibration | `qa.py wf estimate` takes per-agentType medians (turns, ctx growth, out) from ALL recorded runs instead of one run; prints the error of the last estimates | estimate was +24% on one run; needs a feedback loop |
+| R3 | output budget check | `qa.py check --name output_budget`: run the ~15 most used qa.py commands on a fixed fixture and fail if any output exceeds its token budget (Lua table) | every output line is re-read by every later turn (x remaining turns) |
+| R4 | agent report gate | SubagentStop hook measures the returned report and the tool-result share of the agent; logs to `qa.py tokens --agents`; nudge when > 250 words | agent reports come back into the 150k+ main context |
+| R5 | context advisor | `qa.py brief` / Stop hook: when the main context passes a Lua threshold (default 150k) print `compact now: N turns x Mk cache read per turn` | cost per turn scales with context |
+| R6 | pack-on-start | SubagentStart hook injects `qa.py pack` for the task text when the hook payload carries it (verify first) so typed agents skip exploration | exploration is 40-60% of an agent's calls |
+| R7 | review of existing tools | run `qa.py tools`, `guard --stats`, `tokens` and re-rank: delete or fix tools nobody calls, tune guard thresholds from real allow/deny counts | guard blocks=11 allows=117 nudges=0 in the last measure: nudge rule likely dead |
+
+Rule: no new tool without a measured before/after; `qa.py tools --find` first.

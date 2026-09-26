@@ -824,7 +824,10 @@ class EffectRuntime:
         if statuses.resisted(self.enemy or self.owner, row["id"], lambda: 0.0):   # no rng in the room: >=100 only
             return 0
         book = self.__dict__.setdefault("_status_book", {})
-        pl = statuses.plan(book, row["id"], row, t, stacks)
+        mult = statuses.duration_mult(self.enemy or self.owner, row)
+        if mult <= 0.0:
+            return 0
+        pl = statuses.plan(book, row["id"], row, t, statuses.Apply(stacks, mult))
         src = f"status:{row['id']}"
         self._periodic = [p for p in self._periodic if p["src"] != src]
         for bid in statuses.nullify_buffs(pl.ops):

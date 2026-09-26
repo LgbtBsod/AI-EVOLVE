@@ -514,13 +514,31 @@ class EffectManager:
             return 0
         if statuses.resisted(tgt_st.unit, row["id"], self.rng.random):
             return 0
-        pl = statuses.plan(self._status_book, (id(target), row["id"]), row, self.now, stacks)
+        mult = statuses.duration_mult(tgt_st.unit, row)
+        if mult <= 0.0:
+            return 0                                   # cc_duration_mult <= 0: immune to CC
+        pl = statuses.plan(self._status_book, (id(target), row["id"]), row, self.now, statuses.Apply(stacks, mult))
         src = f"status:{row['id']}"
         tgt_st.periodic = [p for p in tgt_st.periodic if p["ability"] != src]
         for bid in statuses.nullify_buffs(pl.ops):
             tgt_st.unit.buffs.pop(bid, None)
         self._run_ops(src_st, pl.ops, target, src, (row["damage_type"],) if row.get("damage_type") else ())
         return pl.stacks
+
+    def active_cc(self, target) -> Optional[dict]:
+        """The winning CC status row on `target` (strongest cc_priority), None when it has none."""
+        if not self._status_book:
+            return None
+        from . import statuses
+        return statuses.active_cc_row(self._status_book, id(target), self.now)
+
+    def _cc_damage(self, st: EntityState, tgt_st: EntityState, amount: float) -> float:
+        """Damage to a CC'd target: (d - flat) * (1 - pct/100) by the target's stats, x row cc_damage_mult x the attacker's."""
+        row = self.active_cc(tgt_st.entity)
+        if row is None:
+            return amount
+        return damage.cc_adjust(amount, tgt_st.unit._eff("cc_damage_flat"), tgt_st.unit._eff("cc_damage_reduction"),
+                                float(row.get("cc_damage_mult", 1.0)) * st.unit._eff("cc_damage_mult"))
 
     def _run_periodic(self, st: EntityState) -> None:
         keep = []
@@ -748,7 +766,13 @@ class EffectManager:
         else:
             st.runtime.enemy = None
         st.runtime.last_damage = float(last_damage)
-        return st.runtime.context()
+        ctx = st.runtime.context()
+        if self._status_book and target_st is not None:
+            row = self.active_cc(target_st.entity)
+            ctx["has_cc"] = 1.0 if row else 0.0
+            if row:
+                ctx["cc_is_" + row["id"]] = 1.0
+        return ctx
 
     def _targets(self, st: EntityState, o: dict, primary, center, radius: float) -> list:
         tgt = o.get("target", "self")
@@ -1113,7 +1137,7 @@ class EffectManager:
             if info.is_dodged:
                 self.emit(tgt, "dodge", other=src)
             return info
-        amount = out.final
+        amount = self._cc_damage(st, tgt_st, out.final)
         if tgt_st.invulnerable(self.now):
             info.invulnerable = True
             self._notify(info)

@@ -29,6 +29,10 @@ return {
     block_chance = 0,               -- цель: шанс блока, %
     block_reduction = 0,            -- цель: пунктов % сверх block.reduction из damage.lua, которые режет блок
     damage_taken = 0,               -- цель: % урона сверх обычного (минус - меньше); итоговый модификатор
+    cc_duration_mult = 1,           -- цель: x к длительности CC-статусов (statuses.lua); <= 0 - иммунитет к CC. Шанс сопротивления - status_resist_<id> (0..100)
+    cc_damage_mult = 1,             -- атакующий: x к урону по цели под CC (умножается на cc_damage_mult строки статуса)
+    cc_damage_flat = 0,             -- цель под CC: очков урона, снимаемых до процента: (d - flat) * (1 - reduction/100)
+    cc_damage_reduction = 0,        -- цель под CC: % урона, который не проходит
     broken = 0,                     -- цель: 1 = сломана (guard break): весь урон x broken из damage.lua; вешается mod-ом на время
   },
 
