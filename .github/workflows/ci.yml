@@ -50,8 +50,8 @@ jobs:
         run: xvfb-run -a python tools/boot_smoke_test.py
       # One line per check + a `QA verdict` header (lua_content/qa.lua, tools/qa_report.py);
       # `python tools/qa.py ci` extracts these lines from the log of a failed run.
-      - name: QA layer tests (uniform report, CI log reader, quality ratchet)
-        run: python -m pytest -q tests/test_qa_report.py tests/test_qa_ci.py tests/test_quality_check.py
+      - name: QA layer tests (uniform report, CI log reader, quality ratchet, repo hygiene guard)
+        run: python -m pytest -q tests/test_qa_report.py tests/test_qa_ci.py tests/test_quality_check.py tests/test_repo_hygiene.py
       - name: QA verdict (qa.py check --ci)
         run: python tools/qa.py check --ci --no-cache
       # SOLID/DRY/SRP/SSOT ratchet: ruff + radon + vulture + import-linter vs tests/quality_baseline.json (tools/quality_metrics.py).

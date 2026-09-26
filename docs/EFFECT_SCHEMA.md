@@ -50,6 +50,8 @@
 value = { flat = 40 } | { pct = 20 } | { pct = 0.5, of = "max_hp" } | { ref = "ctx.strength" }
 scale = { every = 10, of = "hp_missing_below_40", value = Value, factor = 1, cap = nil, floor = nil }
 -- итог: base + floor(ctx[of] / every) * value * factor
+-- of: стат / ctx-поле или псевдо-стат hp_missing_below_<N> (сколько % HP не хватает до порога N%: 40 - берсерк, 35 - Бесконечность Годжо);
+--     семейство определяет ops.derived_ctx - ОДНО место, им пользуются и значения (of), и условия (ctx.hp_missing_below_35 > 5)
 trigger = { kind = "passive" } | { kind = "condition", when = pred } | { kind = "event", event = "attack", filter = pred, owner_has = "effect_id" }
 ```
 

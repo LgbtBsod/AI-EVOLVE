@@ -57,7 +57,11 @@ def test_choose_starts_with_rush_on_fresh_memory(memory):
 
 def test_choose_respects_tactics_pool(memory):
     enemy = Enemy(tactics_pool=["flank"])
-    seen = {memory.choose(enemy) for _ in range(5)}
+    seen = set()
+    for _ in range(5):                                   # выбор -> исход: бандит пробует каждую РАЗРЕШЁННУЮ руку по разу
+        tactic = memory.choose(enemy)                    # (без исходов он честно повторял бы первую - rush)
+        seen.add(tactic)
+        memory.report(enemy, tactic, dealt=1.0, taken=9.0, hero_died=False)
     assert seen == {"rush", "flank"}                     # только из бестиария + rush всегда можно
     try_all_but(memory, enemy, good="flank")             # всё остальное пробовано и провалилось
     for _ in range(3):                                   # флангование окупается - память закрепляет
@@ -65,15 +69,21 @@ def test_choose_respects_tactics_pool(memory):
     assert memory.choose(enemy) == "flank"
 
 
-def test_choose_kite_requires_range_or_spit(memory):
-    melee = Enemy(tactics_pool=["kite"])                 # умеет по бестиарию, но без дистанции
+def test_choose_kite_requires_range_or_spit_or_a_bestiary_entry(memory):
+    """Контракт `TacticsMemory.choose`: kite вычеркнута врагу без дистанции (ни ranged, ни плевка/магии), КРОМЕ случая, когда её
+    даёт сам бестиарий (tactics = {.. "kite"}: tempest_shade - дух без ranged, kite по данным). Разные shape = разные контексты."""
+    melee = Enemy(shape="beast")                         # пустой пул, без дистанции
     try_all_but(memory, melee, good="kite")              # kite формально лучшая в памяти
-    assert memory.choose(melee) != "kite"                # но melee-врагу она вычеркнута
-    ranged = Enemy(ranged=True, tactics_pool=["kite"])
+    assert memory.choose(melee) != "kite"                # но врагу без дистанции и без записи в бестиарии она вычеркнута
+    shade = Enemy(shape="spirit", tactics_pool=["flank", "kite"])   # как tempest_shade: без ranged, но kite в бестиарии
+    try_all_but(memory, shade, good="kite")
+    assert memory.choose(shade) == "kite"
+    ranged = Enemy(shape="serpent", ranged=True)         # дальнобойный - может держать дистанцию
     try_all_but(memory, ranged, good="kite")
-    assert memory.choose(ranged) == "kite"               # дальнобойный - может держать дистанцию
-    assert memory.choose(Enemy(skills=["venom_spit"], tactics_pool=["kite"])) == "rush"     # не его контекст пуст
-    spitter = Enemy(skills=["magic_bolt"], tactics_pool=["kite"])
+    assert memory.choose(ranged) == "kite"
+    fresh = Enemy(shape="giant", skills=["venom_spit"], tactics_pool=["kite"])
+    assert memory.choose(fresh) == "rush"                # контекст пуст: первая разрешённая (rush)
+    spitter = Enemy(shape="blob", skills=["magic_bolt"])
     try_all_but(memory, spitter, good="kite")
     assert memory.choose(spitter) == "kite"              # плевок/магия - тоже дистанция
 

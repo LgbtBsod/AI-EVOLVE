@@ -31,7 +31,7 @@ from functools import lru_cache
 from typing import Any, Callable, Optional
 
 from .ops import (_ALLOWED_CTX, OpCall, Periodic, Tracked, _hp_missing_below_40, apply_mod_math, apply_op,  # noqa: F401 - re-exported
-                  compute_amount, ctx_get as _ctx_get, default_stat_of, extend_amount, replace_contribution,
+                  compute_amount, ctx_get as _ctx_get, default_stat_of, derived_ctx, extend_amount, replace_contribution,
                   resolve_value, same_map)
 
 # ---------------------------------------------------------------- stat rules
@@ -163,7 +163,7 @@ _FUNCS = {"max": max, "min": min, "floor": _lua_round(math.floor), "ceil": _lua_
 def _field(key: str) -> Callable[[dict], Any]:
     if key.startswith("_"):
         raise PrediciationException(f"private attribute {key!r} forbidden")
-    derived = _ALLOWED_CTX.get(key)
+    derived = derived_ctx(key)
 
     def get(ctx):
         try:
@@ -358,7 +358,8 @@ class Unit:
             v = min(max(v, b.get("min", -math.inf)), b.get("max", math.inf))
         return v
 
-    def ctx(self, extra: Optional[dict] = None) -> dict:
+    def ctx(self, extra: Optional[dict] = None, now: float = 0.0) -> dict:
+        """Контекст значений юнита; `now` - время хоста (метки и окно поглощения живут по нему; у Unit своих часов нет)."""
         c = {k: self._eff(k) for k in (*self.base, *self.mods) if k not in self.resources}
         c.update({name: self.resource(name) for name in self.resources})
         c.update({
@@ -367,19 +368,24 @@ class Unit:
             "kills": float(self.kills),
         })
         c["hp_missing_below_40"] = _hp_missing_below_40(c)
+        c.update(self._layer_ctx(now))
+        if extra:
+            c.update(extra)
+        return c
+
+    def _layer_ctx(self, now: float) -> dict:
+        """Поля ctx слоёв примитивов: absorbed_kinetic, mark_<id> (для scale/when: detonate по стакам), колесо Махораги."""
         # absorbed_kinetic: окно поглощения истекло -> накопленное сгорает (Playful Cloud отдаёт в удар)
-        if self.absorbed_until and self._now > self.absorbed_until:
+        if self.absorbed_until and now > self.absorbed_until:
             self.absorbed_kinetic, self.absorbed_until = 0.0, 0.0
-        c["absorbed_kinetic"] = self.absorbed_kinetic
-        for mid, m in self.marks.items():          # mark_<id> для scale/when (detonate по стакам)
-            c[f"mark_{mid}"] = float(m.get("stacks", 0.0)) if m.get("until", 1e18) > self._now else 0.0
+        c = {"absorbed_kinetic": self.absorbed_kinetic}
+        for mid, m in self.marks.items():
+            c[f"mark_{mid}"] = float(m.get("stacks", 0.0)) if m.get("until", 1e18) > now else 0.0
         # колесо Махораги как ctx-поля: scale {of="wheel"} / when "wheel >= 8" (src/core/adaptation.py)
         wh = self.external.get("mahoraga") or {}
         c["wheel"] = float(wh.get("wheel", 0))
         c["escalation_level"] = float(wh.get("escalation_level", wh.get("wheel", 0)))
         c["true_form"] = 1.0 if wh.get("true_form") else 0.0
-        if extra:
-            c.update(extra)
         return c
 
     # resources --------------------------------------------------------------
@@ -468,6 +474,25 @@ _NOTES: dict[str, Callable[..., str]] = {
     "learn": lambda tg, tech: f"learn {tech} -> {tg.name}",
     "learn_nothing": lambda tg: f"learn: nothing observed -> {tg.name}",
     "adapt": lambda tg, dt, stacks: f"adapt {dt} stack {stacks} -> {tg.name}",
+    # Махорага (адаптация / фракция / колесо; src/core/adaptation.py)
+    "adapt_excluded": lambda tg, sign: f"adapt {sign}: excluded (no self-adaptation) -> {tg.name}",
+    "unadapt": lambda tg, sign, changed: f"unadapt {sign} ({'freed' if changed else 'unknown'}) -> {tg.name}",
+    "reset_adaptation": lambda tg: f"reset_adaptation -> {tg.name}",
+    "observe_phenomenon": lambda tg, sign, hit: f"observe {sign} hit {hit} -> {tg.name}",
+    "register_phenomenon": lambda tg, sign: f"register_phenomenon {sign} -> {tg.name}",
+    "use_learned_none": lambda tg: f"use_learned_technique: nothing learned -> {tg.name}",
+    "use_learned_technique": lambda tg, tech: f"use_learned_technique {tech} -> {tg.name}",
+    "set_faction": lambda tg, faction: f"set_faction {faction} -> {tg.name}",
+    "set_aggro": lambda tg, mode: f"set_aggro {mode} -> {tg.name}",
+    "set_targeting": lambda tg: f"set_targeting -> {tg.name}",
+    "retarget": lambda tg, ref: f"retarget {ref} -> {tg.name}",
+    "clear_aggro": lambda tg: f"clear_aggro -> {tg.name}",
+    "escalate": lambda tg, level: f"escalate level {level} -> {tg.name}",
+    "deescalate": lambda tg, level: f"deescalate level {level} -> {tg.name}",
+    "trigger_true_form": lambda tg: f"trigger_true_form -> {tg.name}",
+    "rotate_wheel": lambda tg, wheel: f"rotate_wheel {wheel} -> {tg.name}",
+    "display_wheel": lambda tg, wheel, mode: f"display_wheel {wheel} mode={mode} -> {tg.name}",
+    "halt_wheel": lambda tg, wheel: f"halt_wheel {wheel} -> {tg.name}",
 }
 
 
@@ -537,7 +562,7 @@ class EffectRuntime:
         last_damage (фактический урон последнего удара героя) и buff_<id> -
         сколько секунд осталось баффу (0 - не активен) для каждого баффа,
         который выдают эффекты: `ctx.buff_enraged > 0` включает бонусы на время баффа."""
-        ctx = {**self.owner.ctx(extra), **self.target_ctx("enemy", self.enemy)}
+        ctx = {**self.owner.ctx(extra, self._now), **self.target_ctx("enemy", self.enemy)}
         ctx["last_damage"] = self.last_damage
         # секунд с последнего полученного урона / нанесённого удара (перки «пока не бьют»)
         ctx["since_hit"] = min(999.0, self._now - self._last_hit_at)
@@ -551,7 +576,7 @@ class EffectRuntime:
         """Контекст цели с префиксом: enemy_hp_pct, ally_hp и т.д."""
         if t is None:
             return {}
-        c = t.ctx()
+        c = t.ctx(now=self._now)
         return {f"{prefix}_{k}": v for k, v in c.items()}
 
     def _buff_active(self, bid: str) -> bool:
@@ -941,7 +966,7 @@ class EffectRuntime:
     def op_marks(self, tgt: Unit) -> dict:
         return tgt.marks
 
-    def op_grant_mark(self, cx: OpCall, tgt: Unit, mid: str, stacks: float, until: float) -> None:
+    def op_grant_mark(self, _cx: OpCall, tgt: Unit, mid: str, stacks: float, until: float) -> None:
         tgt.marks[mid] = {"stacks": stacks, "until": until}
 
     def op_spells(self, tgt: Unit) -> list:
@@ -962,23 +987,27 @@ class EffectRuntime:
         replace_contribution(self._op_contrib, key, tgt, o.get("stat"), lambda: self._apply_mod(o, cx.ctx, tgt))
         tgt.clamp_resources()
 
-    def op_refresh(self, cx: OpCall, tgt: Unit) -> None:
+    def op_refresh(self, _cx: OpCall, tgt: Unit) -> None:
         tgt.touch()                                 # пересчёт кэша _eff после purge/правок слоёв
 
+    def op_damage_taken(self, cx: OpCall, _tgt: Unit) -> float:
+        """Тренировочная комната не ведёт список попаданий вызова: урон последнего удара героя (ctx.last_damage)."""
+        return float(cx.ctx.get("last_damage", 0.0))
+
     # --- протокол Махораги (ops.OpHost; состояние в tgt.external, см. src/core/adaptation.py) ---
-    def op_adaptation(self, cx: OpCall, tgt: Unit) -> dict:
+    def op_adaptation(self, _cx: OpCall, tgt: Unit) -> dict:
         return tgt.external.setdefault("mahoraga", {})
 
-    def set_adaptation(self, cx: OpCall, tgt: Unit, state: dict) -> None:
+    def set_adaptation(self, _cx: OpCall, tgt: Unit, state: dict) -> None:
         tgt.external["mahoraga"] = state
 
-    def op_aggro(self, cx: OpCall, tgt: Unit) -> dict:
+    def op_aggro(self, _cx: OpCall, tgt: Unit) -> dict:
         return tgt.external.setdefault("aggro", {})
 
-    def set_aggro(self, cx: OpCall, tgt: Unit, **kv: Any) -> None:
+    def set_aggro(self, _cx: OpCall, tgt: Unit, **kv: Any) -> None:
         tgt.external["aggro"] = dict(kv)
 
-    def op_nested_ops(self, cx: OpCall, tgt: Unit, ops: list) -> None:
+    def op_nested_ops(self, cx: OpCall, _tgt: Unit, ops: list) -> None:
         self.op_nested(cx, ops, ".nested", True)
 
 

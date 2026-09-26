@@ -208,6 +208,12 @@ return {
       pattern = { [[(?P<md>\d+) markdown files]], [[STALE=(?P<stale>\d+)]], [[CHECK=(?P<review>\d+)]] },
       cost = "low", ci = false, tags = { "hygiene" }, what = "markdown files whose references point at missing/dead code (informational count)",
       watches = { "**/*.md", "**/*.py" } },
+    -- Repo hygiene (tools/repo_hygiene.py, data = the `hygiene` table below): no tracked virtualenv / build output / saves / big file, and .gitignore keeps
+    -- its patterns. Guards against a session that overwrites .gitignore and commits junk. No `watches` = the whole repo: a newly tracked file changes the
+    -- cache key, so a stale OK cannot hide it; `always`: it also runs when nothing changed.
+    { name = "hygiene", cmd = "python tools/qa.py hygiene --result", parse = "result_line", cost = "low", always = true,
+      tags = { "hygiene" }, detail = [[^(?!RESULT |repro:)\S]],
+      what = "git ls-files has no .venv*/ target/ *.so *.pyd *.pyc saves/*.db dev_probe_output/ or file > 1 MB; .gitignore covers the required patterns" },
     -- Code-quality ratchet: the logic is tools/quality_metrics.py, the data is the `quality` table below. It prints detail lines, `repro:` and one
     -- RESULT line (`qa.py quality --result`); `ci = false`: CI runs it once on Linux (`check --name quality --no-cache`), not on every OS.
     { name = "quality", cmd = "python tools/qa.py quality --result", parse = "result_line", cost = "low", ci = false,
@@ -298,6 +304,17 @@ return {
       vulture = { hint = "delete the dead code", what = "unused import/variable/argument with >= 80% confidence (vulture).",
                   fix = "delete it; if it is used dynamically (getattr, plugins), reference it once or add a whitelist entry." },
     },
+  },
+
+  -- ===== repo hygiene (tools/repo_hygiene.py; `qa.py hygiene`) =====
+  -- Every list is in .gitignore syntax (trailing `/` = directories, `*` `?` `[..]` per name, `**` = any depth, `!` re-includes).
+  hygiene = {
+    max_file_kb = 1024,          -- a tracked file above this fails (assets that must be bigger: list them in `allow`)
+    allow = {},
+    -- a TRACKED file matching any of these fails: it belongs to the machine, not to the repo
+    forbidden = { ".venv*/", "target/", "*.so", "*.pyd", "*.pyc", "saves/*.db", "dev_probe_output/" },
+    -- .gitignore must ignore each of these (semantic: `*.py[cod]` covers `*.pyc`); a bot that rewrites it to two lines fails here
+    required_ignore = { ".venv-*/", ".venv/", "target/", "dev_probe_output/", "saves/*.db", "__pycache__/", "*.pyc", "*.so", "*.pyd", "build/", "dist/" },
   },
 
   -- Выбор тестов по графу импортов (qa.py affected / test --changed)

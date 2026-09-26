@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from .schema import (OP_KINDS, TARGETS, OPS, TRIGGER_KINDS, EVENTS, FLAGS, MOVE_MODES, AREA_AFFECTS,
-                     TOWARD, TOWARD_STATS, CONTEXT_ONLY_STATS, RESOURCE_STATS, is_stat)
+                     TOWARD, TOWARD_STATS, CONTEXT_ONLY_STATS, RESOURCE_STATS, is_derived_stat, is_stat)
 
 
 def _validate_pred(pred, path: str, effects=()) -> list[str]:
@@ -106,7 +106,7 @@ def validate_op(o: dict, path: str, item_effects=()) -> list[str]:
         err(f"unknown stat {st!r} (use custom:<name> for new stats)")
     if kind in ("mod", "heal", "drain", "set") and not st:
         err(f"kind={kind} requires stat")
-    if st in CONTEXT_ONLY_STATS:
+    if st in CONTEXT_ONLY_STATS or (isinstance(st, str) and is_derived_stat(st)):
         err(f"stat {st!r} is read-only context field (usable only in value.of/scale.of)")
     elif kind == "mod" and st in RESOURCE_STATS:
         err(f"mod cannot change resource {st!r}: use heal/drain/deal/set (or mod max_{st})")

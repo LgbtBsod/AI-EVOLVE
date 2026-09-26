@@ -101,7 +101,7 @@
    "B007": 1,
    "B009": 1,
    "BLE001": 2,
-   "C901": 3,
+   "C901": 2,
    "PLR0911": 1,
    "PLR0913": 4,
    "SIM114": 1,
@@ -260,9 +260,7 @@
  },
  "functions": {
   "src/core/game_core.py::GameCore.start": 13,
-  "src/effects/manager.py::EffectManager._damage": 22,
   "src/effects/manager.py::EffectManager._move": 13,
-  "src/effects/manager.py::EffectManager._targets": 24,
   "src/effects/manager.py::EffectManager.can_cast": 15,
   "src/effects/manager.py::EffectManager.cast": 12,
   "src/effects/manager.py::EffectManager.emit": 24,
@@ -310,7 +308,7 @@
   "B904": 3,
   "B905": 4,
   "BLE001": 81,
-  "C901": 17,
+  "C901": 16,
   "F401": 30,
   "F841": 10,
   "PERF102": 1,
@@ -332,11 +330,11 @@
  },
  "totals": {
   "blind_except": 81,
-  "cc11": 43,
+  "cc11": 41,
   "cc_max": 29,
   "dup_defs": 4,
   "layers_broken": 10,
-  "ruff": 271,
+  "ruff": 270,
   "vulture": 13
  },
  "version": 1

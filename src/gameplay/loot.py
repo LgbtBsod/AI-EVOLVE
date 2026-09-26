@@ -24,7 +24,7 @@ def loot_tables() -> dict:
 
 def roll_loot(table: dict, rng: random.Random, cat: Optional[ItemCatalog] = None) -> tuple[int, list[ItemDef]]:
     """(золото, предметы) по одной строке таблицы."""
-    cat = cat or catalog()
+    cat = catalog() if cat is None else cat        # пустой ItemCatalog (len 0) - тоже каталог, а не «не передали»
     lo, hi = (table.get("gold") or [0, 0])[:2] if table.get("gold") else (0, 0)
     gold = rng.randint(int(lo), int(hi)) if hi else 0
     items = []
@@ -39,7 +39,7 @@ def roll_loot(table: dict, rng: random.Random, cat: Optional[ItemCatalog] = None
 
 def outfit(inv: Inventory, enemy_type: str, rng: random.Random, cat: Optional[ItemCatalog] = None) -> None:
     """Снарядить врага: то, что он носит в сумке, и надетые предметы."""
-    cat = cat or catalog()
+    cat = catalog() if cat is None else cat        # пустой ItemCatalog (len 0) - тоже каталог, а не «не передали»
     table = (loot_tables().get("enemies") or {}).get(enemy_type) or {}
     for item_id in table.get("carries") or []:
         item = cat.get(item_id)

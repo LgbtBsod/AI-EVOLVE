@@ -21,7 +21,7 @@ wheel_delta/escalation_delta/permanent/memory_key/exclude_self/exclude_owner/max
 from __future__ import annotations
 
 import json
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, ClassVar, Dict, List, Optional
 
 WHEEL_MAX_DEFAULT = 8
 
@@ -138,24 +138,30 @@ class AdaptationState:
 
     # ---- ядро: observe/adapt
 
-    def observe(self, signature: str, *, tick: int = 0, amount: float = 0.0,
-                source_id: Optional[str] = None, owner_id: Optional[str] = None,
-                self_id: Optional[str] = None) -> bool:
-        """Зарегистрировать попадание феномена. Возвращает True, если произошла
-        АДАПТАЦИЯ (порог hits достигнут, слот колеса свободен)."""
-        if signature in self.known_phenomena:
-            self.last_seen_tick[signature] = tick
-            self.total_damage[signature] = self.total_damage.get(signature, 0.0) + amount
-            self.last_damage_signature = signature
-            return False
-        if self.exclude_self and source_id and self_id and source_id == self_id:
-            return False                                    # «не адаптируется к себе»
-        if self.exclude_owner and source_id and owner_id and source_id == owner_id:
-            return False                                    # не адаптируется к хозяину
+    def _record(self, signature: str, tick: int, amount: float) -> None:
+        """Учёт удара по подписи: последняя подпись, тик и суммарный урон."""
         self.last_damage_signature = signature
-        self.first_seen_tick.setdefault(signature, tick)
         self.last_seen_tick[signature] = tick
         self.total_damage[signature] = self.total_damage.get(signature, 0.0) + amount
+
+    def excluded(self, source_id: Optional[str], owner_id: Optional[str], self_id: Optional[str]) -> bool:
+        """Удар не считается феноменом: «не адаптируется к себе» (exclude_self) и не к хозяину (exclude_owner)."""
+        if not source_id:
+            return False
+        return bool((self.exclude_self and source_id == self_id) or (self.exclude_owner and source_id == owner_id))
+
+    def observe(self, signature: str, *, tick: int = 0, amount: float = 0.0,
+                source_id: Optional[str] = None, excluded: bool = False) -> bool:
+        """Зарегистрировать попадание феномена. Возвращает True, если произошла
+        АДАПТАЦИЯ (порог hits достигнут, слот колеса свободен). excluded - вызывающий уже проверил `excluded(...)`:
+        по такому источнику новая адаптация не копится (известный феномен всё равно учитывается)."""
+        if signature in self.known_phenomena:
+            self._record(signature, tick, amount)
+            return False
+        if excluded:
+            return False
+        self._record(signature, tick, amount)
+        self.first_seen_tick.setdefault(signature, tick)
         if source_id:
             self.sources[signature] = source_id
         hits = self.progress.get(signature, 0) + 1
@@ -226,7 +232,7 @@ def state_of(unit: Any) -> AdaptationState:
     ext = getattr(unit, "external", None)
     if ext is None:
         ext = {}
-        setattr(unit, "external", ext)
+        unit.external = ext
     st = ext.get("mahoraga")
     if isinstance(st, dict):
         st = AdaptationState.from_dict(st)
@@ -242,7 +248,7 @@ def state_of(unit: Any) -> AdaptationState:
 class FactionManager:
     """Отношения сторон (hostile/neutral/ally), мульти-фракции, динамика."""
 
-    DEFAULT_RELATIONS = {
+    DEFAULT_RELATIONS: ClassVar[Dict[str, Dict[str, str]]] = {
         "feral": {"feral": "ally", "player": "hostile", "enemy": "hostile",
                   "neutral": "hostile", "ally": "hostile", "boss": "hostile"},
         "player": {"player": "ally", "enemy": "hostile", "feral": "hostile",
@@ -300,7 +306,7 @@ class FactionManager:
 class AggroManager:
     """Aggro-таблица + выбор цели по TargetingSpec (nearest/lower_hp/...)."""
 
-    MODES = {"nearest", "farthest", "lowest_hp", "highest_threat", "random"}
+    MODES: ClassVar[frozenset] = frozenset({"nearest", "farthest", "lowest_hp", "highest_threat", "random"})
 
     def __init__(self, rng: Optional[Callable[[int], int]] = None):
         self.modes: Dict[str, Dict[str, Any]] = {}         # aggro_mode id -> spec
@@ -341,13 +347,17 @@ class AggroManager:
             return min(cands, key=lambda i: getattr(units[i], "current_hp", 0.0))
         if strategy == "highest_threat":
             return max(cands, key=lambda i: self.threat.get((unit_id, i), 0.0))
-        pos = positions or {}
+        by_distance = self._by_distance(strategy, unit_id, cands, positions or {})
+        return cands[0] if by_distance is None else by_distance
+
+    @staticmethod
+    def _by_distance(strategy: str, unit_id: str, cands: List[str], pos: Dict[str, Any]) -> Optional[str]:
+        """nearest / farthest по позициям; None - позиций нет (или стратегия другая): выбор остаётся первому кандидату."""
         me = pos.get(unit_id)
-        if strategy in ("nearest", "farthest") and me is not None and \
-           all(p in pos for p in cands):
-            dist = lambda i: ((pos[i][0] - me[0]) ** 2 + (pos[i][1] - me[1]) ** 2) ** 0.5
-            return (min if strategy == "nearest" else max)(cands, key=dist)
-        return cands[0]
+        if strategy not in ("nearest", "farthest") or me is None or not all(p in pos for p in cands):
+            return None
+        dist = lambda i: ((pos[i][0] - me[0]) ** 2 + (pos[i][1] - me[1]) ** 2) ** 0.5  # noqa: E731
+        return (min if strategy == "nearest" else max)(cands, key=dist)
 
     def retarget(self, unit_id: str, target_id: Optional[str]) -> None:
         self.current_target[unit_id] = target_id
@@ -364,7 +374,7 @@ class AggroManager:
 class EscalationManager:
     """Колесо: per-wheel модификаторы + пороговые события + true form."""
 
-    DEFAULT_PER_WHEEL = {
+    DEFAULT_PER_WHEEL: ClassVar[Dict[str, float]] = {
         "strength": 0.15, "aspd": 0.10, "move_speed": 0.05,
         "resist_all": 0.03, "regen": 0.10,
     }
@@ -434,10 +444,9 @@ class AdaptationManager:
         sig = self.hasher.signature(damage_ctx,
                                     granularity=damage_ctx.get("granularity", "exact"))
         prev = st.wheel
-        adapted = st.observe(sig, tick=tick,
-                             amount=float(damage_ctx.get("amount", 0.0)),
-                             source_id=damage_ctx.get("source_id"),
-                             owner_id=owner_id, self_id=self_id)
+        source_id = damage_ctx.get("source_id")
+        adapted = st.observe(sig, tick=tick, amount=float(damage_ctx.get("amount", 0.0)), source_id=source_id,
+                             excluded=st.excluded(source_id, owner_id, self_id))
         events: List[Dict[str, Any]] = []
         if adapted:
             tech = damage_ctx.get("technique_id")

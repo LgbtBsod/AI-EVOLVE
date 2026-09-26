@@ -199,7 +199,77 @@ def coverage_effects(rng: random.Random, preds: PredGen) -> list[dict]:
     effs.append({"id": "zone.half.cross", "tags": ["forge", "zone"],
                  "trigger": {"kind": "event", "event": "hp_cross", "cross": "Half HP"},
                  "ops": [{"kind": "heal", "target": "ally", "stat": "hp", "op": "add", "value": {"flat": 25}}]})
-    return effs
+    return effs + primitive_effects()
+
+
+def primitive_effects() -> list[dict]:
+    """Примитивы боя (аудит Сукуна / Годжо / Тоджи) и Махораги: каждый kind схемы, что не покрыт блоком выше, ровно в
+    одном эффекте-группе. Поля - как читают обработчики src/effects/ops.py; события подобраны так, чтобы метка ставилась
+    раньше взрыва, а колесо шло от адаптации к истинной форме."""
+    def ev(eid: str, event: str, ops: list, tag: str) -> dict:
+        return {"id": eid, "tags": ["forge", tag], "trigger": {"kind": "event", "event": event}, "ops": ops}
+
+    dur = lambda s: {"flat": s}  # noqa: E731
+    true_form = {"kind": "trigger_true_form", "target": "self",
+                 "ops": [{"kind": "mod", "target": "self", "stat": "strength", "op": "mul", "value": {"flat": 1.5}}]}
+    return [
+        # защита: резист типа, иммунитет (тип урона / действие), запрет действия, поглощение, невыбираемость
+        ev("prim.guard", "take_damage", [
+            {"kind": "resist", "target": "self", "damage_type": "fire", "value": {"flat": 10}, "duration": dur(4)},
+            {"kind": "immune", "target": "self", "damage_type": "poison", "duration": dur(2)},
+            {"kind": "immune", "target": "self", "effect": "heal_mana", "duration": dur(2)},
+            {"kind": "block", "target": "enemy", "stat": "cursed_technique", "duration": dur(2)},
+            {"kind": "absorb_damage", "target": "self", "value": {"pct": 50, "of": "last_damage"}, "window": dur(1)},
+            {"kind": "untargetable", "target": "self", "by": ["six_eyes", "divination"], "duration": dur(1)},
+        ], "combat"),
+        # метка и её взрыв (метка ставится на attack_hit, взрывается на crit / kill)
+        ev("prim.mark", "attack_hit", [
+            {"kind": "mark", "target": "enemy", "mark_id": "forge_mark", "value": {"flat": 1}, "duration": dur(8),
+             "max_stacks": 5}], "combat"),
+        ev("prim.detonate", "crit", [
+            {"kind": "detonate", "target": "enemy", "mark_id": "forge_mark", "value": {"flat": 4}}], "combat"),
+        # срыв сил цели: отмена, прерывание техники, разрыв связи, снятие эффектов
+        ev("prim.disrupt", "dodge", [
+            {"kind": "nullify", "target": "enemy", "what": ["abilities"], "duration": dur(2)},
+            {"kind": "cancel_technique", "target": "enemy", "duration": dur(1)},
+            {"kind": "sever", "target": "enemy", "what": "soul_body_link", "duration": dur(2)},
+            {"kind": "purge", "target": "enemy", "filter": {"kind": "buff", "tag": "iframe"}},
+        ], "combat"),
+        # обет: цена платится сразу, награда живёт пока действует метка
+        ev("prim.vow", "combat_start", [
+            {"kind": "binding_vow", "target": "self", "vow_id": "forge_vow", "duration": dur(5),
+             "cost": [{"kind": "drain", "target": "self", "stat": "hp", "op": "sub", "value": {"flat": 10}}],
+             "gain": [{"kind": "mod", "target": "self", "stat": "strength", "op": "add", "value": {"flat": 5}}]}], "combat"),
+        # кража и применение техники
+        ev("prim.learn", "use", [
+            {"kind": "learn", "target": "self", "ability_id": "forge_technique"},
+            {"kind": "use_learned_technique", "target": "self", "pick": "last", "tech_target": "enemy",
+             "value": {"flat": 5}, "adapt_damage": {"flat": 20}}], "adapt"),
+        # адаптация Махораги: наблюдение, порог, память, сброс
+        ev("prim.adapt", "attack", [
+            {"kind": "observe_phenomenon", "target": "self", "damage_type": "fire", "threshold": {"hits": 2}},
+            {"kind": "register_phenomenon", "target": "self", "memory_key": "fire:forge_technique"},
+            {"kind": "adapt", "target": "self", "phenomenon": {"damage_type": "physical"}, "threshold": {"hits": 1},
+             "on_adapt": [{"kind": "heal", "target": "self", "stat": "hp", "op": "add", "value": {"flat": 5}}]},
+            {"kind": "unadapt", "target": "self", "memory_key": "fire:forge_technique"}], "adapt"),
+        ev("prim.reset", "combat_end", [{"kind": "reset_adaptation", "target": "self"}], "adapt"),
+        # фракция и агро
+        ev("prim.aggro", "tick", [
+            {"kind": "set_faction", "target": "self", "faction": "feral"},
+            {"kind": "set_aggro", "target": "self", "aggro_mode": "threat_first"},
+            {"kind": "set_targeting", "target": "self",
+             "targeting": {"mode": "lowest_hp", "switch_on": "damage", "switch_interval": 3}},
+            {"kind": "retarget", "target": "self", "target_ref": "dummy"},
+            {"kind": "clear_aggro", "target": "self"}], "aggro"),
+        # колесо и эскалация; на wheel_max колесо само зовёт trigger_true_form
+        ev("prim.wheel", "kill", [
+            {"kind": "rotate_wheel", "target": "self", "wheel_delta": 3},
+            {"kind": "display_wheel", "target": "self", "mode": "golden"},
+            {"kind": "halt_wheel", "target": "self"},
+            {"kind": "escalate", "target": "self", "escalation_delta": 2},
+            {"kind": "deescalate", "target": "self", "escalation_delta": 1},
+            true_form], "wheel"),
+    ]
 
 
 # ---------------------------------------------------------------- random block

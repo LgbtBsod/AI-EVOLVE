@@ -1,3 +1,35 @@
-# Compiled and build artifacts
+# Python compiled files
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+htmlcov/
+coverage/
+
+# Virtual environments (venvs made by Python < 3.13 don't ignore themselves)
+.venv/
+.venv-*/
+venv/
+
+# Build output
+target/
+build/
+dist/
+*.so
+*.pyd
+*.egg-info/
+
+# Runtime / dev-tool output
+saves/*.db
+saves/tactics_memory.json
+saves/hero_mind.json
+dev_probe_output/
+tools/dev_probe_baseline.json
+*.bak
+
+# Qwen Code / assistant scratch
+.qwen/
+*.orig

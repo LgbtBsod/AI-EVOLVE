@@ -110,6 +110,7 @@ return {
     "luck", "defense", "crit_chance", "crit_dmg", "aspd", "lifesteal",
     "move_speed", "attack_range", "vision_range", "hp_missing_below_40",
     "ctx.hp_pct", "ctx.stacks", "ctx.power",
+    -- + семейство hp_missing_below_<N> (N = порог в %, напр. _35): определяется в src/effects/ops.py derived_ctx, здесь перечислен только _40
   },
 
   -- Именованные скейлы (Scale.mode).

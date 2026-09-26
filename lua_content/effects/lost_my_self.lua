@@ -47,7 +47,7 @@ return {
             { kind = "set", target = "self", stat = "hp", op = "set", value = { flat = 1 } },
             { kind = "buff", target = "self", buff_id = "last_will", flags = { "iframe" },
               duration = { flat = 5, scale = { every = 10, of = "hp_missing_below_40", factor = 2 } },
-              cooldown = { flat = 30 }, extend = { on = "kill", flat = 5 } } },
+              cooldown = { flat = 30 }, extend = { on = "kill", flat = 5 } },
         } },
       } },
     -- событие Timeline («attack») ловит триггер event; owner_has проверяет активный пассив
@@ -64,6 +64,6 @@ return {
   --    оформляет ядро по этой декларации (UI добавит иконку в HUD при регистрации).
   listeners = {
     { on = "register", namespace = "effects", id = "lost_my_self",
-      do = "hud.add_icon" },
+      ["do"] = "hud.add_icon" },   -- `do` is a Lua keyword: a bare `do = ...` key is a syntax error
   },
 }

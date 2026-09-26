@@ -135,3 +135,104 @@ def test_unit_and_entity_state_agree_on_random_op_sequences(seed):
         assert {b: round(d["until"], 9) for b, d in live_unit.items()} == \
                {b: round(d["until"], 9) for b, d in live_ent.items()}, (seed, step, batch)
         assert unit.alive == (hero.health > 0)
+
+
+# ---------------------------------------------------------------- pseudo-stats and the damage_taken host primitive
+
+def test_hp_missing_below_is_one_family_for_values_and_predicates():
+    """`hp_missing_below_<N>` = сколько % HP не хватает до порога N (0..N): ОДНО место (ops.derived_ctx) для значений
+    (scale/amplify `of`) и для предикатов условий. Порог 35 (Gojo, cursed_relics.lua) раньше падал KeyError в симуляции."""
+    from src.effects.runtime import compile_pred
+    ctx = {"hp_pct": 20.0}
+    assert ops.ctx_get(ctx, "hp_missing_below_40") == 20.0 and ops.ctx_get(ctx, "hp_missing_below_35") == 15.0
+    assert ops.ctx_get({"hp_pct": 90.0}, "hp_missing_below_35") == 0.0            # выше порога - 0, не отрицательное
+    assert ops.ctx_get({"hp_missing_below_35": 3.0, "hp_pct": 20.0}, "hp_missing_below_35") == 3.0   # готовое поле ctx главнее
+    assert compile_pred("ctx.hp_missing_below_35 >= 15")(ctx) and not compile_pred("ctx.hp_missing_below_35 > 15")(ctx)
+    with pytest.raises(KeyError, match="unknown ctx field"):
+        ops.ctx_get(ctx, "hp_missing_above_35")                                  # семейство узкое: чужие имена по-прежнему ошибка
+    from tools.effect_schema.validate import validate_op
+    assert schema.is_stat("hp_missing_below_35") and schema.is_stat("enemy_hp_missing_below_35") and not schema.is_stat("hp_missing_above_35")
+    assert validate_op({"kind": "mod", "stat": "strength", "op": "add", "value": {"flat": 1},
+                        "scale": {"every": 10, "of": "hp_missing_below_35", "value": {"flat": 1}}}, "op") == []
+    assert any("read-only" in e for e in validate_op({"kind": "mod", "stat": "hp_missing_below_35", "op": "add", "value": {"flat": 1}}, "op"))
+
+
+def test_damage_taken_primitive_on_both_hosts():
+    """`_damage_dealt_to` (порог damage_total адаптации Махораги) зовёт op_damage_taken - его обязаны иметь ОБА хозяина."""
+    from src.effects.manager import HitInfo
+    from src.effects.ops import OpCall
+    mgr = EffectManager(world=World(), abilities={}, rng=random.Random(1))
+    st = mgr.register(Fighter(), "hero")
+    hits = [HitInfo("boss", "hero", 7.0), HitInfo("boss", "someone_else", 3.0), HitInfo("boss", "hero", 1.5)]
+    assert mgr.op_damage_taken(OpCall(ctx={}, src="x", t=0.0, hits=hits), st) == 8.5      # только попадания ПО ЭТОЙ цели
+    assert mgr.op_damage_taken(OpCall(ctx={}, src="x", t=0.0), st) == 0.0                 # hits=None: ничего не нанесено
+    unit = Unit("hero", max_hp=1000.0)
+    rt = EffectRuntime(unit, [], enemy=Unit("dummy"))
+    assert rt.op_damage_taken(OpCall(ctx={"last_damage": 4.5}, src="x", t=0.0), unit) == 4.5
+
+
+def test_adapt_op_runs_on_both_hosts():
+    """adapt: подпись феномена -> колесо +1; путь через op_damage_taken/op_adaptation не падает ни в комнате, ни в игре."""
+    op = {"kind": "adapt", "target": "self", "threshold": {"damage_total": 5}, "phenomenon": {"damage_type": "fire"}}
+    unit = Unit("hero", max_hp=1000.0)
+    rt = EffectRuntime(unit, [], enemy=Unit("dummy"))
+    ctx = rt.context()
+    ctx["last_damage"] = 9.0
+    rt.run_ops([op], ctx, 1.0, "s#use", event="use")
+    assert unit.external["mahoraga"]["wheel"] == 1
+    mgr = EffectManager(world=World(), abilities={}, rng=random.Random(1))
+    st = mgr.register(Fighter(), "hero")
+    mgr.now = 1.0
+    assert mgr.cast(st.entity, {"id": "s", "ops": [op]}).ok
+    assert st.unit.external["mahoraga"]["wheel"] == 1
+
+
+def test_every_op_note_has_a_training_room_log_line():
+    """op_note(cx, "<что>", ...) в ops.py: у тренировочной комнаты на каждое <что> обязана быть строка лога (иначе KeyError на
+    первой же такой операции - так падали adapt/use_learned_technique/колесо Махораги)."""
+    import re
+    used = set(re.findall(r'op_note\(cx, "([a-z_]+)"', inspect.getsource(ops)))
+    from src.effects.runtime import _NOTES
+    assert len(used) > 30 and sorted(used - set(_NOTES)) == []
+
+
+def test_every_primitive_op_runs_on_the_game_manager():
+    """Кузница (tools/effect_schema/forge.primitive_effects) держит по одной операции на каждый kind боевых примитивов и
+    Махораги; в комнате их гоняет itemcheck (sim), здесь - тот же набор на менеджере игры (цель self: без мира)."""
+    from tools.effect_schema.forge import primitive_effects
+    hero = Fighter()
+    mgr = EffectManager(world=World(), abilities={}, rng=random.Random(1))
+    mgr.register(hero, "hero")
+    mgr.now = 1.0
+    kinds = set()
+    for ef in primitive_effects():
+        for o in ef["ops"]:
+            kinds.add(o["kind"])
+            assert mgr.cast(hero, {"id": f"{ef['id']}.{o['kind']}", "ops": [dict(o, target="self")]}).ok, o["kind"]
+    classic = {"mod", "heal", "drain", "deal", "set", "buff", "extend", "remove_buff", "apply_effect", "kill", "summon", "move"}
+    assert kinds == set(schema.OP_KINDS) - classic                      # новый kind схемы -> строка в primitive_effects
+
+
+def test_mahoraga_spec_edges_that_used_to_crash():
+    """Три края спецификации Махораги, на которых обработчики падали: литеральная id_formula (3 цели распаковки из 2 частей),
+    purge со строковым фильтром (`str.get`) и threshold.custom (аргументы ctx_get были переставлены)."""
+    from src.effects.ops import OpCall
+    cx = OpCall(ctx={}, src="hero", t=0.0)
+    spec = {"phenomenon": {"id_formula": "damage_type..':'..technique_id", "damage_type": "fire", "technique_id": "cleave"}}
+    assert ops._phenomenon_signature(spec, cx) == "fire:cleave"
+    assert ops._phenomenon_signature({"phenomenon": {"id_formula": "damage_type..':'..technique_id", "damage_type": "fire"}}, cx) == "fire:basic"
+    assert ops._phenomenon_signature({"phenomenon": {"damage_type": "fire", "technique_id": "x", "source_flag": ["b", "a"]}}, cx) == "fire:x#a+b"
+
+    unit = Unit("hero", max_hp=1000.0)
+    rt = EffectRuntime(unit, [], enemy=Unit("dummy"))
+    for filt in ("debuff", {"kind": "debuff"}):
+        unit.buffs.update({"debuff_slow": {"until": 99.0}, "haste": {"until": 99.0}, "block:heal": {"until": 99.0}})
+        rt.run_ops([{"kind": "purge", "target": "self", "filter": filt}], rt.context(), 1.0, "s#use", event="use")
+        assert sorted(unit.buffs) == ["haste"], filt
+        unit.buffs.clear()
+
+    st = {"wheel": 2, "progress": {"fire:x": 1}}
+    assert ops._threshold_ok({"custom": "ctx.wheel >= 2"}, "fire:x", 0.0, st, {})
+    assert not ops._threshold_ok({"custom": "ctx.wheel >= 3"}, "fire:x", 0.0, st, {})
+    assert not ops._threshold_ok({"hits": 2}, "fire:x", 0.0, st, {}) and ops._threshold_ok({"hits": 1, "wheel_min": 2}, "fire:x", 0.0, st, {})
+    assert not ops._threshold_ok({"damage_total": 10}, "fire:x", 4.0, st, {}) and ops._threshold_ok({"damage_total": 10}, "fire:x", 10.0, st, {})

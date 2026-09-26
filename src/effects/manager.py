@@ -738,32 +738,48 @@ class EffectManager:
         if tgt in ("enemy", "source"):
             return [primary] if primary is not None else []
         if tgt == "area":
-            r = o.get("radius", radius) or radius or 3.0
-            r = float(st.unit.stat(r)) if isinstance(r, str) else float(r)   # radius = "attack_range"
-            arc = float(o.get("arc", 0.0) or 0.0)       # конус к цели (взмах меча), 0 - полный круг
-            cx, cy = center or (position(primary) if primary is not None and o.get("center", "target") == "target"
-                                else position(st.entity))
-            affects = o.get("affects", "all")      # френдли фаер: по умолчанию все в круге
-            out = []
-            for s in self.states.values():
-                if not is_alive(s.entity) or math.dist((cx, cy), position(s.entity)) > r:
-                    continue
-                if (affects == "others" and s is st) or (affects == "enemies" and s.faction == st.faction) \
-                        or (affects == "allies" and s.faction != st.faction):
-                    continue
-                if arc and s is not st and not _in_arc(st.entity, primary, s.entity, arc):
-                    continue
-                # untargetable: цель невыбираема селекторами (Toji для six_eyes/en); на себя действует всегда
-                by = str(o.get("by", "all"))
-                for bid in list(s.unit.buffs):
-                    if bid.startswith("untargetable:") and s.unit.buffs[bid].get("until", 1e18) > self.now:
-                        scope = bid.split(":", 1)[1]
-                        if scope == "all" or tgt in scope.split(","):
-                            break
-                else:
-                    out.append(s.entity)
-            return out
+            return self._area_targets(st, o, primary, center, radius)
         return []
+
+    def _area_targets(self, st: EntityState, o: dict, primary, center, radius: float) -> list:
+        """target=area: все живые в круге (френдли фаер: заклинатель тоже), суженные affects / arc и невыбираемостью."""
+        r = self._area_radius(st, o, radius)
+        cx, cy = self._area_center(st, o, primary, center)
+        arc = float(o.get("arc", 0.0) or 0.0)       # конус к цели (взмах меча), 0 - полный круг
+        affects, by = o.get("affects", "all"), str(o.get("by", "all"))     # affects: френдли фаер по умолчанию (все в круге)
+        return [s.entity for s in self.states.values()
+                if is_alive(s.entity) and not math.dist((cx, cy), position(s.entity)) > r
+                and not self._area_excludes(st, s, affects, arc, primary) and not self._untargetable(s, by)]
+
+    @staticmethod
+    def _area_radius(st: EntityState, o: dict, radius: float) -> float:
+        r = o.get("radius", radius) or radius or 3.0
+        return float(st.unit.stat(r)) if isinstance(r, str) else float(r)   # radius = "attack_range"
+
+    @staticmethod
+    def _area_center(st: EntityState, o: dict, primary, center) -> tuple:
+        if center:
+            return center
+        on_target = primary is not None and o.get("center", "target") == "target"
+        return position(primary) if on_target else position(st.entity)
+
+    @staticmethod
+    def _area_excludes(st: EntityState, s: EntityState, affects: str, arc: float, primary) -> bool:
+        """`affects` (others / enemies / allies) и конус `arc` выкидывают сущность из области."""
+        if ((affects == "others" and s is st) or (affects == "enemies" and s.faction == st.faction)
+                or (affects == "allies" and s.faction != st.faction)):
+            return True
+        return bool(arc) and s is not st and not _in_arc(st.entity, primary, s.entity, arc)
+
+    def _untargetable(self, s: EntityState, by: str) -> bool:
+        """Сущность невыбираема этим селектором (Toji для six_eyes / en): живой бафф `untargetable:<scope>`, scope = all
+        или список селекторов через запятую."""
+        for bid, rec in s.unit.buffs.items():
+            if bid.startswith("untargetable:") and rec.get("until", 1e18) > self.now:
+                scope = bid.split(":", 1)[1]
+                if scope == "all" or by in scope.split(","):
+                    return True
+        return False
 
     def _run_ops(self, st: EntityState, ops: list, primary, src: str, tags: tuple, hits=None,
                  center=None, radius: float = 0.0, last_damage: float = 0.0) -> None:
@@ -896,7 +912,7 @@ class EffectManager:
     def op_marks(self, tgt: EntityState) -> dict:
         return tgt.marks
 
-    def op_grant_mark(self, cx: OpCall, tgt: EntityState, mid: str, stacks: float, until: float) -> None:
+    def op_grant_mark(self, _cx: OpCall, tgt: EntityState, mid: str, stacks: float, until: float) -> None:
         tgt.marks[mid] = {"stacks": stacks, "until": until}
 
     def op_spells(self, tgt: EntityState) -> list:
@@ -905,7 +921,7 @@ class EffectManager:
     def op_adapt_stacks(self, tgt: EntityState) -> dict:
         return tgt.adapt_stacks
 
-    def op_absorb_add(self, cx: OpCall, tgt: EntityState, amount: float, window: float) -> None:
+    def op_absorb_add(self, _cx: OpCall, tgt: EntityState, amount: float, window: float) -> None:
         if self.now > tgt.absorbed_until:             # новое окно: счётчик обнуляется
             tgt.absorbed_kinetic = 0.0
         tgt.absorbed_kinetic += amount
@@ -914,20 +930,25 @@ class EffectManager:
     def op_apply_mod_op(self, cx: OpCall, tgt: EntityState, o: dict) -> None:
         tgt.runtime.op_apply_mod_op(cx, tgt.unit, o)   # тот же событийный слой mod-вкладов
 
-    def op_refresh(self, cx: OpCall, tgt: EntityState) -> None:
+    def op_refresh(self, _cx: OpCall, tgt: EntityState) -> None:
         tgt.refresh(self.now)
 
+    def op_damage_taken(self, cx: OpCall, tgt: EntityState) -> float:
+        """Урон, который этот вызов (cx.hits: deal/use_learned) уже нанёс цели: порог damage_total адаптации."""
+        tid = entity_id(tgt.entity)
+        return sum(h.damage for h in cx.hits or () if h.target == tid)
+
     # --- протокол Махораги (ops.OpHost; состояние в unit.external, см. src/core/adaptation.py) ---
-    def op_adaptation(self, cx: OpCall, tgt: EntityState) -> dict:
+    def op_adaptation(self, _cx: OpCall, tgt: EntityState) -> dict:
         return tgt.unit.external.setdefault("mahoraga", {})
 
-    def set_adaptation(self, cx: OpCall, tgt: EntityState, state: dict) -> None:
+    def set_adaptation(self, _cx: OpCall, tgt: EntityState, state: dict) -> None:
         tgt.unit.external["mahoraga"] = state
 
-    def op_aggro(self, cx: OpCall, tgt: EntityState) -> dict:
+    def op_aggro(self, _cx: OpCall, tgt: EntityState) -> dict:
         return tgt.unit.external.setdefault("aggro", {})
 
-    def set_aggro(self, cx: OpCall, tgt: EntityState, **kv: Any) -> None:
+    def set_aggro(self, _cx: OpCall, tgt: EntityState, **kv: Any) -> None:
         tgt.unit.external["aggro"] = dict(kv)
 
     def op_nested_ops(self, cx: OpCall, tgt: EntityState, ops: list) -> None:

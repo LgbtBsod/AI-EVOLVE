@@ -18,11 +18,12 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import shlex
 import shutil
 import sys
 import time
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 import qa_graph
 import qa_pool
@@ -96,27 +97,16 @@ def load_registry(cfg: dict | None = None, python_dir: Path | None = None) -> di
 # ---------------------------------------------------------------- files, selection
 
 def _glob_re(glob: str) -> str:
-    """Translate a watch glob to regex: '**/' matches zero or more segments, '*' one segment."""
-    out, i = [], 0
-    while i < len(glob):
-        if glob.startswith("**/", i):
-            out.append("(?:.*/)?")       # zero or more leading directories
-            i += 3
-        elif glob.startswith("/**", i):
-            out.append("/.*")            # everything below
-            i += 3
-        elif glob[i:i + 2] == "**":
-            out.append(".*")
-            i += 2
-        elif glob[i] == "*":
-            out.append("[^/]*")
-            i += 1
-        elif glob[i] == "?":
-            out.append("[^/]")
-            i += 1
-        else:
-            out.append(re.escape(glob[i]))
-            i += 1
+    """Translate a watch glob to a regex with `PurePosixPath.full_match` semantics (works on any Python): a `**`
+    segment matches zero or more directories (as the LAST segment: everything below), `*` / `?` never cross a `/`."""
+    parts, out = glob.split("/"), []
+    for n, seg in enumerate(parts):
+        last = n == len(parts) - 1
+        if seg == "**":
+            out.append(".+" if last else "(?:[^/]+/)*")          # the optional directories carry their own "/"
+            continue
+        out.append("".join("[^/]*" if c == "*" else "[^/]" if c == "?" else re.escape(c) for c in seg))
+        out.append("" if last else "/")
     return "".join(out)
 
 

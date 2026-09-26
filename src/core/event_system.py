@@ -11,6 +11,7 @@ Refactored for Python 3.14 Best Practices:
 """
 from __future__ import annotations
 
+import contextlib
 import logging
 import threading
 import time
@@ -134,11 +135,8 @@ class EventSystem:
                 if signal is None:
                     continue
                 for _sub_id, handler in subs:
-                    try:
+                    with contextlib.suppress(KeyError, ValueError):     # already disconnected - ignore
                         signal.disconnect(handler)
-                    except Exception:
-                        # already disconnected - ignore
-                        pass
             self._signals.clear()
             self._subscriptions.clear()
             logger.info("EventSystem successfully shutdown")

@@ -18,6 +18,7 @@ Value math (`resolve_value`, `compute_amount`, `apply_mod_math`, `extend_amount`
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass
 from typing import Any, Callable, NamedTuple, Optional, Protocol
 
@@ -87,15 +88,27 @@ def same_map(a: dict, b: dict) -> bool:
 # ---------------------------------------------------------------- values (pure)
 
 
-def _hp_missing_below_40(ctx) -> float:
-    """Псевдо-стат: сколько % HP не хватает ПОРОГУ 40% (0..40)."""
-    return max(0.0, 40.0 - ctx.get("hp_pct", 100.0))
+def _hp_missing_below(threshold: float) -> Callable[[dict], float]:
+    """Псевдо-стат: сколько % HP не хватает ДО ПОРОГА `threshold`% (0..threshold)."""
+    return lambda ctx: max(0.0, threshold - ctx.get("hp_pct", 100.0))
 
+
+_hp_missing_below_40 = _hp_missing_below(40.0)          # порог берсерка (lost_my_self / sorrow_of_berserk)
 
 # вычисляемые поля контекста (нет в ctx -> считаются от него): имя -> функция
 _ALLOWED_CTX: dict[str, Callable[[dict], float]] = {
     "hp_missing_below_40": _hp_missing_below_40,
 }
+_HP_MISSING_BELOW = re.compile(r"hp_missing_below_(\d{1,3})")     # семейство: hp_missing_below_<N>, N = любой порог в %
+
+
+def derived_ctx(key: str) -> Optional[Callable[[dict], float]]:
+    """Вычисляемое поле ctx по имени (таблица `_ALLOWED_CTX` + семейство `hp_missing_below_<N>`) или None. ЕДИНСТВЕННОЕ
+    место, где живут псевдо-статы: им пользуются и значения (`ctx_get`), и предикаты условий (`runtime._field`)."""
+    fn = _ALLOWED_CTX.get(key)
+    if fn is None and (m := _HP_MISSING_BELOW.fullmatch(key)):
+        fn = _hp_missing_below(float(m[1]))
+    return fn
 
 
 def ctx_get(ctx: dict, key: Optional[str]) -> float:
@@ -103,8 +116,8 @@ def ctx_get(ctx: dict, key: Optional[str]) -> float:
         return 0.0
     if key in ctx:
         return float(ctx[key])
-    if key in _ALLOWED_CTX:
-        return float(_ALLOWED_CTX[key](ctx))
+    if (derived := derived_ctx(key)) is not None:
+        return float(derived(ctx))
     raise KeyError(f"unknown ctx field {key!r}")
 
 
@@ -284,21 +297,30 @@ class OpHost(Protocol):
 
 # ---------------------------------------------------------------- shared helpers (Mahoraga specs)
 
-def _threshold_ok(h: OpHost, cx: OpCall, tgt: Any, thr: dict, hits: int, sign: str, st: dict) -> bool:
-    """ThresholdSpec (ЧАСТЬ 3.3): hits/damage_total/wheel_min/custom — все заданные условия сразу."""
+def _damage_gate_ok(thr: dict, sign: str, dealt: float, st: dict) -> bool:
+    """threshold.damage_total: урон этого вызова + уже виденный по подписи должен дойти до порога (нет порога - проходит)."""
+    need = float(thr.get("damage_total", 0.0) or 0.0)
+    return not need or dealt + float(st.get("damage_seen", {}).get(sign, 0.0)) >= need
+
+
+def _custom_gate_ok(custom: Any, ctx: dict) -> bool:
+    """threshold.custom: предикат схемы над ctx вызова (+ wheel, phenomenon_hits); нет предиката - проходит."""
+    if not custom:
+        return True
+    from .runtime import eval_pred              # лениво: runtime сам импортирует этот модуль
+    return bool(eval_pred(custom, ctx))
+
+
+def _threshold_ok(thr: dict, sign: str, dealt: float, st: dict, ctx: dict) -> bool:
+    """ThresholdSpec (ЧАСТЬ 3.3): hits/damage_total/wheel_min/custom — все заданные условия сразу.
+    `dealt` = урон, уже нанесённый цели этим вызовом; `st` = состояние колеса цели (dict); `ctx` = контекст вызова."""
     if not thr:
         return True
-    if hits < int(thr.get("hits", 1) or 1):
-        return False
-    dt = float(thr.get("damage_total", 0.0) or 0.0)
-    if dt and _damage_dealt_to(h, cx, tgt) + float(st.get("damage_seen", {}).get(sign, 0.0)) < dt:
-        return False
-    if int(st.get("wheel", 0)) < int(thr.get("wheel_min", 0) or 0):
-        return False
-    custom = thr.get("custom")
-    if custom and not ctx_get(custom, {**cx.ctx, "wheel": st.get("wheel", 0), "phenomenon_hits": hits}):
-        return False
-    return True
+    hits = int(st.get("progress", {}).get(sign, 0))
+    return (hits >= int(thr.get("hits", 1) or 1)
+            and _damage_gate_ok(thr, sign, dealt, st)
+            and int(st.get("wheel", 0)) >= int(thr.get("wheel_min", 0) or 0)
+            and _custom_gate_ok(thr.get("custom"), {**ctx, "wheel": st.get("wheel", 0), "phenomenon_hits": hits}))
 
 
 # ---------------------------------------------------------------- handlers: one per op kind
@@ -317,26 +339,39 @@ def _damage_dealt_to(h: OpHost, cx: OpCall, tgt: Any) -> float:
     return h.op_damage_taken(cx, tgt)
 
 
+def _phenomenon_damage_ctx(p: dict, cx: OpCall) -> dict:
+    """Что известно об ударе-феномене: тип урона и техника (из спецификации, иначе из ctx вызова)."""
+    return {"damage_type": p.get("damage_type") or cx.ctx.get("last_damage_type") or "physical",
+            "technique_id": p.get("technique_id") or cx.ctx.get("observed_technique")}
+
+
+def _is_literal_formula(formula: Any) -> bool:
+    """Шаблон id_formula без вызовов: строка с ':' и без скобок."""
+    return isinstance(formula, str) and ":" in formula and not any(c in formula for c in "()")
+
+
+def _formula_signature(formula: str, dmg_ctx: dict) -> str:
+    """Литеральный шаблон "damage_type..':'..technique_id" из справочника -> `<тип>:<техника>`."""
+    dt, tech = (formula.split("..':'..") + [""])[:2]
+    dt = dmg_ctx["damage_type"] if "damage_type" in dt else (dt.strip("'\"") or dt)
+    tech = dmg_ctx["technique_id"] or "basic" if "technique_id" in tech else (tech.strip("'\"") or "basic")
+    return f"{dt}:{tech}"
+
+
 def _phenomenon_signature(o: dict, cx: OpCall) -> str:
     """PhenomenonSpec (ЧАСТЬ 3.2): id_formula или damage_type..':'..(technique_id or 'basic')."""
     from src.core.adaptation import SignatureHasher
     p = o.get("phenomenon") or {}
-    dmg_ctx = {"damage_type": p.get("damage_type") or cx.ctx.get("last_damage_type") or "physical",
-               "technique_id": p.get("technique_id") or cx.ctx.get("observed_technique")}
-    formula = p.get("id_formula")
-    if isinstance(formula, str) and ":" in formula and not any(c in formula for c in "()"):
-        # литеральный шаблон "damage_type..':'..technique_id" из справочника
-        dt, _, tech = (formula.split("..':'..") + [""])[:2]
-        dt = dmg_ctx["damage_type"] if "damage_type" in dt else (dt.strip("'\"") or dt)
-        tech = dmg_ctx["technique_id"] or "basic" if "technique_id" in tech else (tech.strip("'\"") or "basic")
-        return f"{dt}:{tech}"
+    dmg_ctx = _phenomenon_damage_ctx(p, cx)
+    if _is_literal_formula(p.get("id_formula")):
+        return _formula_signature(p["id_formula"], dmg_ctx)
     gran = p.get("granularity", "exact")
     sign = SignatureHasher().signature(dmg_ctx, gran)
     flags = p.get("source_flag") or cx.ctx.get("last_damage_flags")
-    if flags and gran == "exact":       # составной феномен true_damage+imaginary_mass — отдельная подпись
-        fl = "+".join(sorted(flags)) if isinstance(flags, (list, tuple, set)) else str(flags)
-        sign = f"{sign}#{fl}"
-    return sign
+    if not flags or gran != "exact":
+        return sign
+    fl = "+".join(sorted(flags)) if isinstance(flags, (list, tuple, set)) else str(flags)
+    return f"{sign}#{fl}"                # составной феномен true_damage+imaginary_mass - отдельная подпись
 
 
 def op_deal(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
@@ -478,49 +513,65 @@ def op_mark(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
     h.op_note(cx, "mark", tgt, mid, stacks)
 
 
+def _take_mark_stacks(marks: dict, mid: Optional[str], now: float) -> float:
+    """Снять метку `mid` и вернуть её стаки; без mark_id - взрыв ВСЕХ живых меток (сумма стаков)."""
+    if mid is None:
+        total = sum(float(r["stacks"]) for r in marks.values() if r.get("until", 0.0) > now)
+        marks.clear()
+        return total
+    rec = marks.pop(mid, None) if mid else None
+    return float(rec["stacks"]) if rec else 0.0
+
+
+def _detonate_value(o: dict, stacks: float) -> dict:
+    """Value урона взрыва: scale {every, value} - плюс N шагов по стакам метки; без scale - base за каждую метку."""
+    v = dict(o.get("value") or {"flat": 0.0})
+    base = float(v.get("flat", 0.0))
+    s = o.get("scale")
+    if not s:
+        v["flat"] = base * stacks
+        return v
+    steps = int(stacks // max(float(s.get("every", 1.0)), 1e-9))
+    sv = (s.get("value") or {}) if isinstance(s.get("value"), dict) else {"flat": s.get("value")}
+    v["flat"] = base + steps * float(sv.get("flat", 0.0)) * float(s.get("factor", 1.0))
+    return v
+
+
 def op_detonate(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
     mid = o.get("mark_id")
-    marks = h.op_marks(tgt)
-    rec = marks.pop(mid, None) if mid else None
-    stacks = float(rec["stacks"]) if rec else 0.0
-    if mid is None:                                # без mark_id — взрыв всех живых меток
-        for k_, r_ in list(marks.items()):
-            if r_.get("until", 0.0) > cx.t:
-                stacks += float(r_["stacks"])
-            marks.pop(k_)
+    stacks = _take_mark_stacks(h.op_marks(tgt), mid, cx.t)
     if stacks <= 0:
         h.op_note(cx, "detonate_empty", tgt, mid)
         return
     d = {"kind": "deal", "target": "enemy", "stat": o.get("stat") or "hp", "op": "sub",
-         "flags": ["true_damage", "no_crit"]}
-    v = dict(o.get("value") or {"flat": 0.0})
-    base = float(v.get("flat", 0.0))
-    s = o.get("scale")                             # scale {every, value} -> плюс N шагов по стакам метки
-    if s:
-        steps = int(stacks // max(float(s.get("every", 1.0)), 1e-9))
-        sv = (s.get("value") or {}) if isinstance(s.get("value"), dict) else {"flat": s.get("value")}
-        v["flat"] = base + steps * float(sv.get("flat", 0.0)) * float(s.get("factor", 1.0))
-    else:
-        v["flat"] = base * stacks                  # без scale: базовый урон за каждую метку
-    d["value"] = v
+         "flags": ["true_damage", "no_crit"], "value": _detonate_value(o, stacks)}
     h.op_nested(cx, [d], f".detonate({mid})", True)
     h.op_note(cx, "detonate", tgt, mid, stacks)
 
 
-def op_purge(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+_DEBUFF_IDS = ("debuff", "block:", "nullified")         # по префиксу id: что считается дебаффом при purge kind=debuff
+
+
+def _purge_spec(o: dict) -> tuple[str, Optional[str]]:
+    """filter = "kind" | {kind, tag} -> (kind, tag); kind: buff (по умолчанию) | debuff | mark | all."""
     f = o.get("filter") or {}
-    want = f.get("kind") or f if isinstance(f, str) else f.get("kind", "buff")
-    tag = f.get("tag") if isinstance(f, dict) else None
+    if isinstance(f, str):
+        return f, None
+    return f.get("kind", "buff"), f.get("tag")
+
+
+def _purgeable(bid: Any, rec: dict, want: str, tag: Optional[str], now: float) -> bool:
+    """Живая запись баффа (с нужным тегом-флагом), которую снимает фильтр `want`."""
+    if rec.get("until", 1e18) <= now or (tag and tag not in (rec.get("flags") or [])):
+        return False
+    return want in ("all", "buff") or (want == "debuff" and str(bid).startswith(_DEBUFF_IDS))
+
+
+def op_purge(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    want, tag = _purge_spec(o)
     buffs = h.op_buffs(tgt)
-    for bid in list(buffs):
-        rec = buffs[bid]
-        if rec.get("until", 1e18) <= cx.t:
-            continue
-        flags = rec.get("flags") or []
-        if tag and tag not in flags:
-            continue
-        if want in ("all", "buff") or (want == "debuff" and str(bid).startswith(("debuff", "block:", "nullified"))):
-            buffs.pop(bid)
+    for bid in [b for b, rec in buffs.items() if _purgeable(b, rec, want, tag, cx.t)]:
+        buffs.pop(bid)
     if want in ("all", "mark"):
         h.op_marks(tgt).clear()
     h.op_refresh(cx, tgt)
@@ -608,23 +659,25 @@ def op_learn(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
     h.op_note(cx, "learn", tgt, tech)
 
 
+def _run_adapt_hooks(h: OpHost, cx: OpCall, tgt: Any, o: dict, st: Any) -> None:
+    """Адаптация состоялась: поддерево on_adapt, а на wheel_max ещё и on_max (по умолчанию - trigger_true_form)."""
+    _nested(h, cx, tgt, o.get("on_adapt"))
+    if st.at_max:
+        _nested(h, cx, tgt, o.get("on_max") or [{"kind": "trigger_true_form"}])
+
+
 def op_adapt(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
     """Ядро адаптации (adapt из справочника): подпись феномена -> порог -> wheel+1 + on_adapt."""
     from src.core.adaptation import AdaptationState
     st = AdaptationState.from_dict(_mahoraga_state(h, cx, tgt))
-    thr = o.get("threshold") or {}
-    if o.get("exclude_self", True) and cx.src == getattr(tgt, "name", None):
-        h.op_note(cx, "adapt_excluded", tgt, sign := _phenomenon_signature(o, cx))  # cannot_adapt_to_self
-        return
     sign = _phenomenon_signature(o, cx)
-    adapted = st.observe(sign, tick=int(cx.t), amount=_damage_dealt_to(h, cx, tgt), source_id=cx.src) \
-        and _threshold_ok(h, cx, tgt, thr, st.progress.get(sign, 0), sign, st.to_dict())
-    if adapted:
-        for sub in o.get("on_adapt") or []:
-            _nested(h, cx, tgt, [sub])
-        if st.at_max:
-            for sub in o.get("on_max") or [{"kind": "trigger_true_form"}]:
-                _nested(h, cx, tgt, [sub])
+    if o.get("exclude_self", True) and cx.src == getattr(tgt, "name", None):
+        h.op_note(cx, "adapt_excluded", tgt, sign)      # cannot_adapt_to_self
+        return
+    dealt = _damage_dealt_to(h, cx, tgt)
+    adapted = st.observe(sign, tick=int(cx.t), amount=dealt, source_id=cx.src)
+    if adapted and _threshold_ok(o.get("threshold") or {}, sign, dealt, st.to_dict(), cx.ctx):
+        _run_adapt_hooks(h, cx, tgt, o, st)
     tech = cx.ctx.get("observed_technique")
     if tech and o.get("learned_use", True):
         st.learn(str(tech))                                    # learn_technique в составе adapt
@@ -668,23 +721,27 @@ def op_reset_adaptation(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float)
     h.op_note(cx, "reset_adaptation", tgt)
 
 
+def _learn_phenomenon(st: dict, sign: str, o: dict) -> bool:
+    """Порог hits по подписи набран впервые: в память, сила адаптации, колесо +1. True - адаптация состоялась."""
+    thr = int((o.get("threshold") or {}).get("hits", 1) or 1)
+    if st["progress"][sign] < thr or sign in st["known_phenomena"]:
+        return False
+    st["known_phenomena"].append(sign)
+    st["adaptation_power"][sign] = float((o.get("max_immunity") or {}).get("pct", 100.0))
+    st["wheel"] = min(int(st.get("wheel", 0)) + 1, int(st.get("wheel_max", WHEEL_MAX_DEFAULT)))
+    return True
+
+
 def op_observe_phenomenon(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
     """Наблюдение феномена без урона: тот же путь SignatureHasher -> observe (порог hits)."""
     from src.core.adaptation import SignatureHasher
     st = _mahoraga_state(h, cx, tgt)
-    dmg_ctx = {"damage_type": o.get("damage_type") or cx.ctx.get("last_damage_type") or "physical",
-               "technique_id": o.get("technique_id") or cx.ctx.get("observed_technique")}
-    sign = SignatureHasher().signature(dmg_ctx)
+    sign = SignatureHasher().signature(_phenomenon_damage_ctx(o, cx))
     hit = int(st.get("progress", {}).get(sign, 0)) + 1
     st.setdefault("progress", {})[sign] = hit
     st["last_damage_signature"] = sign
-    thr = int((o.get("threshold") or {}).get("hits", 1) or 1)
-    if hit >= thr and sign not in st["known_phenomena"]:
-        st["known_phenomena"].append(sign)
-        st["adaptation_power"][sign] = float((o.get("max_immunity") or {}).get("pct", 100.0))
-        st["wheel"] = min(int(st.get("wheel", 0)) + 1, int(st.get("wheel_max", WHEEL_MAX_DEFAULT)))
-        for sub in o.get("on_adapt") or []:
-            h.op_nested_ops(cx, tgt, [sub])
+    if _learn_phenomenon(st, sign, o):
+        _nested(h, cx, tgt, o.get("on_adapt"))
     h.set_adaptation(cx, tgt, st)
     h.op_note(cx, "observe_phenomenon", tgt, sign, hit)
 
@@ -713,8 +770,8 @@ def op_use_learned_technique(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: f
         tech = max(spells, key=lambda s: float(cx.ctx.get(f"threat_{s}", 0.0)))
     else:
         tech = spells[-1]
-    boost = 1.0 + resolve_value(o.get("adapt_damage"), cx.ctx, default=0.0) / 100.0 \
-        if isinstance(o.get("adapt_damage"), dict) else 1.0 + float(o.get("adapt_damage") or 0.0) / 100.0
+    bonus = o.get("adapt_damage")                      # % к урону: число или Value ({flat} / {pct, of} / {ref})
+    boost = 1.0 + (resolve_value(bonus, cx.ctx) if isinstance(bonus, dict) else float(bonus or 0.0)) / 100.0
     base = o.get("value") or {"flat": amount}
     if isinstance(base, dict):
         base = {**base, "pct": float(base.get("pct", 100.0)) * boost} if "pct" in base else base

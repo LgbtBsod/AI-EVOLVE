@@ -399,12 +399,28 @@ def test_glob_matching_semantics():
     assert C.gmatch("x.py", "**/*.py") and C.gmatch("lua_content/qa.lua", "lua_content/**") and not C.gmatch("tools/a/b.py", "tools/*.py")
 
 
+def test_glob_matching_agrees_with_pathlib_full_match():
+    """`gmatch` is a portable translator (no full_match before Python 3.13); where pathlib has the real thing it must agree
+    with it on every watch glob the project uses and on the shapes that broke once (`src/**/*.py` did not match `src/a.py`)."""
+    from pathlib import PurePosixPath
+    if not hasattr(PurePosixPath, "full_match"):
+        pytest.skip("PurePosixPath.full_match needs Python 3.13+")
+    paths = ["x.py", "src/a.py", "src/a/b.py", "src/a/b/c.py", "tools/a.py", "tools/a/b.py", "lua_content/qa.lua",
+             "lua_content/items/x.lua", "tests/test_x.py", "tests/core/test_x.py", "docs/A.md", "config.prc", "a.b.py", "src/.hidden.py"]
+    globs = ["**", "**/*.py", "src/**", "src/**/*.py", "src/*.py", "tools/*.py", "tools/**/*.py", "lua_content/**", "lua_content/**/*.lua",
+             "lua_content/items/**", "tests/**/*.py", "tests/*.json", "docs/**", "config.prc", "*.py", "**/test_*.py", "src/?.py", "src/**/b/*.py"]
+    globs += [g for chk in C.load_registry().values() for g in chk.watches]                     # every real watch of every check
+    bad = [(p, g) for p in paths for g in globs if C.gmatch(p, g) != PurePosixPath(p).full_match(g)]
+    assert bad == []
+
+
 def test_selection_on_the_real_registry():
     reg, graph = C.load_registry(), qa_graph.build()
 
     def sel(*files):
         return {c.name for c in C.select(reg, ns(), list(files), graph)[0]}
-    assert sel() == {"combat_smoke"}
+    always = {c.name for c in reg.values() if c.always}          # data-driven: nothing changed -> exactly the `always` checks
+    assert sel() == always and {"combat_smoke", "hygiene"} <= always     # hygiene: git state is not a file the watches can see
     assert {"pathfinding", "tests", "combat_smoke"} <= sel("src/gameplay/pathfinding.py")
     assert {"lua", "items", "tests"} <= sel("lua_content/items/game_items.lua")
     assert {"play:melee_three", "play:swarm", "golden"} <= sel("tools/agent_play.py")

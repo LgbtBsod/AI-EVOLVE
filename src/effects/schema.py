@@ -158,7 +158,14 @@ def is_stat(name: str) -> bool:
         if name.startswith(pfx):
             name = name[len(pfx):]
             break
-    return name in KNOWN_STATS or name in registry_stats()
+    return name in KNOWN_STATS or is_derived_stat(name) or name in registry_stats()
+
+
+def is_derived_stat(name: str) -> bool:
+    """Псевдо-стат, который считается от ctx (`hp_missing_below_<N>`...): только источник value.of / scale.of, писать в него нельзя.
+    Определение семейства - ops.derived_ctx (одно место), здесь только вопрос «это оно?»."""
+    from .ops import derived_ctx
+    return derived_ctx(name) is not None
 
 
 def registry_stats() -> set[str]:
