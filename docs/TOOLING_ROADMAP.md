@@ -92,19 +92,23 @@ Library facts not re-checked online (PyPI pages did not load) are marked "verify
 **12 trend** `qa.py trend` + a `warn trend tests dur=+34% vs median(20)` line inside `check`. Evidence: 100 unused history rows; a same-seed flake cost hours.
 - Files: `check.py` hook, `qa.lua` thresholds. Accept: synthetic history flags one slow check and one flipping check. Risks: CI timing noise (median + 3-run confirm). `check` already prints `(-22%)` vs the previous run; this adds only median-of-20 and flips.
 
-## Implementation order (each step shippable; verify with `qa.py check`, regenerate `docs/TOOLS.md`)
+## Implementation order (REVISED 2026-09-26: sub-agent cost first - agents cost 2.4x the main session)
 
-1. **tools-registry** (`qa.py tools`, `docs/TOOLS.md`, duplicate/drift detector, check `tools`). Every later tool must register here; the check fails on an undocumented tool.
-2. **hook-runner + guard-read**: `.claude/settings.json`, `qa.py guard`, `guards.lua` compile cache; measure hook latency and block rate for a week from `guards.jsonl`.
-3. **static-gate** check first, then the PostToolUse lint branch.
-4. **guard-bash** rules (reuse the registry "replaces raw action" column as the message source).
-5. **resume** (+ SessionStart/Stop hooks, `brief` line).
-6. **tokens** (baseline vs steps 2-5; set the waste thresholds).
-7. **sym-multi** (Rust/Lua ctx first, sym second).
-8. **pack**, then **agent-kit** (pack is the payload of the templates).
-9. **fix-hints**, **trend** (both S, independent).
-10. On demand only: rewrite, health, kernel-spike.
-Rule for every step: one output line via `qa_report`, thresholds in Lua, a pytest file, an auto-generated registry row, no growth of CLAUDE.md beyond one pointer line.
+Every step: one output line via `qa_report`, thresholds in Lua, a pytest file, an auto-generated registry row, no growth of CLAUDE.md beyond one pointer line.
+
+**A. Agent-cost levers (do these first, in this order)**
+1. **tools-registry** - DONE (docs/TOOLS.md, `qa.py tools --find`).
+2. **guard-read + hook-runner + batch-nudge** - IN FLIGHT. Verify that PreToolUse hooks fire for SUBAGENT tool calls (else the same rules must live in the agent preamble).
+3. **agent-kit**: `docs/agent_context/*.md` (preamble + role files) referenced by short prompts, `qa.py prompt ROLE`, `qa.py route` (model/effort/turn budget per stage: cheap model + low effort for running tests, summarising logs, mechanical edits; strong model only for design), the `batch-rule` text, and the standard report contract (<= 250 words, fixed lines).
+4. **agent-relay**: cap an agent at ~40-50 tool calls and hand off through the checkpoint journal to a FRESH agent (per-turn cost grows with context length, so N turns cost about N^2; two agents of N/2 turns cost about half). Needs `resume` + `checkpoint` (`qa.py ckpt "step done" --next "..."` writes the journal + a git stash-create ref); the agent prompt tells it to checkpoint every ~10 calls and to stop at the cap with the handoff brief.
+5. **resume** (+ SessionStart/Stop hooks, journal): SAFE/RISKY/BROKEN, orphan modules, next command; makes relays and limit crashes cheap.
+6. **q** (batched read-only queries in ONE call) and **sym-multi** (`qa.py sym FILE:func`, ctx for Rust/Lua): agents read less and use fewer turns (59% of agent turns are in read-only runs).
+7. **pack** (`qa.py pack TASK`: ~1.5k-token context pack + do-not-read list) - the payload of every agent prompt.
+8. **tokens** with per-AGENT rows (turns, tool calls, calls/turn, peak context, biggest reads; trend) - the yardstick for 2-7; run it before and after each step.
+9. **static-gate** (F821/F811/E9 + py_compile + actionlint + luajit -bl) and **guard-bash** (python3 stub, `gh run view --log`, sleep loops, backtick heredocs, backslash paths): fewer agent errors and retries.
+10. **fix-hints** (`| fix: CMD` on failing check lines), **edit / new / note** (writing tools), **trend**.
+
+**B. On demand only:** rewrite (ast-grep/libcst), health, kernel-spike.
 
 ## Rejected / duplicates
 
