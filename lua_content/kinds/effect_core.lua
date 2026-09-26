@@ -30,8 +30,8 @@ return {
     "вернуть ресурс (reverse drain без отката события)"),
   k("kill", "op_kill", { "target" }, { "flags" },
     "убить цель (в игре — истинный урон через _damage)"),
-  k("erase", "planned", { "target" }, { "flags" },
-    "стереть из существования; irreversible + no_resurrection (см. timeline/event_kinds.lua)"),
+  k("erase", "op_erase", { "target" }, {},
+    "стереть из существования: без die/kill событий, без on_lethal, без воскрешения; останавливает только флаг-бафф erase_immune (src/effects/mimic.py)"),
   k("mass_resurrect", "planned", { "filter" }, {},
     "массовое воскрешение по фильтру трупов"),
 
@@ -70,7 +70,7 @@ return {
   k("space_manipulation", "alias:zone", { "radius" }, { "on_inside" }, "alias of zone on_inside=[swap,teleport]: Room / Shambles"),
 
   -- существа --------------------------------------------------------------------
-  k("summon", "op_summon", { "template" }, { "count", "duration", "stats_override" },
+  k("summon", "op_summon", { "template" }, { "count", "duration", "stats_override", "on_dispel" },
     "призвать (клавы, шары истины, куклы); в комнате — только строка лога"),
   -- контроль цели: одна запись unit.external["control"], возврат по таймеру/смерти контролирующего (src/effects/control.py)
   k("possess", "op_possess", { "target" }, { "duration", "action", "target_ref", "targeting", "requires", "chance", "on_exit", "id" },
@@ -120,7 +120,16 @@ return {
     "украсть эффект/способность/стат навсегда"),
   k("absorb", "planned", { "what", "convert" }, {},
     "поглотить (Geto: souls target -> ресурс поглощающего)"),
-  k("copy", "planned", { "ability_id" }, { "duration" }, "скопировать способность"),
+  k("copy", "op_copy", { "target" }, { "asset", "duration", "observed" }, "копия способности цели во временную выданную `<asset>~copy:<caster>` (src/effects/mimic.py)"),
+  k("copy_technique", "op_copy_technique", { "target" }, { "technique", "duration", "fidelity", "observed" },
+    "скопировать НАБЛЮДАЕМУЮ технику (perceive what=techniques) в выученные заклинателя; fidelity множит урон use_learned_technique"),
+  k("fusion_strike", "op_fusion_strike", { "parts" }, { "merge", "mult", "consume", "flags" }, "слить два payload (stat/value) в ОДИН удар: sum|mul, mult"),
+  k("remove_restriction", "op_remove_restriction", { "id" }, { "duration", "gain", "cost" }, "снять самоограничение id на срок + обмен: gain и cost mod-ы кончаются вместе"),
+  k("dispel", "op_dispel", { "target" }, {}, "развеять призыв/клона: он умирает, его on_dispel-ops срабатывают один раз"),
+  k("false_percept", "op_false_percept", { "target", "facts" }, { "duration" }, "жертва получает подменённые факты perceived на срок (Kyoka Suigetsu)"),
+  k("control_link", "op_control_link", { "target" }, { "as", "id", "break_if", "action", "on_exit" },
+    "постоянная связь контроль: без таймера и дистанции, рвётся смертью контролирующего, break_link или break_if"),
+  k("break_link", "op_break_link", { "target" }, { "force" }, "разорвать связь control_link"),
   k("copy_last_cast", "planned", {}, { "within" }, "скопировать последний каст цели"),
   k("inherit_all", "planned", { "registry" }, {},
     "унаследовать всё из реестра (Yhwach millennium brain)"),

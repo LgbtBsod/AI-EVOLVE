@@ -50,6 +50,7 @@ from . import perception
 from . import triggers
 from . import zones
 from .control import release_control
+from . import mimic
 from .ops import OpCall, Periodic, Tracked, apply_op, form_abilities, replace_contribution_game
 from .runtime import EffectRuntime, Unit, buff_fields, resolve_value, rules
 
@@ -551,6 +552,7 @@ class EffectManager:
                 self._execute(self.state(tg.caster), tg.ability, tg.target, center=(tg.x, tg.y))
         self._run_delayed()
         zones.update(self)
+        mimic.update(self)
 
     def _run_delayed(self) -> None:
         """F4 `delay`: due records in (at, seq) order; a dead caster cancels its record unless `persist`."""
@@ -1088,7 +1090,7 @@ class EffectManager:
         if rec is None:
             return
         boss = next((s for s in self.states.values() if entity_id(s.entity) == rec["controller"]), None)
-        if (rec["until"] is not None and rec["until"] <= now) or boss is None or not is_alive(boss.entity):
+        if mimic.control_over(st, rec, boss, now, boss is not None and is_alive(boss.entity)):
             release_control(self, None, st)
             if rec.get("on_exit"):
                 self._run_ops(st, list(rec["on_exit"]), st.entity, f"control:{rec['id']}#exit", ())
@@ -1114,6 +1116,16 @@ class EffectManager:
             tgt.absorbed_kinetic = 0.0
         tgt.absorbed_kinetic += amount
         tgt.absorbed_until = max(tgt.absorbed_until, self.now) + window
+
+    # F6a mimic (src/effects/mimic.py) -----------------------------------------------------------------
+    def mimic_grant(self, st: EntityState, orig: str, until) -> Optional[str]:
+        return mimic.grant(self, st, orig, until)
+
+    def mimic_erase(self, st: EntityState) -> None:
+        mimic.erase(self, st)
+
+    def restriction_lifted(self, entity, rid: str) -> bool:
+        return mimic.restriction_lifted(self, entity, rid)
 
     # F4 triggers (src/effects/triggers.py) -------------------------------------------------------------
     # F5 zones (src/effects/zones.py) -------------------------------------------------------------------
@@ -1143,6 +1155,8 @@ class EffectManager:
         apply_op(self, cx, tgt, o)
 
     def op_restore_hp(self, tgt: EntityState, pct: float) -> None:
+        if tgt.unit.external.get("erased"):
+            return                                    # F6a erase: no revive
         self._set_health(tgt, max(1.0, float(tgt.unit._eff("max_hp")) * pct / 100.0), revive=True)
 
     def op_run_nested(self, st: EntityState, ops: list, primary, src: str) -> None:
@@ -1211,8 +1225,10 @@ class EffectManager:
         x, y = position(st.entity)
         for i in range(count):
             ang = 2 * math.pi * i / max(1, count) + self.rng.random()
-            self.world.spawn_summon(o.get("summon", "basic"), x + 2.5 * math.cos(ang), y + 2.5 * math.sin(ang),
-                                    st.faction, int(getattr(st.entity, "level", 1) or 1), st.entity)
+            made = self.world.spawn_summon(o.get("summon", "basic"), x + 2.5 * math.cos(ang), y + 2.5 * math.sin(ang),
+                                           st.faction, int(getattr(st.entity, "level", 1) or 1), st.entity)
+            if o.get("on_dispel") and made is not None:
+                mimic.register_dispel(self, made, st, o["on_dispel"])
 
     def _move(self, st, tgt_st, o, primary) -> None:
         """Рывок, отбрасывание/толчок, притягивание, телепорт, обмен местами (режимы: MOVE_DEST). Границы: world.clamp_position
@@ -1374,6 +1390,7 @@ class EffectManager:
             src.kills = int(getattr(src, "kills", 0) or 0) + 1
             self.emit(src, "kill", other=tgt, last_damage=amount)
             self.emit(tgt, "die", other=src, last_damage=amount)
+            mimic.fire_dispel(self, tgt_st, "death")
 
     # ---------------------------------------------------------------- describe
     def describe(self, entity) -> dict:

@@ -279,6 +279,19 @@ def primitive_effects() -> list[dict]:
             {"kind": "zone_mod", "target": "self", "id": "forge_zone", "radius": 6},
             {"kind": "rule_override", "target": "self", "duration": dur(2), "rules": {"flags": ["no_crit"]}},
         ], "zone"),
+        # мимик (src/effects/mimic.py): слияние, снятие ограничения, копии, ложные образы, связь, стирание (erase под when: не стирает героя)
+        ev("prim.mimic", "combat_start", [
+            {"kind": "fusion_strike", "target": "self", "parts": [{"value": {"flat": 2}}, {"value": {"flat": 3}}], "flags": ["no_crit"]},
+            {"kind": "remove_restriction", "target": "self", "id": "forge_limit", "duration": dur(2),
+             "gain": [{"kind": "mod", "target": "self", "stat": "attack", "op": "add", "value": {"flat": 1}}]},
+            {"kind": "dispel", "target": "self"},
+            {"kind": "copy_technique", "target": "self", "technique": "forge_technique", "observed": False, "fidelity": 0.5},
+            {"kind": "copy", "target": "self", "asset": "forge_technique"},
+            {"kind": "false_percept", "target": "self", "duration": dur(2), "facts": {"hp": {"hp": 1}}},
+            {"kind": "control_link", "target": "self", "id": "forge_link", "as": "command", "break_if": {"stat": "hp", "cmp": "lt", "vs": 1}},
+            {"kind": "break_link", "target": "self"},
+            {"kind": "erase", "target": "self", "when": "ctx.hp_pct < 0"},          # never fires on the hero itself
+        ], "mimic"),
         # кража и применение техники
         ev("prim.learn", "use", [
             {"kind": "learn", "target": "self", "ability_id": "forge_technique"},

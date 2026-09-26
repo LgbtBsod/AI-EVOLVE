@@ -157,5 +157,45 @@ return {
       ops = { { kind = "reality_marble", target = "self", id = "ubw", radius = 15, duration = { flat = 30 }, affects = "others",
                 on_enter = { { kind = "summon", target = "self", summon = "blade_spirit", count = 1 } },
                 tick = { every = { flat = 2 }, ops = { hit(4) } } } } },
+
+    -- ---- slice F6a: MIMIC family (family = "mimic"; src/effects/mimic.py, docs/EFFECT_SCHEMA.md "Mimic") ----
+    { id = "corpus_hollow_purple", corpus = 2, family = "mimic", tags = { "spell" }, trigger = "cast", range = 30, cooldown = 30, needs_target = true,
+      ops = { { kind = "fusion_strike", target = "enemy", merge = "sum", mult = 2, flags = { "no_crit" },
+                consume = { { stat = "mana", value = { flat = 20 } } },
+                parts = { { stat = "attack_damage", scale = 1.0 }, { value = { flat = 40 } } } } } },
+
+    { id = "corpus_heavenly_restriction", corpus = 6, family = "mimic", tags = { "spell", "form" }, trigger = "cast", cooldown = 60,
+      ops = { { kind = "remove_restriction", target = "self", id = "cursed_energy", duration = { flat = 20 },
+                gain = { { kind = "mod", target = "self", stat = "attack_damage", op = "add", value = { flat = 30 } } },
+                cost = { { kind = "mod", target = "self", stat = "defense", op = "add", value = { flat = -5 } } } } } },
+
+    { id = "corpus_shadow_clone", corpus = 7, family = "mimic", tags = { "spell" }, trigger = "cast", cooldown = 20,
+      ops = { { kind = "summon", target = "self", summon = "shadow_clone", count = 1,
+                on_dispel = { { kind = "heal", target = "self", stat = "hp", value = { flat = 15 } } } } } },
+
+    { id = "corpus_sharingan_copy", corpus = 10, family = "mimic", tags = { "spell" }, trigger = "cast", range = 25, cooldown = 10, needs_target = true,
+      ops = { { kind = "perceive", target = "enemy", duration = { flat = 10 }, what = { "techniques" } },
+              { kind = "copy_technique", target = "enemy", duration = { flat = 30 }, fidelity = 0.7 } } },
+    { id = "corpus_use_copied", family = "mimic", tags = { "spell" }, trigger = "cast", range = 25, needs_target = true,   -- use the copied technique
+      ops = { { kind = "use_learned_technique", target = "self", pick = "last", tech_target = "enemy", value = { flat = 20 } } } },
+
+    { id = "corpus_kyoka_forged", corpus = 15, family = "mimic", tags = { "spell" }, trigger = "cast", range = 15, cooldown = 20, needs_target = true,
+      ops = { { kind = "hypnosis", target = "enemy", id = "kyoka_suigetsu", duration = { flat = 8 }, perception = "false" },
+              { kind = "false_percept", target = "enemy", duration = { flat = 8 }, facts = { hp = { hp = 9999, max_hp = 9999 } } } } },
+
+    { id = "corpus_parasite_link", corpus = 20, family = "mimic", tags = { "spell" }, trigger = "cast", range = 20, cooldown = 15, needs_target = true,
+      ops = { { kind = "control_link", target = "enemy", id = "parasite_link", as = "possess", requires = { stat = "max_hp", cmp = "lt", vs = "source" },
+                break_if = { stat = "hp", cmp = "lt", vs = 20 } } } },
+    { id = "corpus_cut_link", family = "mimic", tags = { "spell" }, trigger = "cast", range = 999, needs_target = true,
+      ops = { { kind = "break_link", target = "enemy" } } },
+
+    { id = "corpus_hakai", corpus = 29, family = "mimic", tags = { "spell" }, trigger = "cast", range = 20, cooldown = 45, needs_target = true,
+      ops = { { kind = "erase", target = "enemy" } } },
+
+    { id = "corpus_ubw_copy", corpus = 32, family = "mimic", tags = { "spell" }, trigger = "cast", range = 25, cooldown = 10, needs_target = true,
+      ops = { { kind = "perceive", target = "enemy", duration = { flat = 10 }, what = { "techniques" } },
+              { kind = "copy", target = "enemy", observed = true, duration = { flat = 30 } } } },
+    { id = "corpus_dispel_clone", family = "mimic", tags = { "spell" }, trigger = "cast", range = 999, needs_target = true,
+      ops = { { kind = "dispel", target = "enemy" } } },
   },
 }

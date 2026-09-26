@@ -24,6 +24,8 @@ return {
     -- perception family (src/effects/perception.py)
     grant_vision = { canon = "mod", exact = true, params = { stat = "vision_range", op = "add" }, note = "mod vision_range add: can_see honours it" },
     dodge        = { canon = "precognition", exact = true, params = { negate = true, warn = false }, note = "precognition negate=true warn=false: the first hit per cooldown is dodged" },
+    -- mimic family (src/effects/mimic.py)
+    technique_absorb = { canon = "copy_technique", exact = true, note = "copy_technique: the caster takes an observed technique (learned set, fidelity)" },
     -- space family (src/effects/zones.py): a zone with implied fields
     aura               = { canon = "zone", exact = true, params = { follow = true }, note = "zone follow=true: a zone attached to its carrier" },
     reality_marble     = { canon = "zone", exact = true, params = { marble = true }, note = "zone marble=true: `rules` (consts/flags) hold inside, own tick / on_enter ops" },

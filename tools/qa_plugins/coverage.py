@@ -31,8 +31,9 @@ def canon_kinds() -> set:
 
 def _features() -> tuple:
     sys.path.insert(0, str(ROOT))
+    from src.effects.mimic import MIMIC_FEATURES
     from src.effects.zones import ZONE_FEATURES
-    return ZONE_FEATURES
+    return ZONE_FEATURES + MIMIC_FEATURES
 
 
 def alias_rows() -> dict:

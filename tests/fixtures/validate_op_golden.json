@@ -1,5 +1,5 @@
 {
-"n_lua": 522,
+"n_lua": 536,
 "cases": [
 [
 "\"x\"",
@@ -210,6 +210,10 @@
 []
 ],
 [
+"{\"as\": \"possess\", \"break_if\": {\"cmp\": \"lt\", \"stat\": \"hp\", \"vs\": 20}, \"id\": \"parasite_link\", \"kind\": \"control_link\", \"requires\": {\"cmp\": \"lt\", \"stat\": \"max_hp\", \"vs\": \"source\"}, \"target\": \"enemy\"}",
+[]
+],
+[
 "{\"buff_id\": \"bog_hydra.submerge\", \"duration\": {\"flat\": 3}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
 []
 ],
@@ -348,6 +352,10 @@
 []
 ],
 [
+"{\"consume\": [{\"stat\": \"mana\", \"value\": {\"flat\": 20}}], \"flags\": [\"no_crit\"], \"kind\": \"fusion_strike\", \"merge\": \"sum\", \"mult\": 2, \"parts\": [{\"scale\": 1.0, \"stat\": \"attack_damage\"}, {\"value\": {\"flat\": 40}}], \"target\": \"enemy\"}",
+[]
+],
+[
 "{\"cooldown\": {\"flat\": 3}, \"duration\": {\"flat\": 10}, \"kind\": \"dodge\", \"target\": \"self\"}",
 []
 ],
@@ -357,6 +365,14 @@
 ],
 [
 "{\"cooldown\": {\"flat\": 5}, \"duration\": {\"flat\": 15}, \"id\": \"prescience\", \"kind\": \"precognition\", \"negate\": false, \"target\": \"self\"}",
+[]
+],
+[
+"{\"cost\": [{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"self\", \"value\": {\"flat\": -5}}], \"duration\": {\"flat\": 20}, \"gain\": [{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"flat\": 30}}], \"id\": \"cursed_energy\", \"kind\": \"remove_restriction\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 1, \"kind\": \"summon\", \"on_dispel\": [{\"kind\": \"heal\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"flat\": 15}}], \"summon\": \"shadow_clone\", \"target\": \"self\"}",
 []
 ],
 [
@@ -776,6 +792,14 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 10}, \"kind\": \"perceive\", \"target\": \"enemy\", \"what\": [\"techniques\"]}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"perceive\", \"target\": \"enemy\", \"what\": [\"techniques\"]}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 12}, \"id\": \"infinite_tsukuyomi\", \"kind\": \"hypnosis\", \"perception\": \"dream\", \"target\": \"enemy\"}",
 []
 ],
@@ -864,7 +888,15 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 30}, \"fidelity\": 0.7, \"kind\": \"copy_technique\", \"target\": \"enemy\"}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 30}, \"id\": \"kurama_chakra\", \"kind\": \"timed_power_up\", \"on_exit\": [{\"kind\": \"drain\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"flat\": 5}}], \"target\": \"self\"}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 30}, \"kind\": \"copy\", \"observed\": true, \"target\": \"enemy\"}",
 []
 ],
 [
@@ -1216,6 +1248,14 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 8}, \"facts\": {\"hp\": {\"hp\": 9999, \"max_hp\": 9999}}, \"kind\": \"false_percept\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 8}, \"id\": \"kyoka_suigetsu\", \"kind\": \"hypnosis\", \"perception\": \"false\", \"target\": \"enemy\"}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 8}, \"id\": \"kyoka_suigetsu\", \"kind\": \"hypnosis\", \"perception\": \"false\", \"target\": \"enemy\"}",
 []
 ],
@@ -1356,6 +1396,10 @@
 [
 "op: kind=apply_effect requires buff_id (the id of the effect to apply)"
 ]
+],
+[
+"{\"kind\": \"break_link\", \"target\": \"enemy\"}",
+[]
 ],
 [
 "{\"kind\": \"buff\"}",
@@ -1956,7 +2000,15 @@
 ]
 ],
 [
+"{\"kind\": \"dispel\", \"target\": \"enemy\"}",
+[]
+],
+[
 "{\"kind\": \"drain\", \"op\": \"sub\", \"stat\": \"stamina\", \"target\": \"self\", \"value\": {\"flat\": 30}}",
+[]
+],
+[
+"{\"kind\": \"erase\", \"target\": \"enemy\"}",
 []
 ],
 [
@@ -2420,6 +2472,10 @@
 ],
 [
 "{\"kind\": \"untargetable\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"kind\": \"use_learned_technique\", \"pick\": \"last\", \"target\": \"self\", \"tech_target\": \"enemy\", \"value\": {\"flat\": 20}}",
 []
 ],
 [

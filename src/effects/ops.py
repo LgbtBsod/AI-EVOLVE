@@ -29,6 +29,7 @@ from src.effects.control import CONTROL_HANDLERS
 from src.effects.perception import PERCEPTION_HANDLERS
 from src.effects.triggers import TRIGGER_HANDLERS
 from src.effects.zones import ZONE_HANDLERS
+from src.effects.mimic import MIMIC_HANDLERS, scaled
 
 # ---------------------------------------------------------------- spec kind names -> canon (lua_content/kind_aliases.lua)
 
@@ -831,7 +832,7 @@ def op_use_learned_technique(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: f
         tech = spells[-1]
     bonus = o.get("adapt_damage")                      # % к урону: число или Value ({flat} / {pct, of} / {ref})
     boost = 1.0 + (resolve_value(bonus, cx.ctx) if isinstance(bonus, dict) else float(bonus or 0.0)) / 100.0
-    base = o.get("value") or {"flat": amount}
+    base = scaled(tgt, tech, o.get("value") or {"flat": amount})    # F6a: copied technique x fidelity
     if isinstance(base, dict):
         base = {**base, "pct": float(base.get("pct", 100.0)) * boost} if "pct" in base else base
     h.op_nested_ops(cx, tgt, [{"kind": "deal", "target": o.get("tech_target", "enemy"),
@@ -1047,7 +1048,7 @@ OP_HANDLERS: dict[str, Handler] = {
     "escalate": op_escalate, "deescalate": op_deescalate, "trigger_true_form": op_trigger_true_form,
     "rotate_wheel": op_rotate_wheel, "display_wheel": op_display_wheel, "halt_wheel": op_halt_wheel,
     "stance": op_stance, "transform": op_transform, "timed_power_up": op_timed_power_up,
-    **CONTROL_HANDLERS, **PERCEPTION_HANDLERS, **TRIGGER_HANDLERS, **ZONE_HANDLERS,
+    **CONTROL_HANDLERS, **PERCEPTION_HANDLERS, **TRIGGER_HANDLERS, **ZONE_HANDLERS, **MIMIC_HANDLERS,
 }
 
 

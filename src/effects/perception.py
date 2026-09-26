@@ -13,7 +13,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from .mimic import forged_over
+
 _WHAT = ("hp", "stats", "statuses", "hidden", "intent")
+_KNOWN = _WHAT + ("techniques",)      # `techniques` (F6a: what copy_technique needs) is opt-in, not part of the default
 _STATS = ("attack", "defense", "move_speed", "vision_range")
 
 
@@ -23,7 +26,7 @@ def _until(h: Any, cx: Any, o: dict) -> float | None:
 
 def op_perceive(h: Any, cx: Any, tgt: Any, o: dict, amount: float) -> None:
     """The caster learns about the target for a duration: `what` in hp / stats / statuses / hidden / intent (default all)."""
-    rec = {"until": _until(h, cx, o), "what": [w for w in (o.get("what") or _WHAT) if w in _WHAT],
+    rec = {"until": _until(h, cx, o), "what": [w for w in (o.get("what") or _WHAT) if w in _KNOWN],
            "stats": list(o.get("stat_names") or _STATS)}
     h.op_perception(cx.source).setdefault("perceived", {})[h.op_ident(tgt)] = rec
     h.op_note(cx, "perceive", tgt, ",".join(rec["what"]))
@@ -91,6 +94,8 @@ def _facts(st: Any, rec: dict, now: float) -> dict:
             out["statuses"] = sorted(b for b in st.unit.buffs if not b.startswith("untargetable:"))
         elif w == "hidden":
             out["hidden"] = _hidden_of(st, now)
+        elif w == "techniques":
+            out["techniques"] = sorted(st.abilities)
         else:
             out["intent"] = dict(st.unit.external.get("aggro") or {})
     return out
@@ -99,12 +104,13 @@ def _facts(st: Any, rec: dict, now: float) -> dict:
 def view(m: Any, caster: Any, entity_id: Any) -> dict:
     """What `caster` perceives now: {target id: facts}; expired records and gone targets are skipped."""
     st = m.state(caster)
-    recs = ((st.unit.external.get("perception") or {}).get("perceived") or {}) if st else {}
+    per = st.unit.external.get("perception") if st else None
+    recs = (per or {}).get("perceived") or {}
     out: dict = {}
     for tid, rec in recs.items():
         if rec["until"] is not None and rec["until"] <= m.now:
             continue
         tst = next((s for s in m.states.values() if entity_id(s.entity) == tid), None)
         if tst is not None:
-            out[tid] = _facts(tst, rec, m.now)
+            out[tid] = forged_over(per, _facts(tst, rec, m.now), m.now)
     return out
