@@ -358,6 +358,10 @@ return {
     },
   },
   ckpt = { keep = 20, history_tail_bytes = 30000, hook_timeout_s = 8 },
+
+  -- qa.py trend + the `warn trend` lines inside `qa.py check` (history.jsonl). Skipped for checks with < min_rows rows.
+  -- dur: median of the last `window` runs vs the newest; flagged only when the newest `confirm` runs ALL exceed median*(1+dur_pct/100) and +dur_abs seconds.
+  trend = { window = 20, min_rows = 8, dur_pct = 30, dur_abs = 1.0, confirm = 3, flips = 3 },
   -- qa.py tokens: transcript waste ledger. Read-only = calls that may share one message; a warn needs a value past its limit.
   tokens = {
     -- `qa.py tokens --workflow`: an agent whose first context is above `untyped_first_ctx` ran without agentType (default agents cold-start ~67k, typed ~12k; agent_kit.lua `workflow_cost`)
@@ -431,6 +435,7 @@ return {
       { id = "determinism", command = "python tools/qa.py determinism \"SCRIPT\" --pairs 6", purpose = "why two same-seed runs differ: paired traced runs, first divergent frame, hypotheses", replaces = "bisecting a desync by hand", output = "verdict + first divergent frame", group = "analyse", cost = "high" },
       { id = "gauntlet", command = "python tools/qa.py gauntlet [--campaign --lives 5]", replaces = "playing bosses by hand", output = "one line per boss", group = "analyse", cost = "high" },
       { id = "hygiene", replaces = "eyeballing git ls-files and .gitignore", output = "qa_report line", group = "verify", cost = "low" },
+      { id = "trend", command = "python tools/qa.py trend [--check NAME] [--last 20]", purpose = "slow (median of last N + 3-run confirm) or flipping (ok<->FAIL) checks from history.jsonl; also `warn trend` lines in qa.py check", when = "a check got slow or flaky; nothing to run: check prints it", replaces = "eyeballing history.jsonl", output = "one warn line per flagged check", group = "verify", cost = "low" },
       { id = "item", command = "python tools/qa.py item check|digest|diff|all", purpose = "Effect Schema items: itemcheck, one line per effect (digest), diff vs a git ref", replaces = "reading generated item Lua", output = "one line per effect", group = "content", cost = "low" },
       { id = "lua", command = "python tools/qa.py lua check|show FILE|bench", purpose = "Lua content: every file loads with every backend (check), a file's data as compact JSON (show), load time (bench)", when = "any question about lua_content", replaces = "reading Lua files", output = "summary or JSON", group = "content", cost = "low" },
       { id = "quality", command = "python tools/qa.py quality [--worst N|--explain RULE]", replaces = "running ruff, radon, vulture, import-linter separately", output = "qa_report line + worst-N table", group = "verify", cost = "low" },

@@ -31,6 +31,7 @@ Parsers for the output formats the repo already has: result_line (`RESULT k=v ..
 """
 from __future__ import annotations
 
+import fnmatch
 import importlib.util
 import inspect
 import json
@@ -78,6 +79,7 @@ class Result:
     name: str = ""
     age: float | None = None                           # cached only: seconds since the original run
     variant: str = ""                                  # e.g. "diff": a subset run must not be compared with a full one
+    fix: str | None = None                             # ONE command that (probably) fixes it: a hint, never run (lua_content/fixes.lua)
 
     @property
     def key(self) -> str:                              # history/delta identity
@@ -85,7 +87,7 @@ class Result:
 
     def to_dict(self) -> dict:
         return {"name": self.name, "status": self.status, "metrics": self.metrics, "detail": self.detail,
-                "repro": self.repro, "dur": round(self.dur, 3), "age": self.age}
+                "repro": self.repro, "fix": self.fix, "dur": round(self.dur, 3), "age": self.age}
 
 
 _ANSI = re.compile(r"(?:\x1b|\^\[)\[[0-9;?]*[ -/]*[@-~]")      # real ESC, or the `^[` a log saved through `cat -A` shows
@@ -155,9 +157,14 @@ def format_line(res: Result, name_w: int = 0, deltas: dict | None = None, cfg: d
     line = f"{WORD[res.status]:<6} {res.name:<{name_w}} " + " ".join(toks)
     if res.detail and res.status not in ("ok", "cached"):
         line += " | " + one_line(res.detail[0], cfg["line_width"])
-    if res.repro and res.status in ("fail", "error", "warn"):
-        line += f" | repro: {res.repro}"
-    return line.rstrip()
+    return (line + _hints(res)).rstrip()
+
+
+def _hints(res: Result) -> str:
+    """` | fix: CMD | repro: CMD` of a non-ok result (fix before repro)."""
+    if res.status not in ("fail", "error", "warn"):
+        return ""
+    return "".join(f" | {label}: {val}" for label, val in (("fix", res.fix), ("repro", res.repro)) if val)
 
 
 def verdict(results) -> str:
@@ -242,6 +249,36 @@ def write_full(lines: list, run_id: str | None = None) -> str:
     f = d / "full.txt"
     f.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return f.relative_to(ROOT).as_posix() if f.is_relative_to(ROOT) else f.as_posix()
+
+
+# ---------------------------------------------------------------- fix hints (data: lua_content/fixes.lua)
+
+def load_fixes(path: Path | None = None) -> list:
+    """The rules of lua_content/fixes.lua ([] when the file or a Lua backend is missing)."""
+    try:
+        from lua_bridge import load
+        data = load(path or ROOT / "lua_content" / "fixes.lua")
+    except (ImportError, OSError, ValueError, RuntimeError):
+        return []
+    rules = data.get("rules") if isinstance(data, dict) else None
+    return [r for r in (rules or []) if isinstance(r, dict) and r.get("fix")]
+
+
+def fixes_for(name: str, rules: list) -> list:
+    """The rules whose `check` glob matches the check name (for --explain)."""
+    return [r for r in rules if fnmatch.fnmatchcase(name.split("@")[0], r.get("check") or "*")]
+
+
+def apply_fixes(results, rules: list) -> None:
+    """Set Result.fix on non-ok results: first rule whose check glob and `pattern` regex (over detail + k=v metrics) match. Hint only."""
+    for res in results:
+        if res.fix or res.status not in ("fail", "error", "warn"):
+            continue
+        text = " ".join(map(str, res.detail)) + " " + " ".join(f"{k}={v}" for k, v in res.metrics.items())
+        for rule in fixes_for(res.name, rules):
+            if re.search(rule.get("pattern") or "$^", text):
+                res.fix = rule["fix"]
+                break
 
 
 # ---------------------------------------------------------------- history

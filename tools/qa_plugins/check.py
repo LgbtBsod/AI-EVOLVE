@@ -28,8 +28,10 @@ import glob_match
 import qa_graph
 import qa_pool
 import qa_report as R
+from jsonl_io import read_jsonl
 from glob_match import gmatch  # noqa: F401  (re-export: tests and plugins import it from here)
 from probe_settings import ROOT, qa_settings
+from qa_plugins import trend
 
 CACHE_DIR = ROOT / "dev_probe_output" / ".qa_cache"
 CACHE_FILE = CACHE_DIR / "checks.json"
@@ -322,6 +324,14 @@ def explain(chk: R.Check) -> list:
     return lines
 
 
+def fix_notes(name: str) -> list:
+    return [f"fix:     /{r.get('pattern')}/ -> {r['fix']}   ({r.get('note', '')})" for r in R.fixes_for(name, R.load_fixes())]
+
+
+def trend_warnings(cfg_all: dict) -> list:
+    return trend.trend_lines(read_jsonl(R.HISTORY), trend.trend_cfg(cfg_all)) if R.HISTORY.exists() else []
+
+
 def cmd_check(args) -> int:
     t0 = time.perf_counter()
     cfg_all = qa_settings()
@@ -345,7 +355,7 @@ def cmd_check(args) -> int:
         if args.explain not in reg:
             print(f"unknown check {args.explain!r}; known: {' '.join(reg)}")
             return 2
-        print("\n".join(explain(reg[args.explain])))
+        print("\n".join(explain(reg[args.explain]) + fix_notes(args.explain)))
         return 0
     if args.ci:
         args.no_cache = True
@@ -361,6 +371,9 @@ def cmd_check(args) -> int:
     meta = {"dur": time.perf_counter() - t0, "head": qa.git("rev-parse", "--short=7", "HEAD") or "?",
             "dirty": len(qa.git("status", "--porcelain").splitlines()), "selected": len(selected), "total": len(reg), "by": by}
     prev = R.load_prev()
+    R.apply_fixes(results, R.load_fixes())
+    R.append_history(results, meta, cfg)
+    trend_rows = trend_warnings(cfg_all)
     if args.json:
         print(R.to_json(results, meta))
     else:
@@ -368,12 +381,11 @@ def cmd_check(args) -> int:
         if not selected:
             note = f"(no check watches your {len(changed)} changed file(s); `qa.py check --all` runs all {len(reg)}, `--list` names them)"
             short, full = short + [note], full + [note]
-        lines = R.budgeted(short, full, cfg, R.write_full)
+        lines = R.budgeted(short, full, cfg, R.write_full) + trend_rows
         print("\n".join(lines))
         if args.ci and os.environ.get("GITHUB_STEP_SUMMARY"):
             with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as fh:
                 fh.write("```\n" + "\n".join(lines) + "\n```\n")
-    R.append_history(results, meta, cfg)
     return R.exit_code(results)
 
 

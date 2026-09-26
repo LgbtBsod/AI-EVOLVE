@@ -37,6 +37,7 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `static` | `python tools/qa.py static [FILES]` | static gate: ruff F821/F811/E9 + compile on Python, Lua syntax (LuaJIT 2.1 + 5.5 via lupa), workflow... | finding an undefined name by crashing a run | qa_report line + file:line per error | low |
 | `test` | `python tools/qa.py test [--changed]` | pytest in parallel shards; prints only NEW failures (--changed = tests your diff affects) | raw pytest and its full output | counts + new failures | medium |
 | `trace_compare` | `python tools/trace_compare.py` | did a refactor change behaviour: per-frame trace hashes of every play scenario, before vs after | eyeballing runs after a refactor | first divergent frame per scenario | medium |
+| `trend` | `python tools/qa.py trend [--check NAME] [--last 20]` | slow (median of last N + 3-run confirm) or flipping (ok<->FAIL) checks from history.jsonl; also `warn... | eyeballing history.jsonl | one warn line per flagged check | low |
 ### read / navigate - instead of reading raw files
 | tool | command | purpose | replaces | output | cost |
 |---|---|---|---|---|---|
