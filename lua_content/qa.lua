@@ -182,7 +182,7 @@ return {
       watches = { "src/**/*.py", "lua_content/**/*.lua", "tools/agent_play.py", "tools/probe_*.py", "tests/golden/**", "rust_core/src/**/*.rs" } },
     { name = "tokens", cmd = "python tools/qa.py tokens --check", parse = "result_line", cost = "low", ci = false,
       tags = { "tools" }, what = "the transcript ledger parses the latest local session (turns=0 when there is no transcript dir)",
-      watches = { "tools/token_ledger.py", "tools/qa_plugins/tokens.py", "tests/test_tokens.py" } },
+      watches = { "tools/token_ledger.py", "tools/usage_ledger.py", "tests/test_usage_ledger.py", "tools/qa_plugins/tokens.py", "tests/test_tokens.py" } },
     { name = "lua", cmd = "python tools/qa.py lua check", parse = "regex", pattern = [[lua: (?P<loaded>\d+)/(?P<files>\d+) files ok]],
       cost = "low", tags = { "lua" }, what = "every lua_content file loads with every backend, same data",
       watches = { "lua_content/**/*.lua", "tools/lua_bridge.py", "rust_core/src/lua_content/**" } },
@@ -384,6 +384,8 @@ return {
   tokens = {
     -- `qa.py tokens --workflow`: an agent whose first context is above `untyped_first_ctx` ran without agentType (default agents cold-start ~67k, typed ~12k; agent_kit.lua `workflow_cost`)
     workflow = { untyped_first_ctx = 40000, use = "agentType explorer|implementer|verifier|reviewer on agent()" },
+    -- `qa.py tokens --usage`: REAL billed usage (tools/usage_ledger.py). warn when an untyped agent share or a cold start passes its limit; brief line goes stale after `stale_s`
+    usage = { by = { "day", "role", "agent", "session" }, untyped_types = { "workflow-subagent", "" }, stale_s = 3600, warn_first_ctx = 40000, min_samples = 3, calibration_file = "wf_calibration.json" },
     chars_per_token = 4, unbounded_lines = 250, top = 8, heavy_top = 5, retry_prefix = 120, trend_keep = 200,
     readonly_tools = { "Read", "Grep", "Glob", "WebFetch", "WebSearch" }, shell_tools = { "Bash", "PowerShell" },
     -- a shell command is a write when it matches one of these (after `2>&1`, `>/dev/null` are removed)
@@ -477,7 +479,7 @@ return {
         when = "about every 10 tool calls and at the call cap of an agent (relay), before a risky step", replaces = "a hand-written handoff brief", output = "one line: ckpt #N saved", group = "build", cost = "low" },
       { id = "relay", command = "python tools/qa.py relay detect|tick [--dry-run] [--force]|install [--mode notify|headless] [--every N] [--dry-run]|uninstall|status", purpose = "auto-continue unfinished work after a usage-limit stop or crash: OS scheduler runs `tick` (0 tokens while idle), notify (toast + relay_ready.md) or opt-in narrow headless claude run",
         when = "once per machine (`relay install`), then never; `relay status` to look", replaces = "checking by hand when the usage limit resets", output = "one line: relay mode=.. installed=.. every=.. last_tick=.. last_action=.. limit=..", group = "build", cost = "low" },
-      { id = "tokens", command = "python tools/qa.py tokens [--agents] [--top N] [--session latest|ID|PATH] [--json]", purpose = "transcript waste ledger: turns, calls per turn, batchable read-only runs, result and written tokens by tool, unbounded and repeated reads, retries, relays, guard stats, trend per session/agent",
+      { id = "tokens", command = "python tools/qa.py tokens [--usage [--by day|role|agent|session]] [--agents] [--top N] [--session latest|ID|PATH] [--json]", purpose = "transcript waste ledger + REAL billed usage (--usage: in/cache_write/cache_read/out per day/role/agent/session, cached): turns, calls per turn, batchable read-only runs, result and written tokens by tool, unbounded and repeated reads, retries, relays, guard stats, trend per session/agent",
         when = "before and after changing an agent prompt, a hook or a tool; to prove a token saving", replaces = "a hand-written transcript scan", output = "one QA line per metric group, worst first, each with `| use: CMD`", group = "build", cost = "low" },
       { id = "pack", command = "python tools/qa.py pack \"TASK\" [--files a,b] [--max-tok 1500] [--json]", purpose = "ranked context pack for a task: top files with symbol ranges, importers/tests, existing tools, state, verify command, do-not-read list",
         when = "start of any agent task, instead of exploring the repo", replaces = "5-20 exploratory grep/ctx/Read turns", output = "<= 1500 tokens, one grouped block", group = "build", cost = "low" },
@@ -489,7 +491,7 @@ return {
         when = "start of a session or of a relay agent (continue: $(qa.py resume --brief)), after a limit crash", replaces = "re-exploring the repo to find out what was half done", output = "<= 6 lines", group = "build", cost = "low" },
       { id = "prompt", command = "python tools/qa.py prompt ROLE --task \"...\" [--files a,b] [--done \"...\"] [--pack] | --workflow ROLE", purpose = "a SHORT agent prompt (<= 400 tokens): the shared context is a repo file (docs/agent_context/), the prompt only points at it and states TASK / SCOPE / DONE WHEN",
         when = "before every Agent call or Workflow script (agent, prompt, subagent, context)", replaces = "hand-typing a 1.5-6k-char agent prompt or an inlined CONTEXT block of a Workflow script", output = "the prompt on stdout, one size line on stderr", group = "build", cost = "low" },
-      { id = "wf", command = "python tools/qa.py wf new NAME [--kind audit|map-write|review] | estimate SCRIPT|- | assemble DIR", purpose = "lean Workflow scripts: skeleton with agentType on every agent() (12k instead of 67k cold start), static billed-token estimate of a script, assembler of explorer-written sections",
+      { id = "wf", command = "python tools/qa.py wf new NAME [--kind audit|map-write|review] | estimate SCRIPT|- [--recalibrate] [--vs RUN] | assemble DIR", purpose = "lean Workflow scripts: skeleton with agentType on every agent() (12k instead of 67k cold start), static billed-token estimate of a script, assembler of explorer-written sections",
         when = "before writing or running a Workflow script", replaces = "hand-written workflows with untyped agents and big JSON embedded into a writer prompt", output = "qa_report line / script text", group = "build", cost = "low" },
       { id = "route", command = "python tools/qa.py route [STAGE|--list|--check|--write-agents]", purpose = "model / effort / tool-call budget per stage of a Workflow or Agent call (cheap for tests and logs, strong for design and review); generates .claude/agents/*.md",
         when = "choosing the model tier of an agent or a Workflow stage", replaces = "guessing the model and effort of each stage", output = "qa_report line + table", group = "build", cost = "low" },

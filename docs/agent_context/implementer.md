@@ -16,6 +16,8 @@ STOP WHEN: DONE WHEN is met and `qa.py check` shows no FAIL, or only the owner c
 TURN BUDGET: 45 tool calls (soft). At the cap or after ~10 calls without a green check: write the handoff brief (done / next / files touched / last green check) and stop.
 RELAY: run `qa.py ckpt "step done" --next "..."` about every 10 calls and at the cap; at the cap write the handoff (`ckpt ... --next`), print `RELAY: continue with qa.py resume` as the LAST line of your report and stop. The caller continues with `qa.py prompt ROLE --task "continue: $(qa.py resume --brief)"`.
 
+Effect-system SLICE tasks (kinds, corpus, coverage): also read docs/agent_context/slice.md (standing checklist and rules) and take only the delta from the prompt.
+
 REPORT (<= 250 words, exactly these lines):
 files: <files you changed, one line>
 results: <the `qa.py test` and `qa.py check` header lines, copied verbatim>

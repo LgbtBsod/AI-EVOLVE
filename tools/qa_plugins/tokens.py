@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import time
 from pathlib import Path
 
 import token_ledger as L
+import usage_ledger as U
 from probe_settings import ROOT, qa_settings
 from qa_report import QA_OUT, fmt_num
 
@@ -153,8 +155,91 @@ def cmd_workflow(args, c: dict) -> int:
     return 0
 
 
+# ---------------------------------------------------------------- real billed usage (tools/usage_ledger.py)
+
+def project_folder() -> Path:
+    return Path.home() / ".claude" / "projects" / re.sub(r"[^A-Za-z0-9]", "-", str(ROOT))
+
+
+def usage_cfg() -> dict:
+    u = dict(qa_settings()["tokens"]["usage"])
+    u["untyped_types"] = tuple(u["untyped_types"])
+    return u
+
+
+def usage_files(session: str | None) -> tuple[list[dict], bool]:
+    """Files (+ cached rows) of this project; `session` latest | id prefix | None/all = every session."""
+    folder = project_folder()
+    files = U.project_files(folder) if folder.is_dir() else []
+    if session and session != "all":
+        mains = [f for f in files if f["kind"] == "main"]
+        pick = max(mains, key=lambda f: f["path"].stat().st_mtime)["session"] if session == "latest" and mains else session[:8]
+        files = [f for f in files if f["session"] == pick]
+    return U.rows_for(files, QA_OUT / U.CACHE_NAME)
+
+
+def usage_row(r: dict, warn_ctx: int) -> str:
+    bad = r["first_ctx"] > warn_ctx and r["type"] not in ("main", "") and "/" not in r["type"] and not r["name"].startswith("main:")
+    extra = f" type={r['type']}" if r["type"] and "/" not in r["type"] and r["type"] != r["name"] else ""
+    return (f"{'warn' if bad else 'ok':<5} {r['name'][:28]:28} billed={fmt_num(r['billed'])} cr={fmt_num(r['cr'])} out={fmt_num(r['out'])} "
+            f"turns={r['turns']} first_ctx={fmt_num(r['first_ctx'])}{extra}")
+
+
+def usage_totals(files: list[dict], day: str | None, uc: dict) -> dict:
+    tot = U.group(files, "session", day, uc["untyped_types"])
+    return {k: sum(r[k] for r in tot) for k in ("billed", "inp", "cw", "cr", "out", "turns", "main_billed", "agent_billed")}
+
+
+def usage_header(files: list[dict], scope: str, day: str | None, uc: dict, dur: float) -> str:
+    s = usage_totals(files, day, uc)
+    b = s["billed"] or 1
+    n_agents = sum(1 for f in files if f["kind"] == "agent" and any(not day or r[0] == day for r in f["recs"]))
+    return (f"QA verdict=OK tokens usage {scope} billed={fmt_num(s['billed'])} (cw={fmt_num(s['cw'])} out={fmt_num(s['out'])} in={fmt_num(s['inp'])}) "
+            f"cr={fmt_num(s['cr'])} main={round(100 * s['main_billed'] / b)}% agents={round(100 * s['agent_billed'] / b)}% turns={s['turns']} agents_n={n_agents} dur={dur:.1f}s")
+
+
+def cmd_usage(args) -> int:
+    t0, uc = time.time(), usage_cfg()
+    by = args.by or "day"
+    files, _ = usage_files(None if args.session == "latest" else args.session)
+    if not files:
+        print("tokens: no transcript for this project under ~/.claude/projects")
+        return 2
+    day = None
+    scope = "day=all" if args.session == "latest" else f"session={args.session}"
+    top = args.top if args.top is not None else int(qa_settings()["tokens"]["top"])
+    lines = [usage_row(r, uc["warn_first_ctx"]) for r in U.group(files, by, day, uc["untyped_types"])[:top]]
+    print(chr(10).join([usage_header(files, scope, day, uc, time.time() - t0), *lines]))
+    return 0
+
+
+def usage_brief_line() -> str:
+    """`usage today billed=X main=M% agents=A% | top: role Y` from the cache only; stale > stale_s -> a hint. Empty without transcripts."""
+    try:
+        uc, cache = usage_cfg(), QA_OUT / U.CACHE_NAME
+        if not project_folder().is_dir():
+            return ""
+        age = U.cache_age(cache)
+        if age is None or age > uc["stale_s"]:
+            return "usage: run qa.py tokens --usage"
+        cached = U.load_cache(cache)
+        files = [{**f, "recs": cached[str(f["path"])]["recs"]} for f in U.project_files(project_folder()) if str(f["path"]) in cached]
+        today = time.strftime("%Y-%m-%d")
+        s = usage_totals(files, today, uc)
+        if not s["billed"]:
+            return "usage today billed=0"
+        top = U.group(files, "role", today, uc["untyped_types"])[0]
+        b = s["billed"]
+        return (f"usage today billed={fmt_num(b)} main={round(100 * s['main_billed'] / b)}% agents={round(100 * s['agent_billed'] / b)}% "
+                f"| top: {top['name']} {fmt_num(top['billed'])}")
+    except (OSError, ValueError, KeyError):
+        return ""
+
+
 def cmd_tokens(args) -> int:
     c = cfg()
+    if args.usage or args.by:
+        return cmd_usage(args)
     if args.workflow:
         return cmd_workflow(args, c)
     main = L.find_session(Path.home() / ".claude" / "projects", ROOT, args.session)
@@ -180,6 +265,8 @@ def register(sub):
     p.add_argument("--workflow", nargs="?", const="latest", metavar="RUN", help="per-agent billing of a workflow run (latest | wf_ID): first_ctx, cw, cr, out, billed, UNTYPED flag")
     p.add_argument("--agents", action="store_true", help="also the sub-agent summary and the heaviest agents")
     p.add_argument("--top", type=int, default=None, help="rows: metric groups / heaviest agents (default: tokens.top)")
+    p.add_argument("--usage", action="store_true", help="REAL billed usage from transcript `usage` (billed = in + cache write + out; cache_read separate)")
+    p.add_argument("--by", choices=["day", "role", "agent", "session"], help="--usage grouping (default day)")
     p.add_argument("--json", action="store_true", help="machine output")
     p.add_argument("--check", action="store_true", help="one `RESULT status=OK turns=N agents=M` line for `qa.py check`")
     p.set_defaults(func=cmd_tokens)

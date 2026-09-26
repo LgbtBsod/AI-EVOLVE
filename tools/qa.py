@@ -135,6 +135,15 @@ def _print_relay_hint():
         print(line)
 
 
+def _print_usage_line():
+    try:
+        from qa_plugins.tokens import usage_brief_line
+        line = usage_brief_line()
+    except Exception:  # noqa: BLE001 - the brief never fails on a side line
+        line = ""
+    line and print(line)
+
+
 def cmd_brief(args):
     graph = qa_graph.build()
     status = qa_graph.liveness(graph)
@@ -152,6 +161,7 @@ def cmd_brief(args):
     _print_recent_runs()
     if GOLDEN_FILE.exists():
         print(f"golden scenarios: {len(json.loads(GOLDEN_FILE.read_text(encoding='utf-8'))['scenarios'])} recorded - `qa.py golden`")
+    _print_usage_line()
     _print_relay_hint()
     print("next: `qa.py check` (one line per check) | `qa.py changed` | `qa.py ci` | CLAUDE.md for the tool table")
     return 0
