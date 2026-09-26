@@ -1,5 +1,5 @@
 {
-"n_lua": 438,
+"n_lua": 454,
 "cases": [
 [
 "\"x\"",
@@ -368,7 +368,7 @@
 []
 ],
 [
-"{\"damage_type\": \"physical\", \"kind\": \"immune\"}",
+"{\"distance\": 1.5, \"kind\": \"move\", \"mode\": \"knockback\", \"target\": \"enemy\"}",
 []
 ],
 [
@@ -540,6 +540,10 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 10}, \"every\": 1, \"flags\": [\"no_crit\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 4}}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 17.5}}",
 []
 ],
@@ -684,6 +688,10 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 3}, \"filter\": \"abilities\", \"kind\": \"nullify\", \"target\": \"enemy\"}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 3}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"enemy\", \"value\": {\"pct\": -12}}",
 []
 ],
@@ -704,7 +712,11 @@
 []
 ],
 [
-"{\"duration\": {\"flat\": 3}, \"kind\": \"mod\", \"op\": \"set\", \"stat\": \"move_speed\", \"target\": \"self\", \"value\": {\"flat\": 0}}",
+"{\"duration\": {\"flat\": 3}, \"kind\": \"mod\", \"op\": \"set\", \"stat\": \"move_speed\", \"target\": \"enemy\", \"value\": {\"flat\": 0}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"every\": 1, \"flags\": [\"no_crit\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 3}}",
 []
 ],
 [
@@ -864,7 +876,11 @@
 []
 ],
 [
-"{\"duration\": {\"flat\": 5}, \"kind\": \"mod\", \"op\": \"mul\", \"stat\": \"vision_range\", \"target\": \"self\", \"value\": {\"pct\": 0}}",
+"{\"duration\": {\"flat\": 5}, \"kind\": \"mod\", \"op\": \"mul\", \"stat\": \"vision_range\", \"target\": \"enemy\", \"value\": {\"pct\": 0}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"every\": 1, \"flags\": [\"no_crit\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 8}}",
 []
 ],
 [
@@ -984,6 +1000,10 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 8}, \"every\": 1, \"flags\": [\"no_crit\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 5}}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 8}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 15.0}}",
 []
 ],
@@ -1014,18 +1034,6 @@
 [
 "{\"duration\": {\"flat\": 8}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"max_hp\", \"target\": \"enemy\", \"value\": {\"pct\": -20}}",
 []
-],
-[
-"{\"every\": 1, \"flags\": [\"no_crit\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"flat\": 5}}",
-[
-"op: every (periodic op) is for deal/heal and needs duration"
-]
-],
-[
-"{\"every\": 1, \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"flat\": 3}}",
-[
-"op: every (periodic op) is for deal/heal and needs duration"
-]
 ],
 [
 "{\"every\": 1, \"kind\": \"deal\", \"stat\": \"hp\", \"value\": 1}",
@@ -1068,11 +1076,19 @@
 ]
 ],
 [
-"{\"filter\": \"abilities\", \"kind\": \"nullify\"}",
+"{\"filter\": \"abilities\", \"kind\": \"nullify\", \"target\": \"enemy\"}",
 []
 ],
 [
-"{\"filter\": \"actions\", \"kind\": \"nullify\"}",
+"{\"filter\": \"actions\", \"kind\": \"nullify\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"filter\": \"actions\", \"kind\": \"nullify\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"filter\": \"actions\", \"kind\": \"nullify\", \"target\": \"enemy\"}",
 []
 ],
 [
@@ -1112,6 +1128,10 @@
 [
 "op: kind=buff requires buff_id"
 ]
+],
+[
+"{\"kind\": \"cancel_technique\", \"target\": \"enemy\"}",
+[]
 ],
 [
 "{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 3, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 170}}",
@@ -1879,11 +1899,43 @@
 []
 ],
 [
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"damage_dark\", \"target\": \"enemy\", \"value\": {\"flat\": 0}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"damage_fire\", \"target\": \"enemy\", \"value\": {\"flat\": 0}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"damage_holy\", \"target\": \"enemy\", \"value\": {\"flat\": 0}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"damage_ice\", \"target\": \"enemy\", \"value\": {\"flat\": 0}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"damage_lightning\", \"target\": \"enemy\", \"value\": {\"flat\": 0}}",
+[]
+],
+[
 "{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"damage_lightning\", \"target\": \"self\", \"value\": {\"pct\": 20}}",
 []
 ],
 [
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"damage_physical\", \"target\": \"enemy\", \"value\": {\"flat\": 0}}",
+[]
+],
+[
 "{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"damage_physical\", \"target\": \"self\", \"value\": {\"pct\": 15}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"damage_poison\", \"target\": \"enemy\", \"value\": {\"flat\": 0}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"damage_taken\", \"target\": \"enemy\", \"value\": {\"flat\": 0}}",
 []
 ],
 [
@@ -1936,6 +1988,14 @@
 "op: unknown op 'bad'",
 "op: unknown stat 'attack' (use custom:<name> for new stats)"
 ]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"mul\", \"stat\": \"move_speed\", \"target\": \"enemy\", \"value\": {\"flat\": 0.6}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"set\", \"stat\": \"move_speed\", \"target\": \"enemy\", \"value\": {\"flat\": 0}}",
+[]
 ],
 [
 "{\"kind\": \"mod\", \"op\": \"sub\", \"stat\": \"defense\", \"target\": \"enemy\", \"value\": {\"flat\": 2}}",

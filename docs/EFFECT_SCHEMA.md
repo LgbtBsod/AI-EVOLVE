@@ -269,3 +269,7 @@ python -m tools.effect_schema.itemcheck --forge 300 --seed 5 --hostile   # ис�
 Полная сгенерированная версия лежит в `lua_content/items/sorrow_of_berserk.lua`. Её собирает
 `ui_logic.to_lua(item)` из `tools/effect_schema/catalog.py`; после правки шаблона Lua нужно
 перегенерировать, иначе упадёт `test_lua_item_matches_catalog`.
+
+## Статусы (`lua_content/statuses/core_statuses.lua`, `src/effects/statuses.py`)
+
+Статус - строка данных из существующих ops (новых видов нет): `duration` (число задаёт длительность timed-операциям без своей), `ops` (`target = "enemy"` = носитель, источник - тот, кто вешает), `stack = { max, add }` (повторное наложение: стаки += n до max, таймер заново; `add` прибавляется к `value.flat` КАЖДОЙ операции за стак: DoT = base + add * стаки), `alias`, `cc_priority` (сильнейший CC побеждает, `statuses.cc_strongest`), `cc_damage_mult` (данные; применение - S2). Наложение: `EffectManager.apply_status(target, id, source, stacks=1)` и `EffectRuntime.apply_status(id, t, stacks=1)` - один и тот же `statuses.plan`, дальше обычный `run_ops`. Сопротивление: стат носителя `status_resist_<id>` (>=100 иммунитет; иначе один бросок rng менеджера, только если стат > 0). Живой контент статусов пока не вешает. Спека: `tests/test_statuses_spec.py` (оба хоста). Планируемые kinds в строках amaterasu/tsukuyomi/infinity не валидируются.

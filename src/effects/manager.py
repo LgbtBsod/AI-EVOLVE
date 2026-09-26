@@ -422,6 +422,7 @@ class EffectManager:
         self.telegraphs: list[Telegraph] = []
         self._handlers: list[Callable[[HitInfo], None]] = []
         self._depth = 0
+        self._status_book: dict = {}     # (id сущности, status id) -> (стаки, до какого времени)
 
     # ---------------------------------------------------------------- registry
     def register(self, entity, faction: str, abilities: Iterable[str] = ()) -> EntityState:
@@ -502,6 +503,24 @@ class EffectManager:
             self.telegraphs.remove(tg)
             if is_alive(tg.caster) and self.state(tg.caster):
                 self._execute(self.state(tg.caster), tg.ability, tg.target, center=(tg.x, tg.y))
+
+    def apply_status(self, target, status_id: str, source=None, stacks: int = 1) -> int:
+        """Повесить статус из lua_content/statuses (данные) на цель: стаки += stacks до cap, таймер заново.
+        Идёт тем же конвейером ops (_run_ops), что и способности. Возвращает число стаков."""
+        from . import statuses
+        row = statuses.get_status(status_id)
+        tgt_st, src_st = self.state(target), self.state(source if source is not None else target)
+        if tgt_st is None or src_st is None:
+            return 0
+        if statuses.resisted(tgt_st.unit, row["id"], self.rng.random):
+            return 0
+        pl = statuses.plan(self._status_book, (id(target), row["id"]), row, self.now, stacks)
+        src = f"status:{row['id']}"
+        tgt_st.periodic = [p for p in tgt_st.periodic if p["ability"] != src]
+        for bid in statuses.nullify_buffs(pl.ops):
+            tgt_st.unit.buffs.pop(bid, None)
+        self._run_ops(src_st, pl.ops, target, src, (row["damage_type"],) if row.get("damage_type") else ())
+        return pl.stacks
 
     def _run_periodic(self, st: EntityState) -> None:
         keep = []

@@ -80,7 +80,7 @@ Risk for 12-16: neutral until content applies two statuses; reaction uses existi
 
 ## 3. Slices (order by value/risk)
 
-1. **S1 (S): statuses as data.** Rows 1-9, 27 in `core_statuses.lua` with real durations/ticks, plus a loader that reads them (currently unread). Test: `tests/test_statuses_spec.py` on `EffectRuntime`. Risk: neutral (rows unused by live content).
+1. **S1 (S): statuses as data. DONE 2026-09-26** (`lua_content/statuses/core_statuses.lua`, `src/effects/statuses.py`, `EffectManager.apply_status` / `EffectRuntime.apply_status`, `tests/test_statuses_spec.py`). Deviations: stack numbers via `stack = {max, add}` (add to `value.flat` of every op, no `mark` op needed); `frozen` dropped, `disoriented` = alias of `blind`; `cc_priority` is DATA per CC row (decision Q4); `chance_resist` = carrier stat `status_resist_<id>` (>=100 immune, else one rng draw only when > 0: traces unchanged); `cc_damage_mult` is a data field only (application = S2, damage hook); micro_stun row added (`cancel_technique` + `nullify abilities`, 0.2 s); no boss-immunity (spec rows do not require it); a status applied by two sources on one target keeps separate mod layers (key includes the source); EffectRuntime does not expire timed mods on the dummy (host divergence, APP_SPECIFICS row 5), so mod expiry is specified on the manager only. Original plan: Rows 1-9, 27 in `core_statuses.lua` with real durations/ticks, plus a loader that reads them (currently unread). Test: `tests/test_statuses_spec.py` on `EffectRuntime`. Risk: neutral (rows unused by live content).
 2. **S2 (M): stacking + resist.** Rows 10, 11, 29 (`cc_duration_mult` stat). Test: stack cap/refresh spec. Risk: touches `buff` duration path (`manager.py:851`), run `qa.py golden`.
 3. **S3 (M): combo reactions as Lua triggers.** Rows 12-16 with existing ops only. Test: 5 specs (one per reaction) + `agent_play` scenario "freeze then burn". Risk: neutral until content applies pairs; verify depth cap (`MAX_EVENT_DEPTH=6`, `manager.py:75`).
 4. **S4 (L): toughness/break.** Rows 17-26, 28, 30: new state on entity, op `toughness_damage`, matrix in `lua_content/toughness.lua`, break -> `broken` mod (reuses `damage.py:175`), revive dead event `on_shield_break`. Test: executable spec + play "spawn boss; hit until break; expect broken dmg x1.15". Risk: HIGH for traces if wired into `_damage` (dice order, `manager.py:1081-1090`); wire behind a Lua flag default off, `qa.py determinism`.
@@ -98,10 +98,12 @@ Tag first: `git tag archive/pre-legacy-islands` (then `git rm -r`).
 - Nested `AI-EVOLVE/` and `game/`: only self-imports (APP_SPECIFICS 3.4); nothing to rewire, `game/core/{toughness,effects}` need the same specs as `test_effects_toughness_*`.
 - Also update: `docs/APP_SPECIFICS.md` rows 17/18, `tests/qa_known_failures.json`, `lua_content/qa.lua` tools rows for deleted tools; run `qa.py dead`, `qa.py hygiene`, `qa.py check --all`.
 
-## 5. Open questions for the owner
+## 5. Owner decisions
 
-1. Balance: keep legacy numbers (bleed 5+2/stack, burn 8+3, break x1.25 vs canon x1.15) or re-tune to the canon damage scale? Three break multipliers conflict (1.15 / 1.25 / 2.0).
-2. Weaken and vulnerable have no numbers in legacy: choose per-stack percent (suggest weaken -10%, vulnerable +10%), or drop them?
-3. Which of the three bars survive: toughness (100, 5 s break), stagger (500, 1.5 s break) or the 4-state constants table? Suggest one bar, and drop frozen/recovering/weakened states.
-4. Drop chance-resist, cc_damage_mult, unused priority list, and threaded break recovery (all dead or nondeterministic in legacy)?
-5. Combos: reactions never dealt damage in legacy. Real true damage (50/80/60), area for explosion, and hemorrhage/overload (unreachable: same-type skip) kept or dropped?
+1. DECIDED 2026-09-26: keep legacy numbers (bleed 5+2/stack, burn 8+3 ...). Break multiplier: one value, canon x1.15 stays (row 23).
+2. DECIDED 2026-09-26: weaken -10% damage dealt per stack (cap 3), vulnerable +10% damage taken per stack (cap 2).
+3. DECIDED 2026-09-26: ONE bar (toughness 100, 5 s break); frozen/recovering/weakened states dropped (rows 4, 18, 20, 24, 26 = merged into the one bar).
+4. DECIDED 2026-09-26: KEEP the "dead" features: chance-resist, cc_damage_mult, the CC priority list, break recovery (deterministic: a game-clock timer, never a thread).
+5. DECIDED 2026-09-26: KEEP combo reactions: real true damage 50/80/60, `area` for explosion, hemorrhage/overload kept and made reachable (the legacy same-type skip must NOT block them).
+
+Consequences for the slices: S3 - hemorrhage/overload fire on same-type stacking (e.g. at cap via `detonate`), not blocked by an "A != B" rule; S4 - a single toughness bar, break recovery on the game clock (`EffectManager.now`); S2 - `cc_damage_mult` needs a hook in the damage path (attacker bonus vs a CC'd target) and `cc_duration_mult`.

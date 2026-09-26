@@ -817,6 +817,21 @@ class EffectRuntime:
         # каскад: attack порождает attack_hit только через attack();
         # здесь — ре-ентрансные события из ops (например kill внутри fail-ветки)
 
+    def apply_status(self, status_id: str, t: float = 0.0, stacks: int = 1) -> int:
+        """Статус из lua_content/statuses на манекен (enemy): те же данные и правило стаков, что у EffectManager."""
+        from . import statuses
+        row = statuses.get_status(status_id)
+        if statuses.resisted(self.enemy or self.owner, row["id"], lambda: 0.0):   # no rng in the room: >=100 only
+            return 0
+        book = self.__dict__.setdefault("_status_book", {})
+        pl = statuses.plan(book, row["id"], row, t, stacks)
+        src = f"status:{row['id']}"
+        self._periodic = [p for p in self._periodic if p["src"] != src]
+        for bid in statuses.nullify_buffs(pl.ops):
+            (self.enemy or self.owner).buffs.pop(bid, None)
+        self.run_ops(pl.ops, self.context(), t, src)
+        return pl.stacks
+
     def tick(self, t: float, dt: float):
         """regen + DoT/HoT + duration-истечение баффов + tick-события."""
         self.refresh_passives(t)
