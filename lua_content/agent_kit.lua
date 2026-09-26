@@ -14,9 +14,9 @@ return {
   hard_turns_factor = 1.2,                           -- frontmatter maxTurns = max_calls * factor: a backstop above the soft budget (turns <= calls; the agent needs room to write its handoff)
   models = { "sonnet", "opus", "haiku", "fable" },   -- valid `model` names of the Agent / Workflow options and of `model:` in .claude/agents/*.md
   efforts = { "low", "medium", "high", "xhigh", "max" },
-  planned = { "pack", "ckpt" },                      -- `qa.py X` named in the docs before X exists (roadmap steps 4 and 5); `route --check` warns when one exists and should be dropped here
+  planned = { "pack" },                              -- `qa.py X` named in the docs before X exists (roadmap steps 4 and 5); `route --check` warns when one exists and should be dropped here
 
-  handoff = "at the cap or after ~10 calls without a green check write the handoff brief and stop.",   -- HOOK relay (roadmap step 4): becomes `qa.py ckpt "step done" --next "..."` here and in the role files
+  handoff = "every ~10 calls and at the cap run `qa.py ckpt \"done\" --next \"...\"`; at the cap print `RELAY: continue with qa.py resume` as the LAST line and stop.",   -- relay protocol (roadmap step 4)
   report = {
     max_words = 250,
     lines = { "files:", "results:", "unfinished:" },  -- fixed lines of every report; a role may put one more line in front (`report_extra`)

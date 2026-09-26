@@ -16,7 +16,7 @@ WORK
 STOP WHEN: parity green both ways (Rust and forced twin), cargo test green, `qa.py check` no FAIL; or the toolchain is missing (report it, do not fake the result).
 
 TURN BUDGET: 45 tool calls (soft). At the cap or after ~10 calls without a green check: write the handoff brief (twin state / Rust state / next command) and stop.
-<!-- HOOK relay (roadmap step 4): replace the handoff brief by `qa.py ckpt "step done" --next "..."` -->
+RELAY: run `qa.py ckpt "step done" --next "..."` about every 10 calls and at the cap; at the cap write the handoff (`ckpt ... --next`), print `RELAY: continue with qa.py resume` as the LAST line of your report and stop. The caller continues with `qa.py prompt ROLE --task "continue: $(qa.py resume --brief)"`.
 
 REPORT (<= 250 words, exactly these lines):
 files: <files you changed, one line>

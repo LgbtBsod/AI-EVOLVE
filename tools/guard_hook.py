@@ -672,6 +672,30 @@ def render(d: Decision) -> tuple[int, str, str]:
     return 0, "", ""
 
 
+SESSION_CMDS = {"SessionStart": ["resume"], "Stop": ["ckpt", "--auto"], "SubagentStop": ["ckpt", "--auto"]}
+
+
+def session_event(raw, env=None, root=ROOT, timeout: int = 8) -> str:
+    """SessionStart -> the `qa.py resume` text as additionalContext (empty when clean); Stop/SubagentStop -> `qa.py ckpt --auto`. Never raises, '' = nothing to say."""
+    env = os.environ if env is None else env
+    if (env.get("AI_EVOLVE_GUARD") or "").strip().lower() in ("off", "0", "false", "no"):
+        return ""
+    try:
+        payload = loads(raw)
+        event = payload.get("hook_event_name") if isinstance(payload, dict) else None
+        cmd = SESSION_CMDS.get(event)
+        if cmd is None:
+            return ""
+        import subprocess
+        run = subprocess.run([sys.executable, os.path.join(root, "tools", "qa.py"), *cmd], cwd=root, capture_output=True, timeout=timeout, check=False)
+        text = run.stdout.decode("utf-8", "replace").strip()
+        if event != "SessionStart" or not text:
+            return ""
+        return dumps({"hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "Unfinished work (qa.py resume):\n" + text}})
+    except Exception:  # noqa: BLE001 - fail open, like the read guard
+        return ""
+
+
 def main() -> int:
     if sys.argv[1:2] == ["--compile"]:                       # child of _compile_in_child: `--compile ROOT OUT`
         compile_rules(*sys.argv[2:4])
@@ -679,6 +703,10 @@ def main() -> int:
     try:
         raw = sys.stdin.buffer.read()
     except OSError:
+        return 0
+    session = session_event(raw)
+    if session:
+        sys.stdout.write(session)
         return 0
     code, out, err = render(decide(raw))
     try:

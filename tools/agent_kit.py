@@ -184,7 +184,7 @@ def _role_file_problems(cfg: dict, role: dict, root: Path) -> list[str]:
     if not budget or int(budget.group(1)) != role["max_calls"]:
         out.append(f"{rel}: `TURN BUDGET: N` must equal max_calls={role['max_calls']} (found {budget.group(1) if budget else 'none'})")
     out += [f"{rel}: report line `{ln}` is missing" for ln in report_lines(cfg, role) if not re.search(rf"^{re.escape(ln)}", text, re.MULTILINE)]
-    return out + ([] if "HOOK relay" in text else [f"{rel}: the `HOOK relay` marker (roadmap step 4) is missing"])
+    return out + ([] if "RELAY: continue with qa.py resume" in text else [f"{rel}: the relay line (`RELAY: continue with qa.py resume`, roadmap step 4) is missing"])
 
 
 def role_problems(cfg: dict, role: dict, root: Path) -> list[str]:

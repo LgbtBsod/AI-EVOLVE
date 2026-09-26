@@ -321,6 +321,8 @@ return {
 
   -- ===== repo hygiene (tools/repo_hygiene.py; `qa.py hygiene`) =====
   -- Every list is in .gitignore syntax (trailing `/` = directories, `*` `?` `[..]` per name, `**` = any depth, `!` re-includes).
+  -- `qa.py ckpt` / `qa.py resume` (relay of short agents): journal dev_probe_output/qa/journal.jsonl, snapshots refs/qa/ckpt/N
+  ckpt = { keep = 20, history_tail_bytes = 30000, hook_timeout_s = 8 },
   hygiene = {
     max_file_kb = 1024,          -- a tracked file above this fails (assets that must be bigger: list them in `allow`)
     allow = {},
@@ -378,6 +380,10 @@ return {
       { id = "quality", command = "python tools/qa.py quality [--worst N|--explain RULE]", replaces = "running ruff, radon, vulture, import-linter separately", output = "qa_report line + worst-N table", group = "verify", cost = "low" },
       { id = "guard", command = "python tools/qa.py guard [--stats|--explain|--simulate FILE.json|--compile|--install|--uninstall]", purpose = "read guard (Claude Code hooks): outline instead of a big unranged Read, one-line stub for an unchanged re-read, digest command for raw logs, batch nudge",
         when = "an agent burns context on big or repeated reads; --stats shows the blocks and the tokens kept out of the context", replaces = "hoping agents read with offset/limit and batch their calls", output = "qa_report line (+ per-rule lines for --stats)", group = "read", cost = "low" },
+      { id = "ckpt", command = "python tools/qa.py ckpt \"done\" --next \"next action\" [--files a,b] [--agent NAME] [--auto]", purpose = "checkpoint of unfinished work: one journal line + a safety snapshot (refs/qa/ckpt/N, working tree untouched), the last 20 kept",
+        when = "about every 10 tool calls and at the call cap of an agent (relay), before a risky step", replaces = "a hand-written handoff brief", output = "one line: ckpt #N saved", group = "build", cost = "low" },
+      { id = "resume", command = "python tools/qa.py resume [--brief|--check|--diff N|--restore N [--apply]]", purpose = "where the last session stopped (<= 6 lines, silent when clean): dirty, orphan modules, broken files, last ckpt, SAFE/RISKY/BROKEN",
+        when = "start of a session or of a relay agent (continue: $(qa.py resume --brief)), after a limit crash", replaces = "re-exploring the repo to find out what was half done", output = "<= 6 lines", group = "build", cost = "low" },
       { id = "prompt", command = "python tools/qa.py prompt ROLE --task \"...\" [--files a,b] [--done \"...\"] [--pack] | --workflow ROLE", purpose = "a SHORT agent prompt (<= 400 tokens): the shared context is a repo file (docs/agent_context/), the prompt only points at it and states TASK / SCOPE / DONE WHEN",
         when = "before every Agent call or Workflow script (agent, prompt, subagent, context)", replaces = "hand-typing a 1.5-6k-char agent prompt or an inlined CONTEXT block of a Workflow script", output = "the prompt on stdout, one size line on stderr", group = "build", cost = "low" },
       { id = "route", command = "python tools/qa.py route [STAGE|--list|--check|--write-agents]", purpose = "model / effort / tool-call budget per stage of a Workflow or Agent call (cheap for tests and logs, strong for design and review); generates .claude/agents/*.md",

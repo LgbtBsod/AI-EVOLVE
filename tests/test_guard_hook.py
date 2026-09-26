@@ -386,13 +386,13 @@ def _settings():
 def test_install_is_idempotent_and_keeps_foreign_settings():
     once = GP.install(_settings(), "${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe")
     assert GP.install(once, "${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe") == once
-    assert once["permissions"] == _settings()["permissions"] and once["hooks"]["Stop"] == _settings()["hooks"]["Stop"]
+    assert once["permissions"] == _settings()["permissions"] and once["hooks"]["Stop"][0] == _settings()["hooks"]["Stop"][0]
     pre = once["hooks"]["PreToolUse"]
     assert pre[0] == _settings()["hooks"]["PreToolUse"][0] and pre[1]["matcher"] == "Read|Grep|Glob|Bash"
     hook = pre[1]["hooks"][0]
     assert hook == {"type": "command", "command": "${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe",
                     "args": ["-S", "-E", "${CLAUDE_PROJECT_DIR}/tools/guard_hook.py"], "timeout": 10}
-    assert GP.installed_events(once) == ["PreToolUse", "PreCompact"]
+    assert sorted(GP.installed_events(once)) == sorted(["PreToolUse", "PreCompact", "SessionStart", "Stop", "SubagentStop"])
     assert GP.uninstall(once) == _settings()                                           # only OUR entries went away
     assert GP.uninstall(GP.uninstall(once)) == _settings()
 

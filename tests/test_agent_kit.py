@@ -24,7 +24,7 @@ pytestmark = pytest.mark.skipif(not lua_bridge.available_backends(), reason="no 
 VALID_MODELS = {"sonnet", "opus", "haiku", "fable"}          # the `model` enum of the Agent tool / Workflow option / .claude/agents frontmatter
 CHEAP_STAGES = {"run-tests", "summarise-log", "mechanical-edit", "grep-research"}
 STRONG_STAGES = {"design", "judge", "adversarial-review"}
-KNOWN = {"check", "test", "ctx", "tools", "brief", "prompt", "route", "changed", "lua", "item", "ci", "golden", "determinism", "quality", "guard"}
+KNOWN = {"check", "test", "ctx", "tools", "brief", "prompt", "route", "changed", "lua", "item", "ci", "golden", "determinism", "quality", "guard", "ckpt", "resume"}
 
 
 @pytest.fixture(scope="module")
@@ -69,7 +69,7 @@ def test_role_files_are_short_and_state_budget_hook_and_contract(real):
         text = (ROOT / AK.role_file(real, name)).read_text(encoding="utf-8")
         assert len(text.splitlines()) <= 35, name
         assert f"TURN BUDGET: {int(role['max_calls'])} tool calls" in text
-        assert "HOOK relay" in text and "handoff brief" in text
+        assert "RELAY: continue with qa.py resume" in text and "ckpt" in text
         assert all(re.search(rf"^{re.escape(ln)}", text, re.MULTILINE) for ln in AK.report_lines(real, role)), name
 
 
@@ -148,7 +148,7 @@ def test_unknown_placeholder_and_oversize_template(cfg):
 
 def test_unknown_command_fails_and_planned_command_that_exists_warns(cfg):
     fake = set(KNOWN)
-    fails, warns = AK.command_problems(cfg, ROOT, known=fake)                      # `pack` and `ckpt` are planned: no failure
+    fails, warns = AK.command_problems(cfg, ROOT, known=fake)                      # `pack` is planned: no failure
     assert fails == [] and warns == []
     fails, _ = AK.command_problems(cfg, ROOT, known=fake - {"ci"})
     assert any("`qa.py ci` is named in the agent context" in f for f in fails)
@@ -170,7 +170,7 @@ def test_prompt_is_short_points_at_the_context_and_carries_the_contract(real):
     lines = text.splitlines()
     assert lines[0].startswith("Read docs/agent_context/preamble.md and docs/agent_context/implementer.md first")
     assert "TASK: Implement roadmap step 2." in lines and "SCOPE (files you may touch): tools/a.py, tests/test_a.py" in lines and "DONE WHEN: the test passes" in lines
-    assert any(ln.startswith("BUDGET: 45 tool calls") and "handoff brief" in ln for ln in lines)
+    assert any(ln.startswith("BUDGET: 45 tool calls") and "ckpt" in ln for ln in lines)
     report = next(ln for ln in lines if ln.startswith("REPORT:"))
     assert "250 words" in report and "files:" in report and "results:" in report and "unfinished:" in report and "verbatim" in report
     assert AK.tokens(real, text) < 200 and len(text) < 900

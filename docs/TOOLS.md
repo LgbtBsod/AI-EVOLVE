@@ -67,8 +67,10 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | tool | command | purpose | replaces | output | cost |
 |---|---|---|---|---|---|
 | `ci` | `python tools/qa.py ci [--wait]` | GitHub Actions run via gh: verdict + only the essentials of the failed step | gh run view --log | verdict + failing step | low |
+| `ckpt` | `python tools/qa.py ckpt "done" --next "next action" [--files a,b] [--agent NAME] [--auto]` | checkpoint of unfinished work: one journal line + a safety snapshot (refs/qa/ckpt/N, working tree... | a hand-written handoff brief | one line: ckpt #N saved | low |
 | `doctor` | `python tools/qa.py doctor` | missing dependencies and the exact command that fixes each | trial-and-error pip installs after an ImportError | prose | low |
 | `prompt` | `python tools/qa.py prompt ROLE --task "..." [--files a,b] [--done "..."] [--pack] \| --workflow ROLE` | a SHORT agent prompt (<= 400 tokens): the shared context is a repo file (docs/agent_context/), the prompt... | hand-typing a 1.5-6k-char agent prompt or an inlined CONTEXT block of a Workflow script | the prompt on stdout, one size line on stderr | low |
+| `resume` | `python tools/qa.py resume [--brief\|--check\|--diff N\|--restore N [--apply]]` | where the last session stopped (<= 6 lines, silent when clean): dirty, orphan modules, broken files, last... | re-exploring the repo to find out what was half done | <= 6 lines | low |
 | `route` | `python tools/qa.py route [STAGE\|--list\|--check\|--write-agents]` | model / effort / tool-call budget per stage of a Workflow or Agent call (cheap for tests and logs, strong... | guessing the model and effort of each stage | qa_report line + table | low |
 ### content - Lua data and items
 | tool | command | purpose | replaces | output | cost |

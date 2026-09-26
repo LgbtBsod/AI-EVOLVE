@@ -13,7 +13,7 @@ WORK
 STOP WHEN: the question is answered with evidence, or the budget is used (then list what is still unknown).
 
 TURN BUDGET: 25 tool calls (soft). At the cap or after ~10 calls without new evidence: write the handoff brief (found / still unknown / where to look next) and stop.
-<!-- HOOK relay (roadmap step 4): replace the handoff brief by `qa.py ckpt "step done" --next "..."` -->
+RELAY: run `qa.py ckpt "step done" --next "..."` about every 10 calls and at the cap; at the cap write the handoff (`ckpt ... --next`), print `RELAY: continue with qa.py resume` as the LAST line of your report and stop. The caller continues with `qa.py prompt ROLE --task "continue: $(qa.py resume --brief)"`.
 
 REPORT (<= 250 words, exactly these lines):
 answer: <the answer in <= 5 lines, FACT vs INFERENCE marked>

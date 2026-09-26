@@ -32,6 +32,54 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe",
+            "args": [
+              "-S",
+              "-E",
+              "${CLAUDE_PROJECT_DIR}/tools/guard_hook.py"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe",
+            "args": [
+              "-S",
+              "-E",
+              "${CLAUDE_PROJECT_DIR}/tools/guard_hook.py"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe",
+            "args": [
+              "-S",
+              "-E",
+              "${CLAUDE_PROJECT_DIR}/tools/guard_hook.py"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }
