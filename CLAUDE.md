@@ -99,7 +99,7 @@ today's violations are the baseline (`tests/quality_baseline.json`: per metric, 
   tactic (`src/gameplay/enemy_ai.py`, Rust bandit in `tactics.py`; tools use `AI_EVOLVE_TACTICS_MEMORY=off`). The hero learns "retreat" vs "press" (`hero_mind.py`, `AI_EVOLVE_HERO_MIND=off`).
 - **Workflows:** `python tools/qa.py wf new NAME` before writing one, `qa.py wf estimate SCRIPT` before running it; EVERY `agent()` gets `agentType` (explorer|implementer|verifier|reviewer): untyped = 67k cold start, typed = 12k (guard denies untyped; `qa.py tokens --workflow` audits a run).
 - Usage limit / crash: `qa.py relay install` once (notify mode; `--mode headless` opt-in, narrow tools, never commits), then `qa.py relay status`; `tick` costs 0 tokens when idle.
-- Spawn agents with `python tools/qa.py prompt ROLE --task "..." [--files a,b]` (short prompt; shared context = `docs/agent_context/`), not long hand-typed prompts; model/effort/turn budget per stage: `python tools/qa.py route --list`.
+- Spawn agents with `python tools/qa.py prompt ROLE --task "..." [--files a,b]` (short prompt; shared context = `docs/agent_context/`), not long hand-typed prompts; model/effort/turn budget per stage: `python tools/qa.py route --list`. Model policy (owner): tests and simple launches = haiku (`verifier`, stages `run-tests`/`run-scenarios`), everything else sonnet, opus never; a one-line command run inline beats any agent.
 
 ## Where things live
 

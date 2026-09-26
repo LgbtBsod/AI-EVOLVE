@@ -2,7 +2,7 @@
 name: reviewer
 description: "Adversarial review of a diff: tries to break it, reports defects with file:line and a repro. Read-only."
 tools: Read, Grep, Glob, Bash
-model: opus
+model: sonnet
 effort: high
 maxTurns: 30
 ---

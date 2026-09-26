@@ -22,7 +22,7 @@ import qa
 pytestmark = pytest.mark.skipif(not lua_bridge.available_backends(), reason="no Lua backend")
 
 VALID_MODELS = {"sonnet", "opus", "haiku", "fable"}          # the `model` enum of the Agent tool / Workflow option / .claude/agents frontmatter
-CHEAP_STAGES = {"run-tests", "summarise-log", "mechanical-edit", "grep-research"}
+CHEAP_STAGES = {"run-tests", "summarise-log", "run-scenarios", "mechanical-edit", "grep-research"}
 STRONG_STAGES = {"design", "judge", "adversarial-review"}
 KNOWN = {"check", "test", "ctx", "tools", "brief", "prompt", "route", "changed", "lua", "item", "ci", "golden", "determinism", "quality", "guard", "ckpt", "resume", "sym", "q", "tokens", "pack", "static", "wf", "ship", "new", "relay"}
 
@@ -55,7 +55,7 @@ def test_models_are_the_tool_enum_and_routes_follow_the_cost_rule(real):
     by_stage = AK.routes(real)
     assert CHEAP_STAGES | STRONG_STAGES <= set(by_stage)
     assert all(by_stage[s]["model"] in {"haiku", "sonnet"} and by_stage[s]["effort"] == "low" for s in CHEAP_STAGES)
-    assert all(by_stage[s]["model"] == "opus" and by_stage[s]["effort"] == "high" for s in STRONG_STAGES)
+    assert all(by_stage[s]["model"] == "sonnet" and by_stage[s]["effort"] == "high" for s in STRONG_STAGES)
     assert all(by_stage[s]["model"] == "sonnet" and by_stage[s]["effort"] == "medium" for s in ("implement", "refactor", "rust-kernel"))
 
 
@@ -101,8 +101,9 @@ def test_bad_model_name_is_reported(cfg):
 
 def test_bad_effort_and_zero_budget_are_reported(cfg):
     cfg["roles"][1]["max_calls"] = 0
-    cfg["routes"][2]["max_calls"] = -3
-    cfg["routes"][3]["effort"] = "ultra"
+    by_stage = {r["stage"]: r for r in cfg["routes"]}
+    by_stage["mechanical-edit"]["max_calls"] = -3
+    by_stage["grep-research"]["effort"] = "ultra"
     text = "\n".join(problems(cfg))
     assert "role verifier: max_calls must be > 0" in text and "route mechanical-edit: max_calls must be > 0" in text and "route grep-research: effort 'ultra'" in text
 
@@ -304,7 +305,7 @@ def test_stale_detection_and_rewrite(cfg, tmp_path):
     assert len(AK.write_agents(cfg, tmp_path)) == 7
     assert AK.stale_agents(cfg, tmp_path) == [] and AK.write_agents(cfg, tmp_path) == []      # idempotent
     agent = tmp_path / ".claude" / "agents" / "verifier.md"
-    agent.write_text(agent.read_text(encoding="utf-8").replace("model: haiku", "model: opus"), encoding="utf-8", newline="\n")
+    agent.write_text(agent.read_text(encoding="utf-8").replace("model: haiku", "model: sonnet"), encoding="utf-8", newline="\n")
     assert AK.stale_agents(cfg, tmp_path) == [".claude/agents/verifier.md differs from lua_content/agent_kit.lua"]
     agent.write_bytes(AK.agent_text(cfg, AK.roles(cfg)["verifier"]).replace("\n", "\r\n").encode())
     assert AK.stale_agents(cfg, tmp_path) == []                              # a CRLF checkout is not drift
@@ -342,7 +343,7 @@ def test_route_check_fails_on_stale_agents_and_write_agents_repairs(cfg, tmp_pat
 def test_route_list_shows_every_stage_and_role(capsys, real):
     code, out, _ = run(capsys, "route", "--list")
     lines = out.splitlines()
-    assert code == 0 and lines[0].startswith("ok     route stages=12 roles=7 models=haiku,sonnet,opus")
+    assert code == 0 and lines[0].startswith("ok     route stages=13 roles=7 models=haiku,sonnet")
     for stage in AK.routes(real):
         assert any(ln.split()[:1] == [stage] for ln in lines), stage
     assert lines[1].split()[:3] == ["stage", "role", "model"] and len(lines) <= 30
@@ -350,20 +351,26 @@ def test_route_list_shows_every_stage_and_role(capsys, real):
 
 def test_route_row_and_unknown_stage(capsys):
     code, out, _ = run(capsys, "route", "adversarial-review")
-    assert code == 0 and "role=reviewer model=opus effort=high calls=25" in out and "why:" in out
+    assert code == 0 and "role=reviewer model=sonnet effort=high calls=25" in out and "why:" in out
     code, out, _ = run(capsys, "route", "implment")
     assert code == 2 and out.startswith("ERROR") and "closest: implement" in out
 
 
 def test_route_check_passes_on_the_repo(capsys):
     code, out, _ = run(capsys, "route", "--check")
-    assert code == 0 and out.startswith("ok     route roles=7 routes=12 agents=7 fresh=yes")
+    assert code == 0 and out.startswith("ok     route roles=7 routes=13 agents=7 fresh=yes")
 
 
 def test_route_check_result_is_the_machine_form_and_the_check_is_declared(capsys):
     code, out, _ = run(capsys, "route", "--check", "--result")
-    assert code == 0 and out.strip().splitlines()[-1].startswith("RESULT status=OK roles=7 routes=12 agents=7 fresh=yes")
+    assert code == 0 and out.strip().splitlines()[-1].startswith("RESULT status=OK roles=7 routes=13 agents=7 fresh=yes")
     from probe_settings import qa_settings
     check = next(c for c in qa_settings()["checks"] if c["name"] == "agent_kit")
     assert check["cmd"] == "python tools/qa.py route --check --result" and check["parse"] == "result_line"
     assert {"docs/agent_context/**", ".claude/agents/**", "lua_content/agent_kit.lua"} <= set(check["watches"])     # a Markdown-only edit selects the check
+
+
+def test_no_role_or_route_uses_opus(real):
+    # owner rule 2026-09-26: opus is too expensive - reviews, design and judging run on sonnet with high effort
+    assert all(r["model"] != "opus" for r in real["roles"])
+    assert all(r["model"] != "opus" and r.get("escalate") != "opus" for r in AK.routes(real).values())
