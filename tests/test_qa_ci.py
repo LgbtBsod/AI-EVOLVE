@@ -306,3 +306,43 @@ def test_parser_arguments():
     ci.register(p.add_subparsers())
     a = p.parse_args(["ci", "--sha", "HEAD", "--wait", "--lines", "12", "--workflow", "CI"])
     assert (a.sha, a.wait, a.lines, a.workflow, a.run) == ("HEAD", True, 12, "CI", None)
+
+
+# ---------------------------------------------------------------- essentials characterization (frozen before the table refactor)
+
+_ESS_SYNTH = [
+    ["FAILED a::t1 - boom", "FAILED a::t1 - dup", "FAILED b::t2", "FAILED c", "FAILED d", "FAILED e", "FAILED f", "FAILED g - x"],
+    ["E   assert 1 == 2", "E   Full diff:", "E   - a", "E   + b", "x.py:3: AssertionError"],
+    ["E   assert x", "E     ? ^", "E     - a", "E     + b", "E     + c", "E     + d", "E", "f.py:9: Boom"],
+    ["Traceback (most recent call last):", '  File "/x/work/r/r/a.py", line 3, in f', "ValueError: bad",
+     "Traceback (most recent call last):", '  File "C:\a\r\r\b.py", line 4, in g', "    x()"],
+    ["error[E0308]: mismatched", "  --> src/a.rs:3:5", "error: could not compile `x`", "error: other",
+     "error[E1]: no loc", "thread 'm' panicked at src/a.rs:9:1:", "assertion failed",
+     "test a::b ... FAILED", "test c ... FAILED"],
+    ["ERROR: one", "##[error]two", "##[error]Process completed with exit code 1", "Error: one", "FATAL: f", "fatal: g", "ERROR: h"],
+    ["RESULT a ok", "QA verdict=FAIL", "FAIL   x dur=1s", "ERROR  y a dur=2s", "RESULT a ok"],
+    ["===== 3 passed, 1 failed in 2.50s =====", "other in 1s"],
+    ["nothing", "##[group]x", "", "tail1", "tail2", "tail3", "tail4", "tail5"],
+    [],
+]
+_ESS_GOLDEN = FIX / "essentials_golden.json"
+
+
+def _ess_cases():
+    cases = {f"synth{i}": s for i, s in enumerate(_ESS_SYNTH)}
+    for p in sorted(FIX.glob("*.log")):
+        entries = ci.clean_log(p.read_text(encoding="utf-8"))
+        cases[p.stem] = [t for _j, _s, t in entries]
+        for (job, step), ls in ci.group_steps(entries).items():
+            cases[f"{p.stem}|{job}|{step}"] = ls
+    return {k: [list(x) for x in ci.essentials(v)] for k, v in cases.items()}
+
+
+def test_essentials_matches_frozen_golden(monkeypatch):
+    got = _ess_cases()
+    import os
+    if os.environ.get("ESSENTIALS_RECORD"):
+        _ESS_GOLDEN.write_text(json.dumps(got, ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
+    assert got == json.loads(_ESS_GOLDEN.read_text(encoding="utf-8"))
+    kinds = {k for v in got.values() for k, _t in v}
+    assert {"failed", "assert", "diff", "where", "traceback", "cargo", "panic", "error", "tool", "summary", "tail"} <= kinds

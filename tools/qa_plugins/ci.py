@@ -103,73 +103,107 @@ def exit_code_of(lines) -> str | None:
     return None
 
 
-def essentials(lines) -> list:
-    """Failed step's log lines -> [(kind, text)] in priority order (the caller cuts to its line budget)."""
-    out: list = []
-
+def _p_failed(lines) -> list:
     failed, seen = [], set()
     for ln in lines:
         m = re.match(r"FAILED (\S+?)(?: - (.*))?$", ln)
         if m and m.group(1) not in seen:
             seen.add(m.group(1))
             failed.append(f"FAILED {m.group(1)}" + (f" - {_short(m.group(2), 110)}" if m.group(2) else ""))
-    out += [("failed", f) for f in failed[:5]]
+    out = [("failed", f) for f in failed[:5]]
     if len(failed) > 5:
         out.append(("failed", f"(+{len(failed) - 5} more FAILED)"))
+    return out
 
+
+def _pytest_block(lines) -> list:
+    """The first pytest `E ` block (stripped lines)."""
     block: list = []
-    for ln in lines:                                   # first pytest `E ` block: assertion, then diff lines
+    for ln in lines:
         if re.match(r"^E(\s|$)", ln):
             block.append(ln[1:].strip())
         elif block:
             break
+    return block
+
+
+def _diff_lines(rest) -> list:
+    for i, t in enumerate(rest):
+        if t.startswith("Full diff"):
+            rest = rest[:i]                            # pytest repeats the whole object here: pure noise
+            break
+    return [("diff", "  " + _short(t, 110)) for t in rest if not t.startswith("?")][:3]
+
+
+def _p_assert(lines) -> list:
+    block = _pytest_block(lines)
     texts = [t for t in block if t]
+    out = []
     if texts:
         out.append(("assert", "E " + _short(texts[0], 120)))
-        rest = texts[1:]
-        for i, t in enumerate(rest):
-            if t.startswith("Full diff"):
-                rest = rest[:i]                        # pytest repeats the whole object here: pure noise
-                break
-        out += [("diff", "  " + _short(t, 110)) for t in rest if not t.startswith("?")][:3]
+        out += _diff_lines(texts[1:])
     for ln in lines:
         m = re.match(r"^(\S+\.py):(\d+): (\w+)", ln)
         if m and block:
             out.append(("where", f"at {m.group(1)}:{m.group(2)}: {m.group(3)}"))
             break
+    return out
 
+
+def _last_frame_and_exc(tail) -> tuple:
+    frame = None
+    for ln in tail:
+        m = re.match(r'\s+File "(.+)", line (\d+), in (.+)$', ln)
+        if m:
+            frame = f"{_rel(m.group(1))}:{m.group(2)} in {m.group(3)}"
+        elif ln and not ln.startswith((" ", "	")):
+            return frame, ln
+    return frame, None
+
+
+def _p_traceback(lines) -> list:
     tb = max((i for i, ln in enumerate(lines) if ln.strip() == "Traceback (most recent call last):"), default=None)
-    if tb is not None:
-        frame, exc = None, None
-        for ln in lines[tb + 1:]:
-            m = re.match(r'\s+File "(.+)", line (\d+), in (.+)$', ln)
-            if m:
-                frame = f"{_rel(m.group(1))}:{m.group(2)} in {m.group(3)}"
-            elif ln and not ln.startswith((" ", "\t")):
-                exc = ln
-                break
-        if frame or exc:
-            out.append(("traceback", "Traceback " + " -> ".join(x for x in (frame, _short(exc or "", 110)) if x)))
+    if tb is None:
+        return []
+    frame, exc = _last_frame_and_exc(lines[tb + 1:])
+    if not (frame or exc):
+        return []
+    return [("traceback", "Traceback " + " -> ".join(x for x in (frame, _short(exc or "", 110)) if x))]
 
+
+def _cargo_error(lines, i, m):
+    if m.group(1):
+        loc = next((re.search(r"--> (\S+?):(\d+)", x) for x in lines[i + 1:i + 4] if "-->" in x), None)
+        return f"error[{m.group(1)}] " + (f"{loc.group(1)}:{loc.group(2)} " if loc else "") + _short(m.group(2), 90)
+    if "could not compile" in m.group(2):
+        return "error: " + _short(m.group(2), 100)
+    return None
+
+
+def _p_cargo(lines) -> list:
     cargo = []
     for i, ln in enumerate(lines):
         m = re.match(r"^error(?:\[(E\d+)\])?: (.+)$", ln)
-        if not m:
-            continue
-        if m.group(1):
-            loc = next((re.search(r"--> (\S+?):(\d+)", x) for x in lines[i + 1:i + 4] if "-->" in x), None)
-            cargo.append(f"error[{m.group(1)}] " + (f"{loc.group(1)}:{loc.group(2)} " if loc else "") + _short(m.group(2), 90))
-        elif "could not compile" in m.group(2):
-            cargo.append("error: " + _short(m.group(2), 100))
-    out += [("cargo", c) for c in cargo[:4]]
+        c = _cargo_error(lines, i, m) if m else None
+        if c:
+            cargo.append(c)
+    return [("cargo", c) for c in cargo[:4]]
+
+
+def _p_panic(lines) -> list:
     for i, ln in enumerate(lines):
         m = re.match(r"^thread '(.+?)' panicked at (\S+?):(\d+)", ln)
         if m:
-            out.append(("panic", f"panic {m.group(2)}:{m.group(3)} " + _short(lines[i + 1] if i + 1 < len(lines) else "", 90)))
-            break
-    out += [("cargo", f"test {m.group(1)} ... FAILED") for m in
+            return [("panic", f"panic {m.group(2)}:{m.group(3)} " + _short(lines[i + 1] if i + 1 < len(lines) else "", 90))]
+    return []
+
+
+def _p_cargo_tests(lines) -> list:
+    return [("cargo", f"test {m.group(1)} ... FAILED") for m in
             (re.match(r"^test (\S+) \.\.\. FAILED", ln) for ln in lines) if m][:3]
 
+
+def _p_errors(lines) -> list:
     errs, seen = [], set()
     for ln in lines:
         m = re.match(r"^(?:##\[error\])?(?:ERROR|Error|FATAL|fatal): ?(.+)", ln) or \
@@ -177,16 +211,29 @@ def essentials(lines) -> list:
         if m and m.group(1) not in seen:
             seen.add(m.group(1))
             errs.append(_short(ln.replace("##[error]", "").strip(), 130))
-    out += [("error", e) for e in errs[:3]]
+    return [("error", e) for e in errs[:3]]
 
-    ours = [_short(ln, 170) for ln in lines
-            if re.match(r"^(RESULT |QA verdict|(FAIL|ERROR) +\S+ .*dur=)", ln)]
-    out += [("tool", t) for t in list(dict.fromkeys(ours))[:4]]
 
+def _p_tool(lines) -> list:
+    ours = [_short(ln, 170) for ln in lines if re.match(r"^(RESULT |QA verdict|(FAIL|ERROR) +\S+ .*dur=)", ln)]
+    return [("tool", t) for t in list(dict.fromkeys(ours))[:4]]
+
+
+def _p_summary(lines) -> list:
     sums = [ln for ln in lines if re.search(r"\bin \d+(\.\d+)?s\b", ln) and _PYT_COUNT.search(ln)
             and re.match(r"^(=+ )?\d+ ", ln)]
-    if sums:
-        out.append(("summary", sums[-1].strip("= ").strip()))
+    return [("summary", sums[-1].strip("= ").strip())] if sums else []
+
+
+# one parser per log pattern, in output priority order (the caller cuts to its line budget)
+_PARSERS = (_p_failed, _p_assert, _p_traceback, _p_cargo, _p_panic, _p_cargo_tests, _p_errors, _p_tool, _p_summary)
+
+
+def essentials(lines) -> list:
+    """Failed step's log lines -> [(kind, text)] in priority order (the caller cuts to its line budget)."""
+    out: list = []
+    for parse in _PARSERS:
+        out += parse(lines)
     if not out:
         out = [("tail", t) for t in [ln for ln in lines if ln.strip() and not ln.startswith("##[")][-4:]]
     return out

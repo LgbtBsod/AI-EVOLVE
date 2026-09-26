@@ -1,0 +1,333 @@
+{
+ "cargo_error": [
+  [
+   "cargo",
+   "error[E0432] src/simulation/pathfinding.rs:14 unresolved import `crate::simulation::flowfield`"
+  ],
+  [
+   "cargo",
+   "error[E0308] src/analytics/mod.rs:88 mismatched types"
+  ],
+  [
+   "cargo",
+   "error: could not compile `rust_core` (lib) due to 2 previous errors"
+  ]
+ ],
+ "cargo_error|rust_core (ubuntu-latest)|cargo test": [
+  [
+   "cargo",
+   "error[E0432] src/simulation/pathfinding.rs:14 unresolved import `crate::simulation::flowfield`"
+  ],
+  [
+   "cargo",
+   "error[E0308] src/analytics/mod.rs:88 mismatched types"
+  ],
+  [
+   "cargo",
+   "error: could not compile `rust_core` (lib) due to 2 previous errors"
+  ]
+ ],
+ "determinism_failed": [
+  [
+   "tool",
+   "RESULT determinism pairs=80 diverged=2 classes=2 first_frame=0 t=0.03 channel=rng"
+  ]
+ ],
+ "determinism_failed|determinism (windows-latest)|Same-seed pairs (normal, ASLR off where available, hash seed 0)": [
+  [
+   "tool",
+   "RESULT determinism pairs=80 diverged=2 classes=2 first_frame=0 t=0.03 channel=rng"
+  ]
+ ],
+ "linux_pytest_diff": [
+  [
+   "failed",
+   "FAILED tests/test_agent_tools.py::TestRealGame::test_agent_play_is_deterministic - AssertionError: assert ({'t': 8.07, ...', 'goblin']]) == ({'t': 8.07, ...', 'goblin']])"
+  ],
+  [
+   "assert",
+   "E AssertionError: assert ({'t': 8.07, ...', 'goblin']]) == ({'t': 8.07, ...', 'goblin']])"
+  ],
+  [
+   "diff",
+   "  At index 0 diff: {'t': 8.07, 'hp': 116.1, 'max_hp': 140.0, 'hp_pct': 82.9, 'lvl': 1, 'xp': 37, 'alive': Tru..."
+  ],
+  [
+   "where",
+   "at tests/test_agent_tools.py:232: AssertionError"
+  ],
+  [
+   "summary",
+   "1 failed, 44 passed, 3 skipped in 9.02s"
+  ]
+ ],
+ "linux_pytest_diff|Game (ubuntu-latest)|Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)": [
+  [
+   "failed",
+   "FAILED tests/test_agent_tools.py::TestRealGame::test_agent_play_is_deterministic - AssertionError: assert ({'t': 8.07, ...', 'goblin']]) == ({'t': 8.07, ...', 'goblin']])"
+  ],
+  [
+   "assert",
+   "E AssertionError: assert ({'t': 8.07, ...', 'goblin']]) == ({'t': 8.07, ...', 'goblin']])"
+  ],
+  [
+   "diff",
+   "  At index 0 diff: {'t': 8.07, 'hp': 116.1, 'max_hp': 140.0, 'hp_pct': 82.9, 'lvl': 1, 'xp': 37, 'alive': Tru..."
+  ],
+  [
+   "where",
+   "at tests/test_agent_tools.py:232: AssertionError"
+  ],
+  [
+   "summary",
+   "1 failed, 44 passed, 3 skipped in 9.02s"
+  ]
+ ],
+ "qa_check_fail": [
+  [
+   "tool",
+   "QA verdict=FAIL checks=8 ok=7 fail=1 warn=0 cached=0 dur=9s head=1d147e1 dirty=0 selected=8/16 by=all"
+  ],
+  [
+   "tool",
+   "FAIL play:melee_three hp=0.0/140.0 lvl=1 kills=1(-67%) dealt=52.4(-70%) taken=140 expects=0/1 dur=2.0s | FAIL expect alive at t=31.2 (hp=0) | repro: python tools/agent..."
+  ]
+ ],
+ "qa_check_fail|Game (ubuntu-latest)|QA verdict (one line per check; qa.py ci reads this)": [
+  [
+   "tool",
+   "QA verdict=FAIL checks=8 ok=7 fail=1 warn=0 cached=0 dur=9s head=1d147e1 dirty=0 selected=8/16 by=all"
+  ],
+  [
+   "tool",
+   "FAIL play:melee_three hp=0.0/140.0 lvl=1 kills=1(-67%) dealt=52.4(-70%) taken=140 expects=0/1 dur=2.0s | FAIL expect alive at t=31.2 (hp=0) | repro: python tools/agent..."
+  ]
+ ],
+ "synth0": [
+  [
+   "failed",
+   "FAILED a::t1 - boom"
+  ],
+  [
+   "failed",
+   "FAILED b::t2"
+  ],
+  [
+   "failed",
+   "FAILED c"
+  ],
+  [
+   "failed",
+   "FAILED d"
+  ],
+  [
+   "failed",
+   "FAILED e"
+  ],
+  [
+   "failed",
+   "(+2 more FAILED)"
+  ]
+ ],
+ "synth1": [
+  [
+   "assert",
+   "E assert 1 == 2"
+  ],
+  [
+   "where",
+   "at x.py:3: AssertionError"
+  ]
+ ],
+ "synth2": [
+  [
+   "assert",
+   "E assert x"
+  ],
+  [
+   "diff",
+   "  - a"
+  ],
+  [
+   "diff",
+   "  + b"
+  ],
+  [
+   "diff",
+   "  + c"
+  ],
+  [
+   "where",
+   "at f.py:9: Boom"
+  ]
+ ],
+ "synth3": [
+  [
+   "traceback",
+   "Traceback C:\u0007\r\r\b.py:4 in g"
+  ]
+ ],
+ "synth4": [
+  [
+   "cargo",
+   "error[E0308] src/a.rs:3 mismatched"
+  ],
+  [
+   "cargo",
+   "error: could not compile `x`"
+  ],
+  [
+   "cargo",
+   "error[E1] no loc"
+  ],
+  [
+   "panic",
+   "panic src/a.rs:9 assertion failed"
+  ],
+  [
+   "cargo",
+   "test a::b ... FAILED"
+  ],
+  [
+   "cargo",
+   "test c ... FAILED"
+  ]
+ ],
+ "synth5": [
+  [
+   "error",
+   "ERROR: one"
+  ],
+  [
+   "error",
+   "two"
+  ],
+  [
+   "error",
+   "FATAL: f"
+  ]
+ ],
+ "synth6": [
+  [
+   "tool",
+   "RESULT a ok"
+  ],
+  [
+   "tool",
+   "QA verdict=FAIL"
+  ],
+  [
+   "tool",
+   "FAIL x dur=1s"
+  ],
+  [
+   "tool",
+   "ERROR y a dur=2s"
+  ]
+ ],
+ "synth7": [
+  [
+   "summary",
+   "3 passed, 1 failed in 2.50s"
+  ]
+ ],
+ "synth8": [
+  [
+   "tail",
+   "tail2"
+  ],
+  [
+   "tail",
+   "tail3"
+  ],
+  [
+   "tail",
+   "tail4"
+  ],
+  [
+   "tail",
+   "tail5"
+  ]
+ ],
+ "synth9": [],
+ "traceback": [
+  [
+   "traceback",
+   "Traceback src/core/game_core.py:204 in boot -> KeyError: 'game_world'"
+  ],
+  [
+   "tool",
+   "RESULT status=FAIL scene=None enemies=0->0 errors=1"
+  ]
+ ],
+ "traceback|Game (macos-latest)|Boot test (GameCore -> menu/world -> plugins, offscreen)": [
+  [
+   "traceback",
+   "Traceback src/core/game_core.py:204 in boot -> KeyError: 'game_world'"
+  ],
+  [
+   "tool",
+   "RESULT status=FAIL scene=None enemies=0->0 errors=1"
+  ]
+ ],
+ "windows_lua_crlf": [
+  [
+   "failed",
+   "FAILED tests/test_lua_bridge.py::test_export_lua_is_shared_between_backends - assert '-- \\u042d\\u043a\\u0441\\u043f\\u043e\\u0440\\u0442 L...= preds }\\\\r\\\\n' == '-- \\u042d\\u043a\\u0441\\u043f\\..."
+  ],
+  [
+   "assert",
+   "E assert '-- \\u042d\\u043a\\u0441\\u043f\\u043e\\u0440\\u0442 L...= preds }\\\\r\\\\n' == '-- \\u042d\\u043a\\u0441\\u043f\\u043e\\u044..."
+  ],
+  [
+   "diff",
+   "  Skipping 62 identical leading characters in diff, use -v to show"
+  ],
+  [
+   "diff",
+   "  - \\u043e\\u043b\\u043d\\u044f\\u044e\\u0442 \\u043e\\u0431\\u0430"
+  ],
+  [
+   "diff",
+   "  + \\u043e\\u043b\\u043d\\u044f\\u044e\\u0442 \\u043e\\u0431\\u0430"
+  ],
+  [
+   "where",
+   "at tests\\test_lua_bridge.py:105: AssertionError"
+  ],
+  [
+   "summary",
+   "1 failed, 44 passed in 0.32s"
+  ]
+ ],
+ "windows_lua_crlf|rust_core (windows-latest)|Lua bridge parity (mlua vs lupa)": [
+  [
+   "failed",
+   "FAILED tests/test_lua_bridge.py::test_export_lua_is_shared_between_backends - assert '-- \\u042d\\u043a\\u0441\\u043f\\u043e\\u0440\\u0442 L...= preds }\\\\r\\\\n' == '-- \\u042d\\u043a\\u0441\\u043f\\..."
+  ],
+  [
+   "assert",
+   "E assert '-- \\u042d\\u043a\\u0441\\u043f\\u043e\\u0440\\u0442 L...= preds }\\\\r\\\\n' == '-- \\u042d\\u043a\\u0441\\u043f\\u043e\\u044..."
+  ],
+  [
+   "diff",
+   "  Skipping 62 identical leading characters in diff, use -v to show"
+  ],
+  [
+   "diff",
+   "  - \\u043e\\u043b\\u043d\\u044f\\u044e\\u0442 \\u043e\\u0431\\u0430"
+  ],
+  [
+   "diff",
+   "  + \\u043e\\u043b\\u043d\\u044f\\u044e\\u0442 \\u043e\\u0431\\u0430"
+  ],
+  [
+   "where",
+   "at tests\\test_lua_bridge.py:105: AssertionError"
+  ],
+  [
+   "summary",
+   "1 failed, 44 passed in 0.32s"
+  ]
+ ]
+}

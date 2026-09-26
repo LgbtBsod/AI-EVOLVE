@@ -1,0 +1,2064 @@
+{
+"n_lua": 438,
+"cases": [
+[
+"\"x\"",
+[
+"op: not a dict"
+]
+],
+[
+"null",
+[
+"op: not a dict"
+]
+],
+[
+"{\"affects\": \"others\", \"arc\": 110, \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": \"attack_range\", \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"ref\": \"ctx.attack_damage\"}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"arc\": 120, \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 4.0, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 130}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"arc\": 120, \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 4.0, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"arc\": 180, \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": \"attack_range\", \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"ref\": \"ctx.attack_damage\"}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"distance\": 4, \"kind\": \"move\", \"mode\": \"knockback\", \"radius\": 3.0, \"target\": \"area\"}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"distance\": 4, \"kind\": \"move\", \"mode\": \"knockback\", \"radius\": 3.0, \"target\": \"area\"}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"duration\": {\"flat\": 5}, \"kind\": \"mod\", \"op\": \"add\", \"radius\": 10, \"stat\": \"vision_range\", \"target\": \"area\", \"toward\": \"source\", \"value\": {\"pct\": -80}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"duration\": {\"flat\": 6}, \"kind\": \"mod\", \"op\": \"add\", \"radius\": 14, \"stat\": \"vision_range\", \"target\": \"area\", \"toward\": \"source\", \"value\": {\"pct\": -75}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": \"attack_range\", \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 80}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 3.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 90}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 4.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 110}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 120}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 120}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 130}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 5.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 130}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 5.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 140}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 6, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 130}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 6, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 140}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 6, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 6, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 6, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 160}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 6, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 180}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 6, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 190}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 7, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 7, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 200}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 9, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 450}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"center\": \"self\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 9, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 520}}",
+[]
+],
+[
+"{\"affects\": \"others\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 1.8, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"spell_power\", \"pct\": 70}}",
+[]
+],
+[
+"{\"affects\": \"zz\", \"kind\": \"deal\", \"stat\": \"hp\", \"target\": \"area\", \"value\": 1}",
+[
+"op: affects is for target=area, one of ['all', 'allies', 'enemies', 'others']"
+]
+],
+[
+"{\"affects\": \"zz\", \"kind\": \"deal\", \"stat\": \"hp\", \"value\": 1}",
+[
+"op: affects is for target=area, one of ['all', 'allies', 'enemies', 'others']"
+]
+],
+[
+"{\"arc\": 0, \"kind\": \"deal\", \"stat\": \"hp\", \"target\": \"area\", \"value\": 1}",
+[
+"op: arc (degrees, 0 < arc <= 360) is for target=area"
+]
+],
+[
+"{\"arc\": 400, \"kind\": \"deal\", \"stat\": \"hp\", \"value\": 1}",
+[
+"op: arc (degrees, 0 < arc <= 360) is for target=area"
+]
+],
+[
+"{\"arc\": 90, \"kind\": \"deal\", \"stat\": \"hp\", \"target\": \"area\", \"value\": 1}",
+[]
+],
+[
+"{\"buff_id\": \"bog_hydra.submerge\", \"duration\": {\"flat\": 3}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"bone_colossus.ossify\", \"duration\": {\"flat\": 3}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"cerberus.hide\", \"duration\": {\"flat\": 3}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"enraged\", \"duration\": {\"flat\": 10}, \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"faceless_architect.scaffold\", \"duration\": {\"flat\": 3.5}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"forest_warden.bark\", \"duration\": {\"flat\": 3}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"forge_golem.plating\", \"duration\": {\"flat\": 3}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"frost_jarl.ice_armor\", \"duration\": {\"flat\": 3}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"geryon.mask\", \"duration\": {\"flat\": 3}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"gojo.infinity\", \"duration\": {\"flat\": 4}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"gojo.infinity\", \"duration\": {\"flat\": 4}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"grey_cardinal.scapegoat\", \"duration\": {\"flat\": 3}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"hel_matron.half_life\", \"duration\": {\"flat\": 3}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"knot_treasurer.insurance\", \"duration\": {\"flat\": 3}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"lucifer.ice_shell\", \"duration\": {\"flat\": 4}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"minos_judge.gavel\", \"duration\": {\"flat\": 3}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"mire_hag.bubble\", \"duration\": {\"flat\": 2.5}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"rebirth\", \"duration\": {\"flat\": 3}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"rime_witch.mirror\", \"duration\": {\"flat\": 2.5}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"second_wind\", \"duration\": {\"flat\": 1.5}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"sukuna.barrier_shrine\", \"duration\": {\"flat\": 3}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"sukuna.shrine_guard\", \"duration\": {\"flat\": 3}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"venom_dagger.poison\", \"kind\": \"apply_effect\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"center\": \"zz\", \"kind\": \"deal\", \"stat\": \"hp\", \"target\": \"area\", \"value\": 1}",
+[
+"op: area center must be 'target' or 'self'"
+]
+],
+[
+"{\"count\": 1, \"kind\": \"summon\", \"summon\": \"fire_giant\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 1, \"kind\": \"summon\", \"summon\": \"forge_guard\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 1, \"kind\": \"summon\", \"summon\": \"fury\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 1, \"kind\": \"summon\", \"summon\": \"fury\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 1, \"kind\": \"summon\", \"summon\": \"surtr_herald\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 2, \"kind\": \"summon\", \"summon\": \"bog_lurker\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 2, \"kind\": \"summon\", \"summon\": \"centaur_guard\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 2, \"kind\": \"summon\", \"summon\": \"frost_wolf\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 2, \"kind\": \"summon\", \"summon\": \"goblin\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 2, \"kind\": \"summon\", \"summon\": \"golem_shard\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 2, \"kind\": \"summon\", \"summon\": \"ice_troll\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 2, \"kind\": \"summon\", \"summon\": \"wolf\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 2, \"kind\": \"summon\", \"summon\": \"wraith\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 2, \"kind\": \"summon\", \"summon\": \"wraith\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 3, \"kind\": \"summon\", \"summon\": \"bog_lurker\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 3, \"kind\": \"summon\", \"summon\": \"cave_spider\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 3, \"kind\": \"summon\", \"summon\": \"dark_elf\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 3, \"kind\": \"summon\", \"summon\": \"fire_imp\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 3, \"kind\": \"summon\", \"summon\": \"fire_imp\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 3, \"kind\": \"summon\", \"summon\": \"frost_damned\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 3, \"kind\": \"summon\", \"summon\": \"frost_wolf\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 3, \"kind\": \"summon\", \"summon\": \"ghoul\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 3, \"kind\": \"summon\", \"summon\": \"golem_shard\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 3, \"kind\": \"summon\", \"summon\": \"lost_soul\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 3, \"kind\": \"summon\", \"summon\": \"skeleton\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 3, \"kind\": \"summon\", \"summon\": \"slime\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 3, \"kind\": \"summon\", \"summon\": \"wraith\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"damage_type\": \"all\", \"kind\": \"immune\", \"target\": \"self\", \"value\": {\"pct\": 100}}",
+[]
+],
+[
+"{\"damage_type\": \"physical\", \"kind\": \"immune\"}",
+[]
+],
+[
+"{\"distance\": 12, \"kind\": \"move\", \"mode\": \"charge\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"distance\": 12, \"kind\": \"move\", \"mode\": \"charge\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"distance\": 12, \"kind\": \"move\", \"mode\": \"charge\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"distance\": 12, \"kind\": \"move\", \"mode\": \"charge\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"distance\": 12, \"kind\": \"move\", \"mode\": \"charge\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"distance\": 12, \"kind\": \"move\", \"mode\": \"charge\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"distance\": 14, \"kind\": \"move\", \"mode\": \"blink\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"distance\": 14, \"kind\": \"move\", \"mode\": \"blink\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"distance\": 14, \"kind\": \"move\", \"mode\": \"blink\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"distance\": 14, \"kind\": \"move\", \"mode\": \"blink\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"distance\": 14, \"kind\": \"move\", \"mode\": \"blink\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"distance\": 14, \"kind\": \"move\", \"mode\": \"blink\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"distance\": 14, \"kind\": \"move\", \"mode\": \"blink\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"distance\": 14, \"kind\": \"move\", \"mode\": \"blink\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"distance\": 14, \"kind\": \"move\", \"mode\": \"blink\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"distance\": 2, \"kind\": \"move\", \"mode\": \"knockback\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 3, \"kind\": \"move\", \"mode\": \"strafe\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"distance\": 4, \"kind\": \"move\", \"mode\": \"knockback\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 4, \"kind\": \"move\", \"mode\": \"knockback\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 5, \"kind\": \"move\", \"mode\": \"knockback\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 5, \"kind\": \"move\", \"mode\": \"knockback\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 5, \"kind\": \"move\", \"mode\": \"knockback\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 5, \"kind\": \"move\", \"mode\": \"knockback\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 5, \"kind\": \"move\", \"mode\": \"knockback\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 5, \"kind\": \"move\", \"mode\": \"knockback\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 5, \"kind\": \"move\", \"mode\": \"knockback\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 5, \"kind\": \"move\", \"mode\": \"knockback\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 5, \"kind\": \"move\", \"mode\": \"knockback\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 5, \"kind\": \"move\", \"mode\": \"knockback\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 8, \"kind\": \"move\", \"mode\": \"knockback\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 8, \"kind\": \"move\", \"mode\": \"pull\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 8, \"kind\": \"move\", \"mode\": \"pull\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 8, \"kind\": \"move\", \"mode\": \"pull\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 8, \"kind\": \"move\", \"mode\": \"pull\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 8, \"kind\": \"move\", \"mode\": \"pull\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 8, \"kind\": \"move\", \"mode\": \"pull\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 8, \"kind\": \"move\", \"mode\": \"pull\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 8, \"kind\": \"move\", \"mode\": \"pull\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 8, \"kind\": \"move\", \"mode\": \"pull\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 8, \"kind\": \"move\", \"mode\": \"pull\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"duration\": 3, \"every\": 1, \"kind\": \"deal\", \"stat\": \"hp\", \"value\": 1}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 1.5}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"dodge\", \"target\": \"self\", \"value\": {\"flat\": 30}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 17.5}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 17.5}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 20.0}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 20.0}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 20.0}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 20.0}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 22.5}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 22.5}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 22.5}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"pct\": 35}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"pct\": 35}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"pct\": 40}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"pct\": 40}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"pct\": 40}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"pct\": 40}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"pct\": 45}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"pct\": 45}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"pct\": 45}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"hp_regen\", \"target\": \"enemy\", \"value\": {\"pct\": -100}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"max_hp\", \"target\": \"enemy\", \"value\": {\"pct\": -20}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 12}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 22.5}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 12}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 25.0}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 12}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 25.0}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 12}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 25.0}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 12}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 25.0}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 12}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 27.5}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 12}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 27.5}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 12}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"pct\": 45}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 12}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"pct\": 50}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 12}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"pct\": 50}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 12}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"pct\": 50}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 12}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"pct\": 50}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 12}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"pct\": 55}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 12}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"pct\": 55}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 2.5}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"move_speed\", \"target\": \"enemy\", \"value\": {\"pct\": -85}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 3}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"spell_power\", \"pct\": 15}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 3}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"enemy\", \"value\": {\"pct\": -12}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 3}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"move_speed\", \"target\": \"enemy\", \"value\": {\"pct\": -40}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 3}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"move_speed\", \"target\": \"enemy\", \"value\": {\"pct\": -60}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 3}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"move_speed\", \"target\": \"enemy\", \"value\": {\"pct\": -70}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 3}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"move_speed\", \"target\": \"enemy\", \"value\": {\"pct\": -70}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 3}, \"kind\": \"mod\", \"op\": \"set\", \"stat\": \"move_speed\", \"target\": \"self\", \"value\": {\"flat\": 0}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 15}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 20}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 20}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 25}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 25}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 25}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 25}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 30}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 30}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 30}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 35}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 40}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 40}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 45}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"spell_power\", \"pct\": 20}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"crit_chance\", \"target\": \"self\", \"value\": {\"flat\": 10}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"enemy\", \"value\": {\"flat\": -8}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"move_speed\", \"target\": \"enemy\", \"value\": {\"pct\": -50}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"move_speed\", \"target\": \"enemy\", \"value\": {\"pct\": -50}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"move_speed\", \"target\": \"enemy\", \"value\": {\"pct\": -55}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"move_speed\", \"target\": \"enemy\", \"value\": {\"pct\": -60}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"move_speed\", \"target\": \"enemy\", \"value\": {\"pct\": -60}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 4}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"strength\", \"target\": \"self\", \"value\": {\"pct\": 15}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 5}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 3.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 30}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 5}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 3.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 35}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 5}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 4, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 25}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 5}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 4, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 45}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 5}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 4}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 5}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 30}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 5}, \"kind\": \"mod\", \"op\": \"add\", \"radius\": 6.0, \"stat\": \"aspd\", \"target\": \"area\", \"value\": {\"pct\": -50}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 5}, \"kind\": \"mod\", \"op\": \"add\", \"radius\": 6.0, \"stat\": \"aspd\", \"target\": \"area\", \"value\": {\"pct\": -50}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 5}, \"kind\": \"mod\", \"op\": \"add\", \"radius\": 6.0, \"stat\": \"move_speed\", \"target\": \"area\", \"value\": {\"pct\": -40}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 5}, \"kind\": \"mod\", \"op\": \"add\", \"radius\": 6.0, \"stat\": \"move_speed\", \"target\": \"area\", \"value\": {\"pct\": -40}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 5}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"enemy\", \"value\": {\"pct\": -30}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 5}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"enemy\", \"value\": {\"pct\": -30}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 5}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"enemy\", \"value\": {\"pct\": -35}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 5}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"enemy\", \"value\": {\"pct\": -35}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 5}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"damage_taken\", \"target\": \"enemy\", \"value\": {\"pct\": 20}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 5}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"damage_taken\", \"target\": \"enemy\", \"value\": {\"pct\": 20}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 5}, \"kind\": \"mod\", \"op\": \"mul\", \"stat\": \"vision_range\", \"target\": \"self\", \"value\": {\"pct\": 0}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 4, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 35}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 4, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 40}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 4, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 40}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 4.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 40}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 30}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 50}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 55}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 60}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 65}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 70}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 6.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"spell_power\", \"pct\": 60}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 6.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"spell_power\", \"pct\": 70}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"enemy\", \"value\": {\"pct\": -40}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"enemy\", \"value\": {\"pct\": -45}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"enemy\", \"value\": {\"pct\": -30}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"enemy\", \"value\": {\"pct\": -30}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"enemy\", \"value\": {\"pct\": -30}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"enemy\", \"value\": {\"pct\": -35}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"pct\": 30}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"enemy\", \"value\": {\"pct\": -40}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"enemy\", \"value\": {\"pct\": -40}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"enemy\", \"value\": {\"pct\": -40}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"enemy\", \"value\": {\"pct\": -45}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"enemy\", \"value\": {\"pct\": -50}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"enemy\", \"value\": {\"pct\": -50}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"enemy\", \"value\": {\"pct\": -50}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"enemy\", \"value\": {\"pct\": -60}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 7}, \"every\": 1, \"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 60}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 7}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"enemy\", \"value\": {\"pct\": -60}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 8}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 15.0}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 8}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"pct\": 30}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 8}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"crit_chance\", \"target\": \"enemy\", \"value\": {\"pct\": -50}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 8}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"crit_chance\", \"target\": \"enemy\", \"value\": {\"pct\": -60}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 8}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"hp_regen\", \"target\": \"enemy\", \"value\": {\"pct\": -100}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 8}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"hp_regen\", \"target\": \"enemy\", \"value\": {\"pct\": -100}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 8}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"max_hp\", \"target\": \"enemy\", \"value\": {\"pct\": -20}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 8}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"max_hp\", \"target\": \"enemy\", \"value\": {\"pct\": -20}}",
+[]
+],
+[
+"{\"every\": 1, \"flags\": [\"no_crit\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"flat\": 5}}",
+[
+"op: every (periodic op) is for deal/heal and needs duration"
+]
+],
+[
+"{\"every\": 1, \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"flat\": 3}}",
+[
+"op: every (periodic op) is for deal/heal and needs duration"
+]
+],
+[
+"{\"every\": 1, \"kind\": \"deal\", \"stat\": \"hp\", \"value\": 1}",
+[
+"op: every (periodic op) is for deal/heal and needs duration"
+]
+],
+[
+"{\"every\": 1, \"kind\": \"mod\", \"stat\": \"attack\", \"value\": 1}",
+[
+"op: unknown stat 'attack' (use custom:<name> for new stats)",
+"op: every (periodic op) is for deal/heal and needs duration"
+]
+],
+[
+"{\"extend\": {\"on\": \"zz\"}, \"kind\": \"mod\", \"stat\": \"attack\", \"value\": 1}",
+[
+"op: unknown stat 'attack' (use custom:<name> for new stats)",
+"op: extend.on='zz' is not an event"
+]
+],
+[
+"{\"fail\": [{\"kind\": \"set\", \"op\": \"set\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"flat\": 1}}, {\"buff_id\": \"last_will\", \"cooldown\": {\"flat\": 30}, \"duration\": {\"flat\": 5, \"scale\": {\"every\": 10, \"factor\": 2, \"of\": \"hp_missing_below_40\"}}, \"extend\": {\"flat\": 5, \"on\": \"kill\"}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}], \"kind\": \"drain\", \"op\": \"sub\", \"scale\": {\"every\": 10, \"of\": \"hp_missing_below_40\", \"value\": {\"of\": \"max_hp\", \"pct\": 0.5}}, \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 0.5}}",
+[]
+],
+[
+"{\"fail\": [{\"kind\": \"set\", \"op\": \"set\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"flat\": 1}}, {\"buff_id\": \"last_will\", \"cooldown\": {\"flat\": 30}, \"duration\": {\"flat\": 5}, \"extend\": {\"flat\": 5, \"on\": \"kill\"}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}], \"kind\": \"drain\", \"op\": \"sub\", \"scale\": {\"every\": 10, \"factor\": 1, \"of\": \"hp_missing_below_40\", \"value\": {\"of\": \"max_hp\", \"pct\": 0.5}}, \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 0.5}}",
+[]
+],
+[
+"{\"fail\": [{\"kind\": \"set\", \"op\": \"set\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"flat\": 1}}], \"kind\": \"drain\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"pct\": 10}}",
+[]
+],
+[
+"{\"fail\": [{\"kind\": \"zz\"}, \"q\", {\"kind\": \"buff\"}], \"kind\": \"deal\", \"stat\": \"hp\", \"value\": 1}",
+[
+"op.fail[0]: unknown kind 'zz'",
+"op.fail[1]: not a dict",
+"op.fail[2]: kind=buff requires buff_id"
+]
+],
+[
+"{\"filter\": \"abilities\", \"kind\": \"nullify\"}",
+[]
+],
+[
+"{\"filter\": \"actions\", \"kind\": \"nullify\"}",
+[]
+],
+[
+"{\"flags\": [\"no_crit\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"last_damage\", \"pct\": 25}}",
+[]
+],
+[
+"{\"flags\": [\"no_resurrection_guard\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemies\", \"value\": {\"of\": \"max_hp\", \"pct\": 4}}",
+[
+"op: unknown target 'enemies'",
+"op: unknown flags ['no_resurrection_guard'] (known: ['iframe', 'no_crit', 'periodic', 'silent', 'true_damage', 'unavoidable'])"
+]
+],
+[
+"{\"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 18}}",
+[]
+],
+[
+"{\"flags\": [\"true_damage\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"enemy_max_hp\", \"pct\": 2}}",
+[]
+],
+[
+"{\"flags\": [\"zz\"], \"kind\": \"mod\", \"stat\": \"attack\", \"value\": 1}",
+[
+"op: unknown stat 'attack' (use custom:<name> for new stats)",
+"op: unknown flags ['zz'] (known: ['iframe', 'no_crit', 'periodic', 'silent', 'true_damage', 'unavoidable'])"
+]
+],
+[
+"{\"kind\": \"apply_effect\"}",
+[
+"op: kind=apply_effect requires buff_id (the id of the effect to apply)"
+]
+],
+[
+"{\"kind\": \"buff\"}",
+[
+"op: kind=buff requires buff_id"
+]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 3, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 170}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 3.0, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 260}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 3.0, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"spell_power\", \"pct\": 120}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 3.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 170}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 3.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 200}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 3.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 200}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 3.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 200}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 3.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 220}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 3.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 240}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 3.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 240}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 3.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 250}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 3.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"spell_power\", \"pct\": 260}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 3.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"spell_power\", \"pct\": 280}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 4, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 230}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 4, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 240}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 4, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 260}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 4, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 280}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 4, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 280}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 4, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 300}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 4, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 320}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 4.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 300}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 300}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 320}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 340}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 360}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 5.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 380}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 5.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 400}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 6, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 320}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 6, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 420}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 6.0, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"spell_power\", \"pct\": 300}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 6.0, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"spell_power\", \"pct\": 320}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"radius\": 6.5, \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"of\": \"attack_damage\", \"pct\": 460}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"scale\": {\"every\": 10, \"factor\": 1, \"of\": \"hp_missing_below_40\", \"value\": {\"of\": \"max_hp\", \"pct\": 1.5}}, \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"max_hp\", \"pct\": 1.5}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"scale\": {\"every\": 10, \"of\": \"hp_missing_below_40\", \"value\": {\"of\": \"max_hp\", \"pct\": 1.5}}, \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"max_hp\", \"pct\": 1.5}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"scale\": {\"every\": 30, \"of\": \"agility\", \"value\": {\"of\": \"attack_damage\", \"pct\": 10}}, \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 50}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 100}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 100}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 110}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 110}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 110}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 110}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 110}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 120}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 120}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 120}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 120}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 120}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 120}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 120}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 120}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 130}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 130}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 130}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 130}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 130}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 130}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 130}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 130}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 140}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 140}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 140}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 140}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 140}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 140}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 140}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 140}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 140}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 140}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 150}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 160}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 160}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 160}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 160}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 160}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 160}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 160}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 160}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 170}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 170}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 170}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 170}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 170}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 170}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 170}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 180}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 180}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 180}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 200}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 200}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 200}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 90}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 90}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"attack_damage\", \"pct\": 90}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"spell_power\", \"pct\": 110}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"spell_power\", \"pct\": 130}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"spell_power\", \"pct\": 180}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"spell_power\", \"pct\": 240}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"spell_power\", \"pct\": 260}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"spell_power\", \"pct\": 30}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"spell_power\", \"pct\": 90}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"ref\": \"ctx.attack_damage\"}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"ref\": \"ctx.attack_damage\"}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"ref\": \"ctx.attack_damage\"}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"ref\": \"ctx.spell_power\"}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"radius\": \"attack\", \"stat\": \"hp\", \"value\": 1}",
+[
+"op: radius 'attack' is neither a number nor a stat"
+]
+],
+[
+"{\"kind\": \"deal\", \"radius\": \"zz\", \"stat\": \"hp\", \"value\": 1}",
+[
+"op: radius 'zz' is neither a number nor a stat"
+]
+],
+[
+"{\"kind\": \"deal\", \"scale\": {\"every\": 0, \"of\": \"zz\"}, \"stat\": \"hp\"}",
+[
+"op: scale.every required (>0)",
+"op: scale.of unknown stat 'zz'"
+]
+],
+[
+"{\"kind\": \"deal\", \"scale\": {\"every\": 2, \"of\": \"attack\"}, \"stat\": \"hp\"}",
+[
+"op: scale.of unknown stat 'attack'"
+]
+],
+[
+"{\"kind\": \"deal\", \"scale\": {\"every\": 2}, \"stat\": \"hp\"}",
+[
+"op: scale.of required"
+]
+],
+[
+"{\"kind\": \"deal\", \"scale\": {}, \"stat\": \"hp\"}",
+[
+"op: scale.every required (>0)",
+"op: scale.of required"
+]
+],
+[
+"{\"kind\": \"deal\", \"stat\": \"hp\", \"value\": 1, \"when\": \"hp < 5\"}",
+[
+"op.when: expression element not allowed: Name"
+]
+],
+[
+"{\"kind\": \"deal\", \"stat\": \"hp\", \"value\": 1, \"when\": \"zz((\"}",
+[
+"op.when: '(' was never closed (<unknown>, line 1)"
+]
+],
+[
+"{\"kind\": \"deal\", \"stat\": \"hp\", \"value\": {\"flat\": 1}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"stat\": \"hp\", \"value\": {\"of\": \"zz\", \"pct\": 1}}",
+[
+"op: value.of unknown stat 'zz'"
+]
+],
+[
+"{\"kind\": \"deal\", \"stat\": \"hp\", \"value\": {}}",
+[
+"op: value needs one of flat/pct/ref"
+]
+],
+[
+"{\"kind\": \"deal\", \"stat\": \"hp\"}",
+[
+"op: needs value or scale"
+]
+],
+[
+"{\"kind\": \"drain\", \"op\": \"sub\", \"stat\": \"stamina\", \"target\": \"self\", \"value\": {\"flat\": 30}}",
+[]
+],
+[
+"{\"kind\": \"extend\"}",
+[
+"op: kind=extend requires buff_id"
+]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"flat\": 20}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"attack_damage\", \"pct\": 60.0}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"attack_damage\", \"pct\": 65.0}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"attack_damage\", \"pct\": 70.0}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"attack_damage\", \"pct\": 75.0}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"attack_damage\", \"pct\": 85.0}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"attack_damage\", \"pct\": 90.0}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"last_damage\", \"pct\": 12}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 10}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 10}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 10}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 12}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 12}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 12}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 12}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 12}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 12}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 12}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 15}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 15}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 18}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 18}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 18}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 18}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 20}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 20}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 35}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 5}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 70}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 8}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 8}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 8}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"mana\", \"target\": \"self\", \"value\": {\"of\": \"max_mana\", \"pct\": 50}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"op\": \"add\", \"stat\": \"stamina\", \"target\": \"self\", \"value\": {\"of\": \"max_stamina\", \"pct\": 60}}",
+[]
+],
+[
+"{\"kind\": \"heal\", \"stat\": \"attack\", \"value\": 1}",
+[
+"op: unknown stat 'attack' (use custom:<name> for new stats)",
+"op: kind=heal works on resources ['hp', 'mana', 'stamina'], not 'attack'"
+]
+],
+[
+"{\"kind\": \"heal\", \"value\": 1}",
+[
+"op: kind=heal requires stat"
+]
+],
+[
+"{\"kind\": \"hypnosis\", \"when\": \"true\"}",
+[
+"op: unknown kind 'hypnosis'"
+]
+],
+[
+"{\"kind\": \"kill\", \"target\": \"enemy\", \"when\": \"ctx.enemy_hp_pct < 12\"}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"scale\": {\"every\": 10, \"factor\": 1, \"of\": \"hp_missing_below_40\", \"value\": {\"flat\": 10}}, \"stat\": \"crit_dmg\", \"target\": \"self\", \"value\": {\"flat\": 10}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"scale\": {\"every\": 10, \"factor\": 1, \"of\": \"hp_missing_below_40\", \"value\": {\"flat\": 20}}, \"stat\": \"hp_regen\", \"target\": \"self\", \"value\": {\"flat\": 0}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"scale\": {\"every\": 10, \"factor\": 1, \"of\": \"hp_missing_below_40\", \"value\": {\"flat\": 3}}, \"stat\": \"lifesteal\", \"target\": \"self\", \"value\": {\"flat\": 0}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"scale\": {\"every\": 10, \"factor\": 1, \"of\": \"hp_missing_below_40\", \"value\": {\"flat\": 5}}, \"stat\": \"crit_chance\", \"target\": \"self\", \"value\": {\"flat\": 5}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"scale\": {\"every\": 10, \"factor\": 1, \"of\": \"hp_missing_below_40\", \"value\": {\"flat\": 5}}, \"stat\": \"lifesteal\", \"target\": \"self\", \"value\": {\"flat\": 0}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"scale\": {\"every\": 10, \"factor\": 1, \"of\": \"hp_missing_below_40\", \"value\": {\"pct\": 10}}, \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 5}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"scale\": {\"every\": 10, \"of\": \"hp_missing_below_40\", \"value\": {\"flat\": 5}}, \"stat\": \"crit_chance\", \"target\": \"self\", \"value\": {\"flat\": 5}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"scale\": {\"every\": 30, \"of\": \"vitality\", \"value\": {\"of\": \"max_hp\", \"pct\": 0.5}}, \"stat\": \"hp_regen\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 1}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"flat\": 0.2}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 10}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 20}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"flat\": 8}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"damage_lightning\", \"target\": \"self\", \"value\": {\"pct\": 20}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"damage_physical\", \"target\": \"self\", \"value\": {\"pct\": 15}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"damage_taken\", \"target\": \"self\", \"value\": {\"pct\": -20}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"self\", \"value\": {\"pct\": 25}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"evasion\", \"target\": \"self\", \"value\": {\"flat\": 8}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"mana_regen\", \"target\": \"self\", \"value\": {\"flat\": 4}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"mana_regen\", \"target\": \"self\", \"value\": {\"pct\": 100}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"max_stamina\", \"target\": \"self\", \"value\": {\"pct\": 10}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"move_speed\", \"target\": \"self\", \"value\": {\"pct\": 25}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"penetration_flat\", \"target\": \"self\", \"value\": {\"flat\": 10}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"resist_physical\", \"target\": \"self\", \"value\": {\"flat\": 15}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"strength\", \"target\": \"self\", \"value\": {\"pct\": 20}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"strength\", \"target\": \"self\", \"value\": {\"pct\": 20}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"bad\", \"stat\": \"attack\", \"value\": 1}",
+[
+"op: unknown op 'bad'",
+"op: unknown stat 'attack' (use custom:<name> for new stats)"
+]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"sub\", \"stat\": \"defense\", \"target\": \"enemy\", \"value\": {\"flat\": 2}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"stat\": \"armor_pct_x\", \"value\": 1}",
+[
+"op: unknown stat 'armor_pct_x' (use custom:<name> for new stats)"
+]
+],
+[
+"{\"kind\": \"mod\", \"stat\": \"attack\", \"target\": \"zzz\", \"value\": 1}",
+[
+"op: unknown target 'zzz'",
+"op: unknown stat 'attack' (use custom:<name> for new stats)"
+]
+],
+[
+"{\"kind\": \"mod\", \"stat\": \"attack\", \"toward\": \"source\", \"value\": 1}",
+[
+"op: unknown stat 'attack' (use custom:<name> for new stats)",
+"op: toward='source' is for mod of ['vision_range'] (toward='source': stealth)"
+]
+],
+[
+"{\"kind\": \"mod\", \"stat\": \"attack\", \"toward\": \"zz\", \"value\": 1}",
+[
+"op: unknown stat 'attack' (use custom:<name> for new stats)",
+"op: toward='zz' is for mod of ['vision_range'] (toward='source': stealth)"
+]
+],
+[
+"{\"kind\": \"mod\", \"stat\": \"custom:foo\", \"value\": 1}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"stat\": \"hp\", \"value\": 1}",
+[
+"op: mod cannot change resource 'hp': use heal/drain/deal/set (or mod max_hp)"
+]
+],
+[
+"{\"kind\": \"mod\", \"stat\": \"stealth\", \"toward\": \"source\", \"value\": 1}",
+[
+"op: unknown stat 'stealth' (use custom:<name> for new stats)",
+"op: toward='source' is for mod of ['vision_range'] (toward='source': stealth)"
+]
+],
+[
+"{\"kind\": \"mod\", \"stat\": \"zzz\", \"value\": 1}",
+[
+"op: unknown stat 'zzz' (use custom:<name> for new stats)"
+]
+],
+[
+"{\"kind\": \"mod\", \"value\": 1}",
+[
+"op: kind=mod requires stat"
+]
+],
+[
+"{\"kind\": \"move\", \"mode\": \"zz\"}",
+[
+"op: kind=move requires mode in ['blink', 'charge', 'knockback', 'pull', 'strafe']"
+]
+],
+[
+"{\"kind\": \"move\"}",
+[
+"op: kind=move requires mode in ['blink', 'charge', 'knockback', 'pull', 'strafe']"
+]
+],
+[
+"{\"kind\": \"nope\"}",
+[
+"op: unknown kind 'nope'"
+]
+],
+[
+"{\"kind\": \"remove_buff\"}",
+[
+"op: kind=remove_buff requires buff_id"
+]
+],
+[
+"{\"kind\": \"rule_override\", \"rules\": [\"block_physics\"], \"scope\": \"self\"}",
+[
+"op: unknown kind 'rule_override'"
+]
+],
+[
+"{\"kind\": \"set\", \"op\": \"set\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 30}}",
+[]
+],
+[
+"{\"kind\": \"set\", \"stat\": \"attack\", \"value\": 1}",
+[
+"op: unknown stat 'attack' (use custom:<name> for new stats)",
+"op: kind=set works on resources ['hp', 'mana', 'stamina'], not 'attack' (use mod with op=set)"
+]
+],
+[
+"{\"kind\": \"summon\"}",
+[
+"op: kind=summon requires summon (creature type)"
+]
+],
+[
+"{\"kind\": \"untargetable\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"kind\": \"zone\", \"ops\": [{\"flags\": [\"no_resurrection_guard\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemies\", \"value\": {\"of\": \"max_hp\", \"pct\": 4}}], \"radius\": 2, \"shape\": \"circle\", \"tick\": 1}",
+[
+"op: unknown kind 'zone'"
+]
+],
+[
+"{}",
+[
+"op: unknown kind None"
+]
+]
+]
+}

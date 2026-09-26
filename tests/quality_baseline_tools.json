@@ -136,11 +136,9 @@
   },
   "tools/effect_schema/validate.py": {
    "BLE001": 1,
-   "C901": 3,
+   "C901": 2,
    "PERF401": 1,
-   "PLR0912": 2,
-   "PLR0915": 1,
-   "SIM102": 1
+   "PLR0912": 1
   },
   "tools/guard_hook.py": {
    "dup_defs": 1
@@ -206,10 +204,7 @@
    "RET504": 1
   },
   "tools/qa_plugins/ci.py": {
-   "C901": 1,
-   "PLR0912": 1,
-   "PLR0913": 1,
-   "PLR0915": 1
+   "PLR0913": 1
   },
   "tools/qa_plugins/ckpt.py": {
    "PLR0913": 1,
@@ -314,7 +309,6 @@
   "tools/effect_schema/ui_logic.py::op_from_form": 16,
   "tools/effect_schema/validate.py::_references": 21,
   "tools/effect_schema/validate.py::validate_effect": 34,
-  "tools/effect_schema/validate.py::validate_op": 70,
   "tools/probe_analysis.py::combat_stats": 35,
   "tools/probe_analysis.py::forecast": 49,
   "tools/probe_analysis.py::format_forecast": 11,
@@ -350,7 +344,6 @@
   "tools/qa_plugins/check.py::select": 30,
   "tools/qa_plugins/ci.py::build_report": 17,
   "tools/qa_plugins/ci.py::cmd_ci": 16,
-  "tools/qa_plugins/ci.py::essentials": 64,
   "tools/qa_plugins/ci.py::resolve_run": 21,
   "tools/qa_plugins/determinism.py::build_context": 13,
   "tools/qa_plugins/determinism.py::compare_traces": 37,
@@ -391,27 +384,27 @@
   "B904": 1,
   "B905": 15,
   "BLE001": 25,
-  "C901": 26,
+  "C901": 24,
   "PERF401": 15,
   "PLR0911": 6,
-  "PLR0912": 14,
+  "PLR0912": 12,
   "PLR0913": 19,
-  "PLR0915": 11,
+  "PLR0915": 9,
   "PLW0603": 4,
   "PLW1510": 5,
   "PLW2901": 6,
   "RET504": 5,
-  "SIM102": 2,
+  "SIM102": 1,
   "SIM105": 2,
   "SIM115": 1
  },
  "totals": {
   "blind_except": 25,
-  "cc11": 110,
-  "cc_max": 70,
+  "cc11": 108,
+  "cc_max": 51,
   "dup_defs": 8,
   "layers_broken": 0,
-  "ruff": 193,
+  "ruff": 186,
   "vulture": 3
  },
  "version": 1
