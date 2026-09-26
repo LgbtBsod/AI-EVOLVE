@@ -26,7 +26,8 @@ from src.effects.manager import EffectManager  # noqa: E402
 from tests.test_effect_manager import Fighter, World  # noqa: E402
 from tools.effect_schema.validate import validate_op  # noqa: E402
 
-ROWS = {a["id"]: a for a in lua_bridge.load(lua_bridge.CONTENT / "corpus_holdout_abilities.lua")["abilities"]}
+ALL_ROWS = {a["id"]: a for a in lua_bridge.load(lua_bridge.CONTENT / "corpus_holdout_abilities.lua")["abilities"]}
+ROWS = {k: v for k, v in ALL_ROWS.items() if v.get("family") == "exchange"}
 ZAP = {"id": "zap", "trigger": "cast", "range": 999, "needs_target": True,
        "ops": [{"kind": "deal", "target": "enemy", "stat": "hp", "op": "sub", "value": {"flat": 10}}]}
 

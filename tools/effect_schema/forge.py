@@ -325,6 +325,14 @@ def primitive_effects() -> list[dict]:
             {"kind": "time_erase", "target": "self", "window": 2, "when": "ctx.hp_pct < 0"},      # never fires on the hero itself
             {"kind": "change_tier", "target": "self", "track": "stars", "steps": 1},
         ], "exchange"),
+        # социальные и пулы G1b (src/effects/social.py): отказ = запись, не ошибка
+        ev("prim.social", "use", [
+            {"kind": "reputation", "target": "self", "faction": "nobody", "delta": 1},
+            {"kind": "diplomacy", "target": "self", "relation": "nothing", "duration": dur(1)},
+            {"kind": "contract", "target": "self", "action": "breach", "id": "none"},
+            {"kind": "fuel_consume", "target": "self", "pool": "nothing", "amount": 1},
+            {"kind": "pool", "target": "self", "pool": "nothing", "action": "grant", "amount": 1},
+        ], "social"),
         # кража и применение техники
         ev("prim.learn", "use", [
             {"kind": "learn", "target": "self", "ability_id": "forge_technique"},

@@ -1,5 +1,5 @@
 {
-"n_lua": 577,
+"n_lua": 588,
 "cases": [
 [
 "\"x\"",
@@ -26,11 +26,23 @@
 []
 ],
 [
+"{\"action\": \"grant\", \"amount\": 2, \"kind\": \"pool\", \"pool\": \"inspiration\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"action\": \"grant\", \"amount\": 4, \"kind\": \"pool\", \"pool\": \"lifesteal_hits\", \"target\": \"self\"}",
+[]
+],
+[
 "{\"action\": \"puppet\", \"duration\": {\"flat\": 5}, \"id\": \"bloodbend\", \"kind\": \"possess\", \"target\": \"enemy\"}",
 []
 ],
 [
 "{\"action\": \"stand_still\", \"duration\": {\"flat\": 4}, \"id\": \"voice\", \"kind\": \"command\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"action\": \"use\", \"count\": 4, \"kind\": \"pool\", \"pool\": \"lifesteal_hits\", \"target\": \"enemy\", \"then\": [{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 4}}, {\"kind\": \"heal\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"flat\": 2}}]}",
 []
 ],
 [
@@ -210,6 +222,10 @@
 []
 ],
 [
+"{\"amount\": 15, \"kind\": \"fuel_consume\", \"pool\": \"warp\", \"target\": \"enemy\", \"then\": [{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 30}}]}",
+[]
+],
+[
 "{\"anchor\": \"horcrux_vault\", \"at\": {\"x\": 40, \"y\": 40}, \"id\": \"horcrux\", \"kind\": \"snapshot\", \"scope\": \"self\", \"target\": \"self\"}",
 []
 ],
@@ -235,6 +251,10 @@
 ],
 [
 "{\"as\": \"possess\", \"break_if\": {\"cmp\": \"lt\", \"stat\": \"hp\", \"vs\": 20}, \"id\": \"parasite_link\", \"kind\": \"control_link\", \"requires\": {\"cmp\": \"lt\", \"stat\": \"max_hp\", \"vs\": \"source\"}, \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"b_ops\": [{\"kind\": \"heal\", \"stat\": \"mana\", \"target\": \"enemy\", \"value\": {\"flat\": 100}}], \"breach\": {\"penalty_ops\": [{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"enemy\", \"value\": {\"flat\": -5}}]}, \"duration\": {\"flat\": 20}, \"id\": \"loan\", \"interest\": {\"every\": 5, \"rate\": 0.1}, \"kind\": \"contract\", \"principal\": 100, \"target\": \"enemy\"}",
 []
 ],
 [
@@ -521,6 +541,14 @@
 ],
 [
 "{\"damage_type\": \"all\", \"kind\": \"immune\", \"target\": \"self\", \"value\": {\"pct\": 100}}",
+[]
+],
+[
+"{\"delta\": 30, \"kind\": \"reputation\", \"on_tier\": {\"friendly\": [{\"duration\": {\"flat\": 20}, \"kind\": \"diplomacy\", \"relation\": \"ceasefire\", \"target\": \"enemy\"}]}, \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"delta\": 60, \"faction\": \"citizens\", \"kind\": \"reputation\", \"on_tier\": {\"revered\": [{\"faction\": \"hero\", \"kind\": \"set_faction\", \"target\": \"enemy\"}]}, \"target\": \"enemy\"}",
 []
 ],
 [
@@ -956,6 +984,10 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 30}, \"kind\": \"diplomacy\", \"relation\": \"ceasefire\", \"target\": \"enemy\"}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 30}, \"kind\": \"perceive\", \"target\": \"enemy\"}",
 []
 ],
@@ -1340,6 +1372,10 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 8}, \"kind\": \"fuel_consume\", \"pool\": \"pewter\", \"rate\": 10, \"target\": \"self\", \"then\": [{\"duration\": {\"flat\": 8}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"flat\": 10}}]}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 8}, \"kind\": \"mark\", \"mark_id\": \"gum\", \"target\": \"enemy\", \"value\": {\"flat\": 1}}",
 []
 ],
@@ -1357,6 +1393,10 @@
 ],
 [
 "{\"duration\": {\"flat\": 8}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"crit_chance\", \"target\": \"enemy\", \"value\": {\"pct\": -60}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 8}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"self\", \"value\": {\"flat\": -3}}",
 []
 ],
 [
@@ -2053,6 +2093,10 @@
 ],
 [
 "{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"ref\": \"ctx.spell_power\"}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"flat\": 15}}",
 []
 ],
 [

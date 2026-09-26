@@ -51,7 +51,7 @@ from . import triggers
 from . import zones
 from .control import release_control
 from . import mimic
-from . import statecraft, timeworld
+from . import social, statecraft, timeworld
 from .ops import OpCall, Periodic, Tracked, apply_op, form_abilities, replace_contribution_game
 from .runtime import EffectRuntime, Unit, buff_fields, resolve_value, rules
 
@@ -470,6 +470,7 @@ class EffectManager:
         self._rules: list[dict] = []     # F5 timed rule_override layers {id, until, consts, flags}
         self._tw = timeworld.TimeState()  # F7 time / world (src/effects/timeworld.py)
         self._last_cast: dict[int, str] = {}           # G1a: id(entity) -> last cast ability id (copy_last_cast / read)
+        self._soc = social.SocialState()   # G1b treaties / contracts / burns / pools (src/effects/social.py)
         self._sc = statecraft.StateCraft()  # F8 snapshots / loops / writes (src/effects/statecraft.py)
         self._status_book: dict = {}     # (id сущности, status id) -> (стаки, до какого времени)
 
@@ -558,6 +559,7 @@ class EffectManager:
         self._run_delayed()
         zones.update(self)
         mimic.update(self)
+        social.update(self)                            # G1b: treaty expiry, debt ticks, burns, pool regen; returns at once when idle
         statecraft.update(self)                        # F8: loops / writes; returns at once when nothing is recorded
 
     def _run_delayed(self) -> None:
@@ -1138,6 +1140,9 @@ class EffectManager:
 
     # F4 triggers (src/effects/triggers.py) -------------------------------------------------------------
     # F8 statecraft (src/effects/statecraft.py) ---------------------------------------------------------
+    def soc_state(self):
+        return self._soc
+
     def sc_state(self):
         return self._sc
 

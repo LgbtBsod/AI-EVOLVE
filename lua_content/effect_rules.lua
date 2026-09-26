@@ -94,6 +94,29 @@ return {
     broken      = { min = 0, max = 1 },
   },
 
+  -- slice G1b (src/effects/social.py, docs/EFFECT_SCHEMA.md "Social and pools"): reputation tiers, treaties, contracts, resource pools; all caps here
+  social = {
+    reputation = {
+      min = -100, max = 100, max_delta = 60,
+      tiers = { { id = "hostile", at = -100 }, { id = "wary", at = -30 }, { id = "neutral", at = -10 },
+                { id = "friendly", at = 20 }, { id = "revered", at = 60 } },
+    },
+    diplomacy = {
+      max_duration = 120, max_treaties = 4, cost = { resource = "mana", amount = 20 },
+      relations = { ceasefire = { aggro_mode = "passive" }, war = { aggro_mode = "nearest_any" }, alliance = { merge = true } },
+    },
+    contract = { max_duration = 120, max_contracts = 8, max_debt_mult = 3.0, min_every = 1.0 },
+    pools = {
+      pewter        = { max = 100, regen = 1, allow_debt = true, debt_limit = 40,
+                        debt_effect = { chance = 1.0, ops = { { kind = "mod", target = "self", stat = "defense", op = "add", value = { flat = -3 }, duration = { flat = 8 } } } },
+                        end_effect = { { kind = "mod", target = "self", stat = "attack_damage", op = "add", value = { flat = -6 }, duration = { flat = 6 } } } },
+      warp          = { max = 10, regen = 0.5, allow_debt = true, debt_limit = 20,
+                        debt_effect = { chance = 0.5, ops = { { kind = "deal", target = "self", stat = "hp", op = "sub", value = { flat = 15 } } } } },
+      inspiration   = { max = 3, regen = 0, start = 0, die = 6 },
+      lifesteal_hits = { max = 6, regen = 0, start = 0 },
+    },
+  },
+
   -- slice G1a (src/effects/exchange.py, docs/EFFECT_SCHEMA.md "Exchange"): every whitelist / cap of the bounded exchange ops
   exchange = {
     created_keep = 32,

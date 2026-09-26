@@ -503,6 +503,8 @@ _NOTES: dict[str, Callable[..., str]] = {
         "snapshot", "restore_state", "respawn_at", "time_loop", "rename", "write", "wish", "confiscate")},
     **{k: (lambda tg, *a, _k=k: f"{_k} {' '.join(map(str, a))} -> {tg.name}") for k in (      # G1a exchange (src/effects/exchange.py): room = log line only
         "create_ex_nihilo", "mass_resurrect", "status_mod", "debuff", "unbounded", "copy_last_cast", "read", "steal", "learn_technique", "time_erase", "change_tier")},
+    **{k: (lambda tg, *a, _k=k: f"{_k} {' '.join(map(str, a))} -> {tg.name}") for k in (      # G1b social (src/effects/social.py): room = log line only
+        "reputation", "diplomacy", "contract", "fuel_consume", "pool")},
     "set_aggro": lambda tg, mode: f"set_aggro {mode} -> {tg.name}",
     "set_targeting": lambda tg: f"set_targeting -> {tg.name}",
     "retarget": lambda tg, ref: f"retarget {ref} -> {tg.name}",

@@ -43,5 +43,39 @@ return {
 
     { id = "hold_garden_of_avalon", corpus = 160, family = "exchange", tags = { "spell" }, trigger = "cast", cooldown = 60,
       ops = { { kind = "mass_resurrect", target = "self", radius = 30, pct = 100 } } },
+
+    -- slice G1b (src/effects/social.py, tests/test_effect_social_spec.py): reputation / diplomacy / contract / pools. family = "social".
+    { id = "hold_zero_speech", corpus = 108, family = "social", tags = { "spell" }, trigger = "cast", range = 30, cooldown = 20, needs_target = true,
+      ops = { { kind = "reputation", target = "enemy", faction = "citizens", delta = 60,
+                on_tier = { revered = { { kind = "set_faction", target = "enemy", faction = "hero" } } } } } },
+
+    { id = "hold_paragon_persuasion", corpus = 145, family = "social", tags = { "spell" }, trigger = "cast", range = 30, cooldown = 20, needs_target = true,
+      ops = { { kind = "reputation", target = "enemy", delta = 30,
+                on_tier = { friendly = { { kind = "diplomacy", target = "enemy", relation = "ceasefire", duration = { flat = 20 } } } } } } },
+
+    { id = "hold_pewter_burn", corpus = 110, family = "social", tags = { "spell" }, trigger = "cast", cooldown = 30,
+      ops = { { kind = "fuel_consume", target = "self", pool = "pewter", rate = 10, duration = { flat = 8 },
+                ["then"] = { { kind = "mod", target = "self", stat = "attack_damage", op = "add", value = { flat = 10 }, duration = { flat = 8 } } } } } },
+
+    { id = "hold_bardic_inspiration", corpus = 127, family = "social", tags = { "spell" }, trigger = "cast", cooldown = 10,
+      ops = { { kind = "pool", target = "self", pool = "inspiration", action = "grant", amount = 2 } } },
+
+    { id = "hold_waterfowl_dance", corpus = 140, family = "social", tags = { "attack" }, trigger = "cast", range = 30, cooldown = 15, needs_target = true,
+      ops = { { kind = "pool", target = "self", pool = "lifesteal_hits", action = "grant", amount = 4 },
+              { kind = "pool", target = "enemy", pool = "lifesteal_hits", action = "use", count = 4,
+                ["then"] = { { kind = "deal", target = "enemy", stat = "hp", op = "sub", value = { flat = 4 } },
+                             { kind = "heal", target = "self", stat = "hp", value = { flat = 2 } } } } } },
+
+    { id = "hold_smite", corpus = 142, family = "social", tags = { "spell" }, trigger = "cast", range = 30, cooldown = 6, needs_target = true,
+      ops = { { kind = "fuel_consume", target = "enemy", pool = "warp", amount = 15,
+                ["then"] = { { kind = "deal", target = "enemy", stat = "hp", op = "sub", value = { flat = 30 } } } } } },
+
+    { id = "hold_broker_ceasefire", corpus = 154, family = "social", tags = { "spell" }, trigger = "cast", range = 30, cooldown = 30, needs_target = true,
+      ops = { { kind = "diplomacy", target = "enemy", relation = "ceasefire", duration = { flat = 30 } } } },
+
+    { id = "hold_loan_interest", corpus = 155, family = "social", tags = { "spell" }, trigger = "cast", range = 30, cooldown = 30, needs_target = true,
+      ops = { { kind = "contract", target = "enemy", id = "loan", principal = 100, duration = { flat = 20 }, interest = { rate = 0.1, every = 5 },
+                b_ops = { { kind = "heal", target = "enemy", stat = "mana", value = { flat = 100 } } },
+                breach = { penalty_ops = { { kind = "mod", target = "enemy", stat = "defense", op = "add", value = { flat = -5 }, duration = { flat = 10 } } } } } } },
   },
 }
