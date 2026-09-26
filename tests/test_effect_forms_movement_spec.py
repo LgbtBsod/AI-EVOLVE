@@ -45,7 +45,7 @@ def forms(mgr, ent):
 
 
 def test_every_corpus_row_validates_and_is_marked():
-    assert {a["corpus"] for a in ROWS.values() if "corpus" in a} == {8, 9, 17, 23, 24, 27, 28, 36}
+    assert {a["corpus"] for a in ROWS.values() if "corpus" in a and a.get("family") != "control"} == {8, 9, 17, 23, 24, 27, 28, 36}
     for aid, ab in ROWS.items():
         for o in walk(ab["ops"]):
             assert validate_op(o, f"{aid}.{o['kind']}") == [], (aid, o)

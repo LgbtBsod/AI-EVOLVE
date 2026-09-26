@@ -25,6 +25,7 @@ from functools import lru_cache
 from typing import Any, Callable, NamedTuple, Optional, Protocol
 
 from src.core.adaptation import WHEEL_MAX_DEFAULT
+from src.effects.control import CONTROL_HANDLERS
 
 # ---------------------------------------------------------------- spec kind names -> canon (lua_content/kind_aliases.lua)
 
@@ -335,6 +336,13 @@ class OpHost(Protocol):
     def op_aggro(self, cx: OpCall, tgt: Any) -> dict: ...       # {faction, aggro_mode, targeting, target}
     def set_aggro(self, cx: OpCall, tgt: Any, **kv: Any) -> None: ...
     def op_nested_ops(self, cx: OpCall, tgt: Any, ops: list) -> None: ...  # on_adapt/on_max поддеревья
+    # --- control (src/effects/control.py) ---
+    def op_control(self, tgt: Any) -> dict: ...                          # {"rec": запись активного контроля}
+    def op_controller(self, cx: OpCall) -> Any: ...                      # id того, кто контролирует (источник вызова)
+    def op_faction(self, cx: OpCall, tgt: Any, new: Any = None) -> Any: ...  # фракция цели (new -> сменить); вернуть прежнюю
+    def op_resisted(self, cx: OpCall, tgt: Any, sid: str) -> bool: ...   # status_resist_<sid> (одна seeded-выборка при 0<p<100)
+    def op_roll(self, cx: OpCall) -> float: ...                          # [0,1) из seeded RNG хоста
+    def op_stat_of(self, cx: OpCall, who: str, tgt: Any, stat: str) -> float: ...  # стат источника ("source") / цели ("target")
 
 
 # ---------------------------------------------------------------- shared helpers (Mahoraga specs)
@@ -1030,6 +1038,7 @@ OP_HANDLERS: dict[str, Handler] = {
     "escalate": op_escalate, "deescalate": op_deescalate, "trigger_true_form": op_trigger_true_form,
     "rotate_wheel": op_rotate_wheel, "display_wheel": op_display_wheel, "halt_wheel": op_halt_wheel,
     "stance": op_stance, "transform": op_transform, "timed_power_up": op_timed_power_up,
+    **CONTROL_HANDLERS,
 }
 
 

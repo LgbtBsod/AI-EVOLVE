@@ -139,11 +139,25 @@ _REQ_EARLY = {
 }
 
 
+CONTROL_KINDS = ("hypnosis", "command", "possess", "dominance", "temptation", "tame")
+
+
+def _control_errors(o, kind):
+    req, ch = o.get("requires"), o.get("chance")
+    if req is not None and (not isinstance(req, dict) or not req.get("stat") or req.get("cmp", "lt") not in ("lt", "le", "gt", "ge")):
+        return [f"kind={kind} requires: {{stat, cmp: lt|le|gt|ge, vs: 'source' | number}}"]
+    if ch is not None and (not isinstance(ch, (int, float)) or not 0 <= ch <= 100):
+        return [f"kind={kind} chance must be 0..100"]
+    return []
+
+
 def _c_required_early(o, kind, path, ie):
     if kind in _REQ_EARLY and not o.get(_REQ_EARLY[kind][0]):
         return [_REQ_EARLY[kind][1]]
     if kind == "timed_power_up" and o.get("id") and o.get("duration") is None:
         return ["kind=timed_power_up requires duration"]
+    if kind in CONTROL_KINDS:
+        return _control_errors(o, kind)
     if kind == "move" and o.get("mode") not in MOVE_MODES | MOVE_MODES_SPEC:
         return [f"kind=move requires mode in {sorted(MOVE_MODES)}"]
     return []

@@ -483,6 +483,9 @@ _NOTES: dict[str, Callable[..., str]] = {
     "use_learned_none": lambda tg: f"use_learned_technique: nothing learned -> {tg.name}",
     "use_learned_technique": lambda tg, tech: f"use_learned_technique {tech} -> {tg.name}",
     "set_faction": lambda tg, faction: f"set_faction {faction} -> {tg.name}",
+    "control_start": lambda tg, kind: f"control {kind} -> {tg.name}",
+    "control_blocked": lambda tg, why: f"control blocked ({why}) -> {tg.name}",
+    "control_end": lambda tg, cid: f"control_end {cid} -> {tg.name}",
     "set_aggro": lambda tg, mode: f"set_aggro {mode} -> {tg.name}",
     "set_targeting": lambda tg: f"set_targeting -> {tg.name}",
     "retarget": lambda tg, ref: f"retarget {ref} -> {tg.name}",
@@ -1038,6 +1041,30 @@ class EffectRuntime:
 
     def set_aggro(self, _cx: OpCall, tgt: Unit, **kv: Any) -> None:
         tgt.external["aggro"] = dict(kv)
+
+    # --- control (src/effects/control.py): комната записывает контроль, но не гасит его по таймеру (это делает EffectManager) ---
+    def op_control(self, tgt: Unit) -> dict:
+        return tgt.external.setdefault("control", {})
+
+    def op_controller(self, cx: OpCall) -> Any:
+        return getattr(cx.source, "name", None)
+
+    def op_faction(self, _cx: OpCall, tgt: Unit, new: Any = None) -> Any:
+        ag = tgt.external.setdefault("aggro", {})
+        old = ag.get("faction")
+        if new is not None:
+            ag["faction"] = new
+        return old
+
+    def op_resisted(self, _cx: OpCall, tgt: Unit, sid: str) -> bool:
+        from . import statuses
+        return statuses.resisted(tgt, sid, lambda: 0.0)       # no rng in the room: >=100 only
+
+    def op_roll(self, _cx: OpCall) -> float:
+        return 0.0
+
+    def op_stat_of(self, cx: OpCall, who: str, tgt: Unit, stat: str) -> float:
+        return float((cx.source if who == "source" else tgt)._eff(stat))
 
     def op_nested_ops(self, cx: OpCall, _tgt: Unit, ops: list) -> None:
         self.op_nested(cx, ops, ".nested", True)

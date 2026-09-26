@@ -18,6 +18,9 @@ return {
     pull     = { canon = "move", exact = true, params = { mode = "pull" },     note = "move mode=pull: target toward the source" },
     push     = { canon = "move", exact = true, params = { mode = "push" },     note = "move mode=push: target away from the source" },
     swap     = { canon = "move", exact = true, params = { mode = "swap" },     note = "move mode=swap: exchange positions with the other party" },
+    -- control family (src/effects/control.py)
+    blood_manipulation = { canon = "possess",   exact = true, params = { action = "puppet" }, note = "possess action=puppet: the caster drives the target's body (faction + targeting override)" },
+    enter_dream        = { canon = "hypnosis",  exact = true, params = { perception = "dream" }, note = "hypnosis perception=dream: the target lives in the caster's illusion" },
     debuff   = { canon = "buff", exact = false, note = "buff carries mods via a buff record; semantics differ" },
     erase    = { canon = "kill", exact = false, note = "kill is weaker: no removal from the world / memory" },
     copy_technique = { canon = "learn", exact = false, note = "learn needs observed_technique from perception" },

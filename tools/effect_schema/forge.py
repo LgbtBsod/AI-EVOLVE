@@ -249,6 +249,16 @@ def primitive_effects() -> list[dict]:
             {"kind": "timed_power_up", "target": "self", "id": "forge_power", "duration": dur(4),
              "on_exit": [{"kind": "drain", "target": "self", "stat": "hp", "op": "sub", "value": {"flat": 1}}]},
         ], "form"),
+        # контроль цели (src/effects/control.py): приказ, гипноз, вселение; tame - постоянная смена фракции
+        ev("prim.control", "combat_start", [
+            {"kind": "command", "target": "self", "id": "forge_cmd", "duration": dur(3), "action": "stand_still"},
+            {"kind": "hypnosis", "target": "self", "id": "forge_hyp", "duration": dur(3), "target_ref": "caster"},
+            {"kind": "possess", "target": "self", "id": "forge_pos", "duration": dur(3),
+             "requires": {"stat": "max_hp", "cmp": "lt", "vs": 1000}},
+            {"kind": "dominance", "target": "self", "duration": dur(3)},
+            {"kind": "temptation", "target": "self", "duration": dur(3), "action": "follow"},
+            {"kind": "tame", "target": "self", "chance": 50},
+        ], "control"),
         # кража и применение техники
         ev("prim.learn", "use", [
             {"kind": "learn", "target": "self", "ability_id": "forge_technique"},

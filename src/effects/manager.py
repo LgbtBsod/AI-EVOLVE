@@ -46,6 +46,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Optional, Protocol
 
 from . import damage
+from .control import release_control
 from .ops import OpCall, Periodic, Tracked, apply_op, form_abilities, replace_contribution_game
 from .runtime import EffectRuntime, Unit, buff_fields, resolve_value, rules
 
@@ -523,6 +524,7 @@ class EffectManager:
             if not is_alive(st.entity) and not st.periodic:
                 continue
             self._expire_forms(st, now)
+            self._expire_control(st, now)
             for k in [k for k, (until, _l) in st.external.items() if until <= now]:
                 del st.external[k]
             for k in [k for k, (until, _t, _v) in st.vision_vs.items() if until <= now]:
@@ -1013,6 +1015,40 @@ class EffectManager:
             self.op_form_clear_mods(None, st, rec["id"])
             if rec.get("on_exit"):
                 self._run_ops(st, list(rec["on_exit"]), st.entity, f"form:{rec['id']}#exit", ())
+
+    # --- control (src/effects/control.py): запись в unit.external["control"], фракция = EntityState.faction ---
+    def op_control(self, tgt: EntityState) -> dict:
+        return tgt.unit.external.setdefault("control", {})
+
+    def op_controller(self, cx: OpCall) -> Any:
+        return entity_id(cx.source.entity)
+
+    def op_faction(self, _cx: OpCall, tgt: EntityState, new: Any = None) -> Any:
+        old = tgt.faction
+        if new is not None:
+            tgt.faction = new
+        return old
+
+    def op_resisted(self, _cx: OpCall, tgt: EntityState, sid: str) -> bool:
+        from . import statuses
+        return statuses.resisted(tgt.unit, sid, self.rng.random)
+
+    def op_roll(self, _cx: OpCall) -> float:
+        return self.rng.random()
+
+    def op_stat_of(self, cx: OpCall, who: str, tgt: EntityState, stat: str) -> float:
+        return float((cx.source if who == "source" else tgt).unit._eff(stat))
+
+    def _expire_control(self, st: EntityState, now: float) -> None:
+        """Контроль кончается по таймеру или со смертью контролирующего: фракция/aggro возвращаются, затем on_exit."""
+        rec = (st.unit.external.get("control") or {}).get("rec")
+        if rec is None:
+            return
+        boss = next((s for s in self.states.values() if entity_id(s.entity) == rec["controller"]), None)
+        if (rec["until"] is not None and rec["until"] <= now) or boss is None or not is_alive(boss.entity):
+            release_control(self, None, st)
+            if rec.get("on_exit"):
+                self._run_ops(st, list(rec["on_exit"]), st.entity, f"control:{rec['id']}#exit", ())
 
     def op_note(self, cx: OpCall, what: str, *args) -> None:
         """В игре лога операций нет (его ведёт только тренировочная комната)."""

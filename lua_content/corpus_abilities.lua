@@ -2,6 +2,7 @@
 -- Executable specs of the corpus abilities (tests/fixtures/ability_corpus.json) that the FORM and MOVEMENT families unblocked.
 -- NOT wired into live gameplay: no enemy/hero uses these rows; tests/test_effect_forms_movement_spec.py runs each on EffectManager.
 -- corpus = id in the corpus; trigger = "cast" (the caster uses it); numbers are small and plausible, not balanced.
+-- Slice F2 rows carry family = "control" (hypnosis / command / possess / dominance / tame / temptation: src/effects/control.py, docs/EFFECT_SCHEMA.md "Control").
 -- Kinds: dash / teleport / pull / push / swap = `move` with an implied mode (kind_aliases.lua); stance / transform / timed_power_up
 -- = forms (docs/EFFECT_SCHEMA.md "Forms"); consume = drain; status = apply_effect.
 local function hit(v) return { kind = "deal", target = "enemy", stat = "hp", op = "sub", value = { flat = v } } end
@@ -64,5 +65,30 @@ return {
     { id = "corpus_repulsor", corpus = 36, tags = { "spell" }, trigger = "cast", range = 14, cooldown = 3, needs_target = true,
       ops = { { kind = "consume", target = "self", stat = "mana", value = { flat = 20 } }, hit(18),
               { kind = "dash", target = "self", distance = 3 } } },
+
+    -- ---- slice F2: CONTROL family (family = "control") ----
+    { id = "corpus_tsukuyomi", corpus = 11, family = "control", tags = { "spell" }, trigger = "cast", range = 15, cooldown = 30, needs_target = true,
+      ops = { { kind = "hypnosis", target = "enemy", id = "tsukuyomi", duration = { flat = 6 }, target_ref = "caster", perception = "dream" } } },
+    { id = "corpus_infinite_tsukuyomi", corpus = 13, family = "control", tags = { "spell" }, trigger = "cast", range = 15, cooldown = 90, needs_target = true,
+      ops = { { kind = "hypnosis", target = "enemy", id = "infinite_tsukuyomi", duration = { flat = 12 }, perception = "dream" } } },
+    { id = "corpus_kyoka_suigetsu", corpus = 15, family = "control", tags = { "spell" }, trigger = "cast", range = 15, cooldown = 20, needs_target = true,
+      ops = { { kind = "hypnosis", target = "enemy", id = "kyoka_suigetsu", duration = { flat = 8 }, perception = "false" } } },
+    { id = "corpus_parasite_strings", corpus = 20, family = "control", tags = { "spell" }, trigger = "cast", range = 20, cooldown = 15, needs_target = true,
+      ops = { { kind = "possess", target = "enemy", id = "parasite", duration = { flat = 10 },
+                requires = { stat = "max_hp", cmp = "lt", vs = "source" },
+                on_exit = { { kind = "deal", target = "self", stat = "hp", op = "sub", value = { flat = 5 } } } } } },
+    { id = "corpus_one_ring", corpus = 49, family = "control", tags = { "spell" }, trigger = "cast", range = 20, cooldown = 60, needs_target = true,
+      ops = { { kind = "dominance", target = "enemy", id = "one_ring", duration = { flat = 20 }, requires = { stat = "max_hp", cmp = "lt", vs = "source" } } } },
+    { id = "corpus_the_voice", corpus = 51, family = "control", tags = { "spell" }, trigger = "cast", range = 10, cooldown = 12, needs_target = true,
+      ops = { { kind = "command", target = "enemy", id = "voice", duration = { flat = 4 }, action = "stand_still" } } },
+    { id = "corpus_axii", corpus = 58, family = "control", tags = { "spell" }, trigger = "cast", range = 8, cooldown = 10, needs_target = true,
+      ops = { { kind = "command", target = "enemy", id = "axii", duration = { flat = 8 }, action = "ally" },
+              { kind = "set_faction", target = "enemy", faction = "hero" } } },
+    { id = "corpus_bloodbending", corpus = 60, family = "control", tags = { "spell" }, trigger = "cast", range = 12, cooldown = 25, needs_target = true,
+      ops = { { kind = "possess", target = "enemy", id = "bloodbend", duration = { flat = 5 }, action = "puppet" } } },
+    { id = "corpus_tame_beast", family = "control", tags = { "spell" }, trigger = "cast", range = 8, needs_target = true,   -- permanent, seeded roll
+      ops = { { kind = "tame", target = "enemy", chance = 50 } } },
+    { id = "corpus_temptation", family = "control", tags = { "spell" }, trigger = "cast", range = 8, needs_target = true,
+      ops = { { kind = "temptation", target = "enemy", duration = { flat = 6 }, action = "follow", requires = { stat = "max_hp", cmp = "lt", vs = 1000 } } } },
   },
 }

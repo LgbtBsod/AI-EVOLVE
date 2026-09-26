@@ -1,5 +1,5 @@
 {
-"n_lua": 478,
+"n_lua": 489,
 "cases": [
 [
 "\"x\"",
@@ -15,6 +15,22 @@
 ],
 [
 "{\"abilities\": {\"add\": [\"kurama_bomb\"], \"remove\": [\"weapon_attack\"]}, \"duration\": {\"flat\": 30}, \"id\": \"kurama\", \"kind\": \"transform\", \"stats\": [{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"self\", \"value\": {\"flat\": 10}}, {\"kind\": \"mod\", \"op\": \"mul\", \"stat\": \"move_speed\", \"target\": \"self\", \"value\": {\"flat\": 1.3}}], \"target\": \"self\"}",
+[]
+],
+[
+"{\"action\": \"ally\", \"duration\": {\"flat\": 8}, \"id\": \"axii\", \"kind\": \"command\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"action\": \"follow\", \"duration\": {\"flat\": 6}, \"kind\": \"temptation\", \"requires\": {\"cmp\": \"lt\", \"stat\": \"max_hp\", \"vs\": 1000}, \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"action\": \"puppet\", \"duration\": {\"flat\": 5}, \"id\": \"bloodbend\", \"kind\": \"possess\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"action\": \"stand_still\", \"duration\": {\"flat\": 4}, \"id\": \"voice\", \"kind\": \"command\", \"target\": \"enemy\"}",
 []
 ],
 [
@@ -262,6 +278,10 @@
 [
 "op: area center must be 'target' or 'self'"
 ]
+],
+[
+"{\"chance\": 50, \"kind\": \"tame\", \"target\": \"enemy\"}",
+[]
 ],
 [
 "{\"conflict_with\": [\"gear_fifth\"], \"duration\": {\"flat\": 10}, \"exclusive_group\": \"gear2\", \"id\": \"gear_second\", \"kind\": \"stance\", \"target\": \"self\"}",
@@ -588,6 +608,10 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 10}, \"id\": \"parasite\", \"kind\": \"possess\", \"on_exit\": [{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"flat\": 5}}], \"requires\": {\"cmp\": \"lt\", \"stat\": \"max_hp\", \"vs\": \"source\"}, \"target\": \"enemy\"}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 10}, \"kind\": \"mark\", \"mark_id\": \"shunshin\", \"target\": \"enemy\", \"value\": {\"flat\": 1}}",
 []
 ],
@@ -672,6 +696,10 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 12}, \"id\": \"infinite_tsukuyomi\", \"kind\": \"hypnosis\", \"perception\": \"dream\", \"target\": \"enemy\"}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 12}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"self\", \"value\": {\"pct\": 22.5}}",
 []
 ],
@@ -733,6 +761,10 @@
 ],
 [
 "{\"duration\": {\"flat\": 20}, \"id\": \"gear5_rush\", \"kind\": \"timed_power_up\", \"on_exit\": [{\"kind\": \"drain\", \"op\": \"sub\", \"stat\": \"stamina\", \"target\": \"self\", \"value\": {\"flat\": 30}}], \"target\": \"self\"}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 20}, \"id\": \"one_ring\", \"kind\": \"dominance\", \"requires\": {\"cmp\": \"lt\", \"stat\": \"max_hp\", \"vs\": \"source\"}, \"target\": \"enemy\"}",
 []
 ],
 [
@@ -1004,6 +1036,10 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 6}, \"id\": \"tsukuyomi\", \"kind\": \"hypnosis\", \"perception\": \"dream\", \"target\": \"enemy\", \"target_ref\": \"caster\"}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 6}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"enemy\", \"value\": {\"pct\": -40}}",
 []
 ],
@@ -1076,6 +1112,10 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 8}, \"id\": \"kyoka_suigetsu\", \"kind\": \"hypnosis\", \"perception\": \"false\", \"target\": \"enemy\"}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 8}, \"kind\": \"mark\", \"mark_id\": \"gum\", \"target\": \"enemy\", \"value\": {\"flat\": 1}}",
 []
 ],
@@ -1130,6 +1170,10 @@
 "op: unknown stat 'attack' (use custom:<name> for new stats)",
 "op: extend.on='zz' is not an event"
 ]
+],
+[
+"{\"faction\": \"hero\", \"kind\": \"set_faction\", \"target\": \"enemy\"}",
+[]
 ],
 [
 "{\"fail\": [{\"kind\": \"set\", \"op\": \"set\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"flat\": 1}}, {\"buff_id\": \"last_will\", \"cooldown\": {\"flat\": 30}, \"duration\": {\"flat\": 5, \"scale\": {\"every\": 10, \"factor\": 2, \"of\": \"hp_missing_below_40\"}}, \"extend\": {\"flat\": 5, \"on\": \"kill\"}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}], \"kind\": \"drain\", \"op\": \"sub\", \"scale\": {\"every\": 10, \"of\": \"hp_missing_below_40\", \"value\": {\"of\": \"max_hp\", \"pct\": 0.5}}, \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"of\": \"max_hp\", \"pct\": 0.5}}",
@@ -1949,7 +1993,7 @@
 [
 "{\"kind\": \"hypnosis\", \"when\": \"true\"}",
 [
-"op: unknown kind 'hypnosis'"
+"op.when: expression element not allowed: Name"
 ]
 ],
 [
