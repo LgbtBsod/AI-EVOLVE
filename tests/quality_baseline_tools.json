@@ -144,11 +144,7 @@
    "dup_defs": 1
   },
   "tools/probe_analysis.py": {
-   "B905": 1,
-   "C901": 2,
-   "PLR0912": 2,
-   "PLR0913": 1,
-   "PLR0915": 2
+   "B905": 1
   },
   "tools/probe_db.py": {
    "B905": 2,
@@ -310,10 +306,9 @@
   "tools/effect_schema/validate.py::_references": 21,
   "tools/effect_schema/validate.py::validate_effect": 34,
   "tools/probe_analysis.py::combat_stats": 35,
-  "tools/probe_analysis.py::forecast": 49,
+  "tools/probe_analysis.py::forecast": 15,
   "tools/probe_analysis.py::format_forecast": 11,
   "tools/probe_analysis.py::format_hypotheses": 11,
-  "tools/probe_analysis.py::hypotheses": 51,
   "tools/probe_db.py::cmd_compare": 11,
   "tools/probe_db.py::cmd_trend": 11,
   "tools/probe_db.py::ingest": 19,
@@ -384,12 +379,12 @@
   "B904": 1,
   "B905": 15,
   "BLE001": 25,
-  "C901": 24,
+  "C901": 22,
   "PERF401": 15,
   "PLR0911": 6,
-  "PLR0912": 12,
-  "PLR0913": 19,
-  "PLR0915": 9,
+  "PLR0912": 10,
+  "PLR0913": 18,
+  "PLR0915": 7,
   "PLW0603": 4,
   "PLW1510": 5,
   "PLW2901": 6,
@@ -400,11 +395,11 @@
  },
  "totals": {
   "blind_except": 25,
-  "cc11": 108,
-  "cc_max": 51,
+  "cc11": 107,
+  "cc_max": 37,
   "dup_defs": 8,
   "layers_broken": 0,
-  "ruff": 186,
+  "ruff": 179,
   "vulture": 3
  },
  "version": 1

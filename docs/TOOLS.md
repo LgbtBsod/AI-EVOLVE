@@ -124,6 +124,7 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `probe_analysis` | `import probe_analysis` | run analysis shared by dev_probe, agent_play and probe_db: hypotheses and one summary; the loops live in... | reading raw samples | summary text | - |
 | `probe_invariants` | `import probe_invariants` | world invariants checked on every frame of agent_play (HP over max, NaN, unit outside the map) | noticing broken state by eye | violation list | - |
 | `probe_kernels` | `import probe_kernels` | number-crunching of run analysis: rust_core.RunAnalytics with an equivalent Python fallback | Python loops over samples | numbers | - |
+| `probe_rules` | `python tools/probe_rules.py` | generic evaluator of the hypothesis/outlook rules kept as data in lua_content/probe_rules.lua; JSON... | if/elif rule chains in probe_analysis | hypothesis dicts | - |
 | `probe_runtime` | `import probe_runtime` | shared runtime of dev_probe and agent_play: quiet engine, render modes, virtual clock, scene reads | booting Panda3D by hand | - | - |
 | `probe_settings` | `import probe_settings` | loads lua_content/dev_tools.lua and qa.lua as settings (qa_settings(), Python defaults as fallback) | hard-coded thresholds in Python | dict | - |
 | `qa_graph` | `import qa_graph` | static import graph: what is live or dead, which tests a change touches (behind affected, dead, ctx, check) | grepping for importers | graph object | - |
