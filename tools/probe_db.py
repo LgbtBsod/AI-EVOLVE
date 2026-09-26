@@ -31,6 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import probe_analysis as analysis  # noqa: E402
 import probe_kernels as kernels  # noqa: E402
+from jsonl_io import read_jsonl  # noqa: E402
 from probe_settings import ROOT, section  # noqa: E402
 
 SCHEMA = """
@@ -127,10 +128,7 @@ def ingest_quietly(run_id, meta, samples, events, kills=(), despawns=()):
         return f"probe DB ingest failed: {exc!r}"
 
 
-def _read_jsonl(path):
-    if not path.exists():
-        return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+_read_jsonl = read_jsonl  # tolerant reader shared with the other tools
 
 
 def ingest_dir(con, run_dir):

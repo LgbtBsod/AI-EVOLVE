@@ -11,8 +11,6 @@ import copy
 from functools import lru_cache
 from pathlib import Path
 
-import lua_bridge
-
 ROOT = Path(__file__).resolve().parent.parent
 LUA_PATH = ROOT / "lua_content" / "dev_tools.lua"
 QA_LUA_PATH = ROOT / "lua_content" / "qa.lua"
@@ -70,6 +68,8 @@ def _load(path_str, qa=False):
     result = copy.deepcopy(QA_DEFAULTS if qa else DEFAULTS)
     path = Path(path_str)
     try:
+        import lua_bridge  # lazy: pulls src.content (logging, traceback) ~50 ms
+
         _merge(result, lua_bridge.load(path))
         result["_source"] = str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else str(path)
     except RuntimeError as exc:  # нет ни rust_core, ни lupa

@@ -26,6 +26,7 @@ import time
 from datetime import datetime, timezone
 
 import qa_report as R
+from git_util import git as _git
 from probe_settings import ROOT, qa_settings
 
 GH_HINT = "gh CLI not found - install https://cli.github.com/ then run `gh auth login`"
@@ -295,11 +296,6 @@ def build_report(run: dict, log_text: str | None, per_block: int = 8, max_lines:
 
 
 # ---------------------------------------------------------------- gh plumbing
-
-def _git(*args) -> str:
-    r = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True)
-    return r.stdout.strip() if r.returncode == 0 else ""
-
 
 def _json(out: str):
     try:

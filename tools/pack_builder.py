@@ -16,6 +16,7 @@ from pathlib import Path
 import file_toc
 import qa_graph
 import tool_registry as TR
+from jsonl_io import tail_jsonl
 from probe_settings import ROOT, qa_settings
 
 _DECL = re.compile(r"^\s*(?:pub\s+)?(?:async\s+)?(?:def|fn|class|struct|function)\s+([\w.]+)|^\s*([A-Za-z_]\w*)\s*=\s*\{")
@@ -182,11 +183,7 @@ def tool_hits(task: str, cfg: dict, settings: dict, root: Path = ROOT) -> list:
 def _last_rows(path: Path, tail: int) -> dict:
     last = {}
     if path.exists():
-        for line in path.read_text(encoding="utf-8", errors="replace").splitlines()[-tail:]:
-            try:
-                row = json.loads(line)
-            except ValueError:
-                continue
+        for row in tail_jsonl(path, tail):
             last[row.get("name")] = row
     return last
 

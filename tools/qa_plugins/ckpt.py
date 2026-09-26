@@ -15,11 +15,12 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import tempfile
 import time
 from pathlib import Path
 
+from git_util import git as _git
+from jsonl_io import append_jsonl, read_jsonl
 from probe_settings import ROOT, qa_settings
 
 REF = "refs/qa/ckpt"
@@ -30,14 +31,12 @@ def cfg() -> dict:
     return {**DEFAULTS, **(qa_settings().get("ckpt") or {})}
 
 
-def git(root: Path, *args: str, env: dict | None = None) -> str:
+def git_at(root: Path, *args: str, env: dict | None = None) -> str:
     """stdout of one git call ('' on any failure: the callers treat 'no answer' as 'nothing')."""
-    try:
-        run = subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                             env={**os.environ, **(env or {})}, timeout=30, check=False)
-    except (OSError, subprocess.SubprocessError):
-        return ""
-    return run.stdout.rstrip("\r\n") if run.returncode == 0 else ""
+    return _git(*args, root=root, env=env, timeout=30, raw=True)
+
+
+git = git_at  # name used by resume.py and tests
 
 
 def out_dir(root: Path) -> Path:
@@ -46,7 +45,7 @@ def out_dir(root: Path) -> Path:
 
 def status_all(root: Path) -> tuple[list[tuple[str, str]], int, int]:
     """([(status, path)], behind, ahead): the working tree (modified, added, untracked) and the sync with its upstream, from ONE `git status -b -z` call."""
-    raw = git(root, "-c", "core.quotepath=off", "status", "--porcelain=v1", "-z", "-uall", "-b")
+    raw = git_at(root, "-c", "core.quotepath=off", "status", "--porcelain=v1", "-z", "-uall", "-b")
     parts, rows, i = raw.split("\0"), [], 0
     behind = ahead = 0
     while i < len(parts):
@@ -94,23 +93,23 @@ def last_verdict(root: Path, tail: int) -> str:
 
 
 def next_number(root: Path) -> int:
-    refs = git(root, "for-each-ref", "--format=%(refname)", REF).splitlines()
+    refs = git_at(root, "for-each-ref", "--format=%(refname)", REF).splitlines()
     nums = [int(r.rsplit("/", 1)[1]) for r in refs if r.rsplit("/", 1)[1].isdigit()]
     return max(nums, default=0) + 1
 
 
 def prune(root: Path, keep: int) -> int:
-    refs = git(root, "for-each-ref", "--format=%(refname)", REF).splitlines()
+    refs = git_at(root, "for-each-ref", "--format=%(refname)", REF).splitlines()
     nums = sorted(int(r.rsplit("/", 1)[1]) for r in refs if r.rsplit("/", 1)[1].isdigit())
     old = nums[:-keep] if keep > 0 else nums
     for n in old:
-        git(root, "update-ref", "-d", f"{REF}/{n}")
+        git_at(root, "update-ref", "-d", f"{REF}/{n}")
     return len(old)
 
 
 def snapshot(root: Path, number: int, message: str) -> str:
     """Commit the whole working tree (tracked + untracked, not ignored) under refs/qa/ckpt/N. A temporary index: the real one and the tree are untouched. '' = failed."""
-    gd = Path(git(root, "rev-parse", "--absolute-git-dir") or "")
+    gd = Path(git_at(root, "rev-parse", "--absolute-git-dir") or "")
     if not gd.is_dir():
         return ""
     fd, tmp = tempfile.mkstemp(prefix="qa_ckpt_index_", dir=gd)
@@ -120,27 +119,19 @@ def snapshot(root: Path, number: int, message: str) -> str:
             shutil.copyfile(gd / "index", tmp)
         env = {"GIT_INDEX_FILE": tmp, "GIT_AUTHOR_NAME": "qa", "GIT_AUTHOR_EMAIL": "qa@localhost",
                "GIT_COMMITTER_NAME": "qa", "GIT_COMMITTER_EMAIL": "qa@localhost"}
-        git(root, "add", "-A", env=env)
-        tree = git(root, "write-tree", env=env)
-        head = git(root, "rev-parse", "--verify", "-q", "HEAD")
-        commit = git(root, "commit-tree", tree, *(["-p", head] if head else []), "-m", message, env=env) if tree else ""
+        git_at(root, "add", "-A", env=env)
+        tree = git_at(root, "write-tree", env=env)
+        head = git_at(root, "rev-parse", "--verify", "-q", "HEAD")
+        commit = git_at(root, "commit-tree", tree, *(["-p", head] if head else []), "-m", message, env=env) if tree else ""
         if commit:
-            git(root, "update-ref", f"{REF}/{number}", commit)
+            git_at(root, "update-ref", f"{REF}/{number}", commit)
         return commit
     finally:
         Path(tmp).unlink(missing_ok=True)
 
 
 def read_journal(root: Path) -> list[dict]:
-    path = out_dir(root) / "journal.jsonl"
-    rows: list[dict] = []
-    if path.is_file():
-        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-            try:
-                rows.append(json.loads(line))
-            except ValueError:
-                continue
-    return rows
+    return read_jsonl(out_dir(root) / "journal.jsonl")
 
 
 def save(root: Path, done: str, nxt: str, files: str = "", agent: str = "", auto: bool = False) -> dict | None:
@@ -151,12 +142,11 @@ def save(root: Path, done: str, nxt: str, files: str = "", agent: str = "", auto
         return None
     number = next_number(root)
     commit = snapshot(root, number, f"qa ckpt #{number}: {done}"[:200])
-    row = {"ts": int(time.time()), "n": number, "head": git(root, "rev-parse", "--short", "HEAD"), "snapshot": commit[:12],
+    row = {"ts": int(time.time()), "n": number, "head": git_at(root, "rev-parse", "--short", "HEAD"), "snapshot": commit[:12],
            "dirty": [{"path": p, "st": s, "sha": sha_of(root / p)} for s, p in dirty], "verdict": last_verdict(root, settings["history_tail_bytes"]),
            "done": done, "next": nxt, "files": [f for f in files.split(",") if f], "agent": agent, "auto": auto}
     out_dir(root).mkdir(parents=True, exist_ok=True)
-    with (out_dir(root) / "journal.jsonl").open("a", encoding="utf-8", newline="\n") as fh:
-        fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    append_jsonl(out_dir(root) / "journal.jsonl", row)
     prune(root, int(settings["keep"]))
     return row
 

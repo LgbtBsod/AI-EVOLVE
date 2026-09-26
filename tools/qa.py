@@ -22,7 +22,7 @@
 Команды из tools/qa_plugins/*.py подключаются сами: модуль с register(sub)
 (добавить подпарсер и set_defaults(func=...)) - новая команда без правки qa.py.
 
-Прогоны игры идут параллельно подпроцессами (tools/qa_pool.py, asyncio),
+Прогоны игры идут параллельно подпроцессами (tools/qa_pool.py, потоки),
 статистика и обход графа - в Rust (rust_core.QaKernels), настройки - Lua
 (lua_content/qa.lua). Детали всегда на диске (dev_probe_output/qa/), в
 консоль - только вывод.
@@ -44,7 +44,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import probe_kernels as kernels  # noqa: E402
 import qa_graph  # noqa: E402
-from file_toc import outline  # noqa: E402, F401 - `qa.outline`: the table of contents lives in file_toc, shared with the read guard
+from file_toc import (
+    outline,  # noqa: E402, F401 - `qa.outline`: the table of contents lives in file_toc, shared with the read guard
+)
+from git_util import changed_files as _changed_files  # noqa: E402
+from git_util import (
+    git,  # noqa: E402, F401 - `qa.git`: the one wrapper lives in git_util
+)
 from probe_settings import ROOT, qa_settings  # noqa: E402
 from qa_pool import Job, default_jobs, python_job, run_many  # noqa: E402
 
@@ -66,21 +72,12 @@ def relpath(p):
 
 # ---------------------------------------------------------------- git / changes
 
-def git(*args):
-    r = subprocess.run(["git", *args], cwd=ROOT, capture_output=True, text=True)
-    return r.stdout.strip() if r.returncode == 0 else ""
-
-
-def changed_files(base=None):
+def _changed_vs_base(base=None):
     """Изменения рабочего дерева + коммиты ветки относительно base (merge-base)."""
-    base = base or qa_settings()["tests"]["base_ref"]
-    files = set()
-    mb = git("merge-base", "HEAD", base)
-    if mb:
-        files |= set(git("diff", "--name-only", mb, "HEAD").splitlines())
-    files |= set(git("diff", "--name-only", "HEAD").splitlines())
-    files |= set(git("ls-files", "--others", "--exclude-standard").splitlines())
-    return sorted(f for f in files if f and (ROOT / f).exists())
+    return _changed_files(base or qa_settings()["tests"]["base_ref"], ROOT)
+
+
+changed_files = _changed_vs_base  # public name used by the plugins
 
 
 # ---------------------------------------------------------------- doctor / brief
@@ -125,9 +122,10 @@ def cmd_brief(args):
     dead = [p for p, s in status.items() if s == "dead"]
     changed = changed_files()
     tests, scripts, _ = qa_graph.impacted(graph, changed)
+    branch = git("rev-parse", "--abbrev-ref", "HEAD")
     known = load_known()
     print(f"env: python {platform.python_version()}, kernels={kernels.BACKEND}, "
-          f"branch={git('rev-parse', '--abbrev-ref', 'HEAD') or '?'}")
+          f"branch={branch or '?'}")
     print(f"changes vs {qa_settings()['tests']['base_ref']}: {len(changed)} file(s)"
           + (f" -> {len(tests)} test file(s), scripts: {', '.join(Path(s).name for s in scripts) or '-'}" if changed else ""))
     print(f"known failing tests: {len(known)} (tests/qa_known_failures.json)")
@@ -702,7 +700,7 @@ def main(argv=None):
     p.add_argument("script")
     p.add_argument("--seed", type=int, default=1)
     p.add_argument("--top", type=int, default=15)
-    load_plugins(sub)
+    load_plugins(sub, argv if argv is not None else sys.argv[1:])
     args = parser.parse_args(argv)
     handler = getattr(args, "func", None) or globals()[f"cmd_{args.cmd}"]
     return handler(args)
@@ -713,17 +711,37 @@ def main(argv=None):
 PLUGIN_ERRORS: dict[str, str] = {}
 
 
-def load_plugins(sub):
-    """tools/qa_plugins/*.py: register(sub) добавляет подкоманды. Сломанный плагин
-    не роняет qa.py - причина видна в `qa.py doctor`."""
+_NO_PLUGINS = {"brief", "affected", "test", "golden", "sweep", "fuzz", "ctx", "dead", "docs", "perf"}  # commands defined in this file
+
+
+def _load_one(sub, name):
     import importlib
+
+    try:
+        importlib.import_module(f"qa_plugins.{name}").register(sub)
+    except Exception as exc:  # noqa: BLE001
+        PLUGIN_ERRORS[name] = f"{type(exc).__name__}: {exc}"
+
+
+def load_plugins(sub, argv=()):
+    """tools/qa_plugins/*.py: register(sub) добавляет подкоманды. Сломанный плагин
+    не роняет qa.py - причина видна в `qa.py doctor`.
+
+    Быстрый путь (старт qa.py ~80 мс короче): команда из этого файла - плагины не импортируются;
+    команда `X` при наличии qa_plugins/X.py - импортируется только он (иначе, как и для --help/doctor, все)."""
     import pkgutil
+
     import qa_plugins
+    cmd = next((a for a in argv if not a.startswith("-")), None)
+    if cmd and not {"-h", "--help"} & set(argv):
+        if cmd in _NO_PLUGINS:
+            return
+        if (Path(qa_plugins.__file__).parent / f"{cmd}.py").is_file():
+            _load_one(sub, cmd)
+            if cmd in sub.choices:
+                return
     for info in pkgutil.iter_modules(qa_plugins.__path__):
-        try:
-            importlib.import_module(f"qa_plugins.{info.name}").register(sub)
-        except Exception as exc:  # noqa: BLE001
-            PLUGIN_ERRORS[info.name] = f"{type(exc).__name__}: {exc}"
+        _load_one(sub, info.name)
 
 
 if __name__ == "__main__":

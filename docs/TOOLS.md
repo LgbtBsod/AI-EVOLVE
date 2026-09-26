@@ -111,7 +111,9 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 |---|---|---|---|---|---|
 | `agent_kit` | `import agent_kit` | roles, short prompts, stage routing and generated .claude/agents/*.md for sub-agents and Workflow stages... | re-typed CONTEXT blocks in agent prompts and Workflow scripts | prompt text / problem list | - |
 | `file_toc` | `import file_toc` | table of contents helper (stdlib only): Python via ast with line ranges, other languages via the regexes... | reading a big file to see what is in it | list of `Lnn name` lines | - |
+| `git_util` | `import git_util` | the one git wrapper: git(*args) -> stdout or '', head(), dirty(), changed_files(rev), git_many() for... | 4 private git() copies in qa.py, ci, ckpt | strings/lists | - |
 | `glob_match` | `import glob_match` | the one path-glob matcher (PurePosixPath.full_match; ** = any dirs) for watches and selection | regex glob translator in check.py | bool | - |
+| `jsonl_io` | `import jsonl_io` | the one jsonl reader/writer: read_jsonl, tail_jsonl, append_jsonl (utf-8, LF, skips corrupt or partial lines) | hand-written json.loads(line) loops | list of rows | - |
 | `lua_bridge` | `import lua_bridge` | alias of src/content/lua_bridge.py: load(path) runs a Lua file in the sandbox and returns its data... | reading Lua files or embedding a Lua runtime | dict from one JSON string | - |
 | `pack_builder` | `import pack_builder` | pack_builder - the logic behind `qa.py pack`: rank files for a task, pick symbol pointers, collect... | - | - | - |
 | `probe_analysis` | `import probe_analysis` | run analysis shared by dev_probe, agent_play and probe_db: hypotheses and one summary; the loops live in... | reading raw samples | summary text | - |
@@ -120,7 +122,7 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `probe_runtime` | `import probe_runtime` | shared runtime of dev_probe and agent_play: quiet engine, render modes, virtual clock, scene reads | booting Panda3D by hand | - | - |
 | `probe_settings` | `import probe_settings` | loads lua_content/dev_tools.lua and qa.lua as settings (qa_settings(), Python defaults as fallback) | hard-coded thresholds in Python | dict | - |
 | `qa_graph` | `import qa_graph` | static import graph: what is live or dead, which tests a change touches (behind affected, dead, ctx, check) | grepping for importers | graph object | - |
-| `qa_pool` | `import qa_pool` | async subprocess pool: many game runs or tests in parallel with timeouts | hand-written subprocess loops | results per job | - |
+| `qa_pool` | `import qa_pool` | thread-pool subprocess runner: many game runs or tests in parallel with timeouts (kills the process tree) | hand-written subprocess loops | results per job | - |
 | `qa_pytest_plugin` | `import qa_pytest_plugin` | pytest plugin (-p qa_pytest_plugin): every test outcome as one JSONL row for qa.py test | parsing pytest console output | JSONL | - |
 | `qa_report` | `import qa_report` | THE output format of every check: Result, format_line, worst-first budgeted report, history, deltas | ad-hoc print formats | one line per check | - |
 | `quality_metrics` | `import quality_metrics` | the code-quality ratchet behind qa.py quality: ruff, radon CC, vulture, import-linter, duplicate... | running the linters separately | Result | - |

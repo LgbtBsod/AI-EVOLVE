@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Асинхронный пул подпроцессов для QA: много прогонов игры/тестов разом.
+"""Пул подпроцессов для QA: много прогонов игры/тестов разом.
 
 Каждый прогон игры - отдельный процесс (ShowBase - синглтон, а свежий процесс
-гарантирует детерминизм), поэтому параллелизм - процессный: asyncio +
-семафор на `jobs` одновременных подпроцессов (по умолчанию - число ядер).
-Потоки здесь не помогли бы - работу делают дочерние процессы, а главный
-процесс только ждёт их ввода-вывода (для этого asyncio и нужен).
+гарантирует детерминизм), поэтому параллелизм - процессный: ThreadPoolExecutor
+на `jobs` одновременных подпроцессов (по умолчанию - число ядер). Потоки только ждут
+ввода-вывода детей; таймаут убивает всё дерево процессов.
 
     results = run_many([Job("a", [sys.executable, "tools/agent_play.py", ...]), ...], jobs=4)
     for r in results: r.name, r.rc, r.stdout, r.seconds
@@ -14,9 +13,10 @@ run_many() сохраняет порядок входа; первый упавш
 (для фаззинга и Monte Carlo нужны все результаты). stop_when(result) -> True
 позволяет прервать хвост очереди (ddmin: хватит одного воспроизведения).
 """
-import asyncio
 import os
+import subprocess
 import sys
+import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -52,44 +52,47 @@ def default_jobs():
     return max(1, (os.cpu_count() or 2))
 
 
-async def _run_one(job, sem, cancelled):
-    async with sem:
-        if cancelled.is_set():
-            return Result(job.name, -1, "", "", 0.0, job.meta, skipped=True)
-        start = time.perf_counter()
-        env = {**os.environ, "PYTHONIOENCODING": "utf-8", **job.env}
-        proc = await asyncio.create_subprocess_exec(
-            *job.argv, cwd=ROOT, env=env,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
-        try:
-            out, err = await asyncio.wait_for(proc.communicate(), timeout=job.timeout)
-            rc = proc.returncode
-        except asyncio.TimeoutError:
-            proc.kill()
-            out, err = await proc.communicate()
-            rc = 124
-            err += f"\n[qa_pool] timeout after {job.timeout}s".encode()
-        return Result(job.name, rc, out.decode("utf-8", "replace"), err.decode("utf-8", "replace"),
-                      time.perf_counter() - start, job.meta)
+def _kill_tree(proc):
+    """Kill the child and (on Windows) its process tree."""
+    if os.name == "nt":
+        subprocess.run(["taskkill", "/F", "/T", "/PID", str(proc.pid)], capture_output=True, check=False)
+    proc.kill()
 
 
-async def _run_all(jobs_list, jobs, stop_when):
-    sem = asyncio.Semaphore(jobs)
-    cancelled = asyncio.Event()
+def _run_one(job, cancelled):
+    if cancelled.is_set():
+        return Result(job.name, -1, "", "", 0.0, job.meta, skipped=True)
+    start = time.perf_counter()
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", **job.env}
+    proc = subprocess.Popen(job.argv, cwd=ROOT, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        out, err = proc.communicate(timeout=job.timeout)
+        rc = proc.returncode
+    except subprocess.TimeoutExpired:
+        _kill_tree(proc)
+        out, err = proc.communicate()
+        rc = 124
+        err += f"\n[qa_pool] timeout after {job.timeout}s".encode()
+    return Result(job.name, rc, out.decode("utf-8", "replace"), err.decode("utf-8", "replace"),
+                  time.perf_counter() - start, job.meta)
 
-    async def guarded(job):
-        result = await _run_one(job, sem, cancelled)
+
+def run_many(jobs_list, jobs=None, stop_when=None):
+    jobs_list = list(jobs_list)
+    if not jobs_list:
+        return []
+    from concurrent.futures import ThreadPoolExecutor  # lazy: pulls logging (~30 ms) that brief/ctx/find never need
+
+    cancelled = threading.Event()
+
+    def guarded(job):
+        result = _run_one(job, cancelled)
         if stop_when is not None and not result.skipped and stop_when(result):
             cancelled.set()
         return result
 
-    return await asyncio.gather(*(guarded(j) for j in jobs_list))
-
-
-def run_many(jobs_list, jobs=None, stop_when=None):
-    if not jobs_list:
-        return []
-    return asyncio.run(_run_all(list(jobs_list), jobs or default_jobs(), stop_when))
+    with ThreadPoolExecutor(max_workers=max(1, jobs or default_jobs())) as pool:
+        return list(pool.map(guarded, jobs_list))
 
 
 def python_job(name, script, *args, **kw):

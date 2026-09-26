@@ -41,6 +41,8 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from jsonl_io import read_jsonl
+
 ROOT = Path(__file__).resolve().parent.parent
 QA_OUT = ROOT / "dev_probe_output" / "qa"
 HISTORY = QA_OUT / "history.jsonl"
@@ -267,11 +269,7 @@ def load_prev(names=None, path: Path | None = None) -> dict:
     if not path.exists():
         return {}
     prev = {}
-    for line in reversed(path.read_text(encoding="utf-8").splitlines()):
-        try:
-            row = json.loads(line)
-        except ValueError:
-            continue
+    for row in reversed(read_jsonl(path)):
         n = row.get("name")
         if n not in prev and (names is None or n in names):
             prev[n] = row.get("metrics") or {}
