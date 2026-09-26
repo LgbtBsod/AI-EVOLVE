@@ -180,6 +180,9 @@ return {
       detail = "CHANGED|NEW scenario|definition changed|run failed", soft_if = [[golden recorded on [\w.-]+, this is [\w.-]+]],
       cost = "medium", ci = false, tags = { "play", "golden" }, what = "deterministic scenarios vs tests/golden/ (warn, not fail, on another platform than the recording)",
       watches = { "src/**/*.py", "lua_content/**/*.lua", "tools/agent_play.py", "tools/probe_*.py", "tests/golden/**", "rust_core/src/**/*.rs" } },
+    { name = "tokens", cmd = "python tools/qa.py tokens --check", parse = "result_line", cost = "low", ci = false,
+      tags = { "tools" }, what = "the transcript ledger parses the latest local session (turns=0 when there is no transcript dir)",
+      watches = { "tools/token_ledger.py", "tools/qa_plugins/tokens.py", "tests/test_tokens.py" } },
     { name = "lua", cmd = "python tools/qa.py lua check", parse = "regex", pattern = [[lua: (?P<loaded>\d+)/(?P<files>\d+) files ok]],
       cost = "low", tags = { "lua" }, what = "every lua_content file loads with every backend, same data",
       watches = { "lua_content/**/*.lua", "tools/lua_bridge.py", "rust_core/src/lua_content/**" } },
@@ -333,6 +336,25 @@ return {
   -- `qa.py sym` / `qa.py q`: read-only query caps (lines)
   q = { sym_lines = 60, callers = 8, max_line_chars = 160, total_lines = 120, per_query_lines = 30, grep_files = 12, grep_per_file = 3 },
   ckpt = { keep = 20, history_tail_bytes = 30000, hook_timeout_s = 8 },
+  -- qa.py tokens: transcript waste ledger. Read-only = calls that may share one message; a warn needs a value past its limit.
+  tokens = {
+    chars_per_token = 4, unbounded_lines = 250, top = 8, heavy_top = 5, retry_prefix = 120, trend_keep = 200,
+    readonly_tools = { "Read", "Grep", "Glob", "WebFetch", "WebSearch" }, shell_tools = { "Bash", "PowerShell" },
+    -- a shell command is a write when it matches one of these (after `2>&1`, `>/dev/null` are removed)
+    write_patterns = { ">", "\\bsed\\s+-i", "\\brm\\s", "\\bmv\\s", "\\bcp\\s", "\\btee\\b", "\\bgit\\s+(add|commit|push|checkout|reset|stash|rm|merge|rebase)\\b",
+                       "\\bpip\\s+install", "\\bmkdir\\b", "--write\\b", "--update-baseline", "\\bSet-Content\\b", "\\bOut-File\\b" },
+    warn = { calls_per_turn_below = 1.25, saveable_pct_over = 20, unbounded_reads_over = 0, repeat_reads_over = 2, retries_over = 1, heavy_tokens_over = 5000, write_tokens_over = 40000 },
+    use = {
+      batch = "put ALL independent read-only calls in ONE message; chains via qa.py q \"grep:PAT\" \"sym:F:N\"",
+      unbounded = "qa.py ctx FILE, then Read with offset/limit (qa.py sym FILE:func)",
+      repeats = "keep what you read; qa.py sym FILE:func for one symbol",
+      results = "qa.py ctx / sym / q instead of Read; qa.py check header instead of raw output",
+      heavy = "qa.py ctx FILE | qa.py probe_db stats; never cat raw logs",
+      writes = "Edit with a short unique old_string; qa.py prompt ROLE (no inlined context); scripts to tools/, not heredocs",
+      retries = "read the error once; qa.py guard --explain",
+      relays = "qa.py resume (continue the relay)", guard = "qa.py guard --stats",
+    },
+  },
   hygiene = {
     max_file_kb = 1024,          -- a tracked file above this fails (assets that must be bigger: list them in `allow`)
     allow = {},
@@ -392,6 +414,8 @@ return {
         when = "an agent burns context on big or repeated reads; --stats shows the blocks and the tokens kept out of the context", replaces = "hoping agents read with offset/limit and batch their calls", output = "qa_report line (+ per-rule lines for --stats)", group = "read", cost = "low" },
       { id = "ckpt", command = "python tools/qa.py ckpt \"done\" --next \"next action\" [--files a,b] [--agent NAME] [--auto]", purpose = "checkpoint of unfinished work: one journal line + a safety snapshot (refs/qa/ckpt/N, working tree untouched), the last 20 kept",
         when = "about every 10 tool calls and at the call cap of an agent (relay), before a risky step", replaces = "a hand-written handoff brief", output = "one line: ckpt #N saved", group = "build", cost = "low" },
+      { id = "tokens", command = "python tools/qa.py tokens [--agents] [--top N] [--session latest|ID|PATH] [--json]", purpose = "transcript waste ledger: turns, calls per turn, batchable read-only runs, result and written tokens by tool, unbounded and repeated reads, retries, relays, guard stats, trend per session/agent",
+        when = "before and after changing an agent prompt, a hook or a tool; to prove a token saving", replaces = "a hand-written transcript scan", output = "one QA line per metric group, worst first, each with `| use: CMD`", group = "build", cost = "low" },
       { id = "sym", command = "python tools/qa.py sym FILE:NAME [--callers] [--context N]", purpose = "one function/class/struct/impl/Lua function with line numbers (+ static callers), capped",
         when = "instead of reading a big file for one symbol", replaces = "Read of a whole file", output = "<= 60 numbered lines", group = "build", cost = "low" },
       { id = "q", command = "python tools/qa.py q \"grep:PAT@glob+ctx\" \"sym:FILE:NAME\" \"ctx:FILE\" \"read:FILE:A-B\" \"find:GLOB\" \"changed\"", purpose = "N read-only queries in parallel in one call, one grouped capped output",

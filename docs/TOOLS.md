@@ -25,6 +25,7 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `check:quality` | `python tools/qa.py check --name quality` | SOLID/DRY/SRP/SSOT ratchet: ruff + radon CC + vulture + import-linter layers + duplicate definitions vs... | running ruff, radon, vulture, import-linter separately | qa_report line | low |
 | `check:quality_tools` | `python tools/qa.py check --name quality_tools` | the quality ratchet for tools/ (ruff + radon CC + vulture + duplicate definitions vs... | - | qa_report line | low |
 | `check:tests` | `python tools/qa.py check --name tests` | pytest in parallel shards (only affected files in diff mode; known failures do not count as NEW) | raw pytest and its full output | qa_report line | medium |
+| `check:tokens` | `python tools/qa.py check --name tokens` | the transcript ledger parses the latest local session (turns=0 when there is no transcript dir) | - | qa_report line | low |
 | `check:tools` | `python tools/qa.py check --name tools` | every tool/plugin/check/script has a purpose line, docs/TOOLS.md equals the harvest, no near-duplicate... | grepping tools/ before writing a new tool; a hand-kept tool table in CLAUDE.md | qa_report line | low |
 | `combat_smoke_test` | `python tools/combat_smoke_test.py` | windowless smoke test of combat, effects, leveling and AI targeting (no Panda3D) | hand-testing combat formulas | passed/failed counts | low |
 | `fuzz` | `python tools/qa.py fuzz` | random player actions + world invariants every frame; a failure is shrunk to a minimal repro script | manual exploratory play | minimal repro line | high |
@@ -73,6 +74,7 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `resume` | `python tools/qa.py resume [--brief\|--check\|--diff N\|--restore N [--apply]]` | where the last session stopped (<= 6 lines, silent when clean): dirty, orphan modules, broken files, last... | re-exploring the repo to find out what was half done | <= 6 lines | low |
 | `route` | `python tools/qa.py route [STAGE\|--list\|--check\|--write-agents]` | model / effort / tool-call budget per stage of a Workflow or Agent call (cheap for tests and logs, strong... | guessing the model and effort of each stage | qa_report line + table | low |
 | `sym` | `python tools/qa.py sym FILE:NAME [--callers] [--context N]` | one function/class/struct/impl/Lua function with line numbers (+ static callers), capped | Read of a whole file | <= 60 numbered lines | low |
+| `tokens` | `python tools/qa.py tokens [--agents] [--top N] [--session latest\|ID\|PATH] [--json]` | transcript waste ledger: turns, calls per turn, batchable read-only runs, result and written tokens by... | a hand-written transcript scan | one QA line per metric group, worst first, each with `\| use: CMD` | low |
 ### content - Lua data and items
 | tool | command | purpose | replaces | output | cost |
 |---|---|---|---|---|---|
@@ -117,4 +119,5 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `qa_pytest_plugin` | `import qa_pytest_plugin` | pytest plugin (-p qa_pytest_plugin): every test outcome as one JSONL row for qa.py test | parsing pytest console output | JSONL | - |
 | `qa_report` | `import qa_report` | THE output format of every check: Result, format_line, worst-first budgeted report, history, deltas | ad-hoc print formats | one line per check | - |
 | `quality_metrics` | `import quality_metrics` | the code-quality ratchet behind qa.py quality: ruff, radon CC, vulture, import-linter, duplicate... | running the linters separately | Result | - |
+| `token_ledger` | `import token_ledger` | Transcript waste ledger (stdlib + optional orjson): parse Claude Code session JSONL into per-log metrics. | - | - | - |
 | `tool_registry` | `import tool_registry` | harvest, render and gap detection of the tools registry (logic of qa.py tools) | a hand-written tool table | Result / markdown | - |
