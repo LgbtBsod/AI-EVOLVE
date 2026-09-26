@@ -77,6 +77,7 @@ today's violations are the baseline (`tests/quality_baseline.json`: per metric, 
 
 ## Rules of thumb
 
+- **Put ALL independent read-only calls (Read/Grep/Glob/`qa.py ctx`) into ONE message** (a turn re-reads the whole context; `qa.py guard` nudges you and answers unranged reads of big/raw files with an outline; token rules: `docs/agent_context/preamble.md`).
 - Read only the `RESULT`/verdict line first; open `summary.md` / `session.json` only if pointed there. Never read `state.jsonl`/`game.log` raw — use `probe_db.py`.
 - `--fast` + a seed (agent_play defaults to seed 1) = byte-for-byte reproducible; every failing run prints `repro:` (also `repro.sh` in the run dir).
 - The player's levers in agent_play: `spawn enemy|trap|chest|boss` (`spawn enemy golem_shard x3` = a bestiary kind) (keys 1-4), `attack`, `interact`, `emotion calm|rage|fear|curiosity|greed|resolve`,

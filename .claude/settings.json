@@ -1,0 +1,37 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Grep|Glob|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe",
+            "args": [
+              "-S",
+              "-E",
+              "${CLAUDE_PROJECT_DIR}/tools/guard_hook.py"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe",
+            "args": [
+              "-S",
+              "-E",
+              "${CLAUDE_PROJECT_DIR}/tools/guard_hook.py"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

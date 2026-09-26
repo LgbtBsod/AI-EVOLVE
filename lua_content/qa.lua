@@ -371,6 +371,8 @@ return {
       { id = "item", command = "python tools/qa.py item check|digest|diff|all", purpose = "Effect Schema items: itemcheck, one line per effect (digest), diff vs a git ref", replaces = "reading generated item Lua", output = "one line per effect", group = "content", cost = "low" },
       { id = "lua", command = "python tools/qa.py lua check|show FILE|bench", purpose = "Lua content: every file loads with every backend (check), a file's data as compact JSON (show), load time (bench)", when = "any question about lua_content", replaces = "reading Lua files", output = "summary or JSON", group = "content", cost = "low" },
       { id = "quality", command = "python tools/qa.py quality [--worst N|--explain RULE]", replaces = "running ruff, radon, vulture, import-linter separately", output = "qa_report line + worst-N table", group = "verify", cost = "low" },
+      { id = "guard", command = "python tools/qa.py guard [--stats|--explain|--simulate FILE.json|--compile|--install|--uninstall]", purpose = "read guard (Claude Code hooks): outline instead of a big unranged Read, one-line stub for an unchanged re-read, digest command for raw logs, batch nudge",
+        when = "an agent burns context on big or repeated reads; --stats shows the blocks and the tokens kept out of the context", replaces = "hoping agents read with offset/limit and batch their calls", output = "qa_report line (+ per-rule lines for --stats)", group = "read", cost = "low" },
       -- checks (`check:NAME`; purpose = the `what` of the check)
       { id = "check:boot_smoke", replaces = "launching the game to see whether it starts" },
       { id = "check:combat_smoke", replaces = "hand-testing combat formulas" },
@@ -398,6 +400,8 @@ return {
       { id = "combat_smoke_test", purpose = "windowless smoke test of combat, effects, leveling and AI targeting (no Panda3D)", replaces = "hand-testing combat formulas", output = "passed/failed counts", group = "verify", cost = "low" },
       { id = "dev_probe", purpose = "long headless run with anomaly hunt: samples, combat stats, contact sheet, findings in probe_db", when = "unattended run or anything visual", replaces = "reading raw state.jsonl and screenshots", output = "RESULT line + summary.md", group = "analyse", cost = "high" },
       { id = "dev_probe_async", purpose = "async multi-threaded probe framework that runs the tools/plugins/*.py analyzers", replaces = "-", output = "prose", group = "analyse" },
+      { id = "guard_hook", command = "python tools/guard_hook.py  (hook JSON on stdin; installed by qa.py guard --install)", purpose = "hook entry point of the read guard: stdlib only, decides in a few ms, fails open (exit 2 + stderr = deny with the answer, JSON additionalContext = nudge)",
+        replaces = "-", output = "exit code + stderr / hook JSON", group = "read", cost = "low", wraps = "python tools/qa.py guard" },
       { id = "dev_probe_diff", purpose = "delta-only comparison of two dev_probe runs (--frames adds a visual diff)", replaces = "diffing two summary.json by eye", output = "changed metrics only", group = "analyse", cost = "low" },
       { id = "probe_db", command = "python tools/probe_db.py stats|why|predict|compare|trend|sql", purpose = "SQLite analytics over every recorded probe run: stats, why, predict, compare, trend, free SQL", when = "numbers across runs, did my fix help", replaces = "reading state.jsonl / game.log", output = "short tables", group = "analyse", cost = "low" },
       { id = "repo_hygiene", purpose = "logic of the hygiene check: what git must never track (virtualenv, build output, saves, big files) and the .gitignore that keeps it out", replaces = "-", output = "RESULT line", group = "verify", cost = "low", wraps = "python tools/qa.py hygiene" },
@@ -405,6 +409,7 @@ return {
       { id = "training_room", purpose = "training room with mannequins to try equipment and effects (v2.0)", replaces = "-", output = "prose", group = "analyse" },
       { id = "training_room_demo", purpose = "demo run of the training room: equipment on mannequins", replaces = "-", output = "prose", group = "analyse", status = "demo" },
       -- libraries of tools/ (import them: do not write a second pool / report format / graph)
+      { id = "file_toc", purpose = "table of contents helper (stdlib only): Python via ast with line ranges, other languages via the regexes of guards.lua; behind qa.py ctx and the read guard", replaces = "reading a big file to see what is in it", output = "list of `Lnn name` lines", group = "libs" },
       { id = "lua_bridge", purpose = "alias of src/content/lua_bridge.py: load(path) runs a Lua file in the sandbox and returns its data (rust_core.LuaContent, lupa fallback)", replaces = "reading Lua files or embedding a Lua runtime", output = "dict from one JSON string", group = "libs" },
       { id = "probe_analysis", purpose = "run analysis shared by dev_probe, agent_play and probe_db: hypotheses and one summary; the loops live in probe_kernels", replaces = "reading raw samples", output = "summary text", group = "libs" },
       { id = "probe_invariants", purpose = "world invariants checked on every frame of agent_play (HP over max, NaN, unit outside the map)", replaces = "noticing broken state by eye", output = "violation list", group = "libs" },
@@ -438,6 +443,7 @@ return {
       { id = "rust:resolve_hit", replaces = "the Python damage pipeline (twin)", cost = "low" },
       { id = "rust:resolve_hits", replaces = "a Python loop of damage.resolve", cost = "low" },
       -- Lua files that declare `-- tool:`
+      { id = "lua:guards.lua", replaces = "hard-coded thresholds, path patterns and messages in the hook", cost = "low" },
       { id = "lua:qa.lua", replaces = "hard-coded QA thresholds and check lists in Python", cost = "low" },
     },
   },

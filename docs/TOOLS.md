@@ -40,6 +40,8 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `changed` | `python tools/qa.py changed [REV]` | semantic diff: +added -removed ~changed symbols per file, churn, RISK flags, checks to run | git diff | <= 30 lines | low |
 | `ctx` | `python tools/qa.py ctx FILE` | outline of a Python file: classes, functions, importers, tests | reading a big file whole | outline (about 40 lines) | low |
 | `docs` | `python tools/qa.py docs` | which .md files are stale (they name code that is missing or dead) | opening old .md reports | counts + top stale files | low |
+| `guard` | `python tools/qa.py guard [--stats\|--explain\|--simulate FILE.json\|--compile\|--install\|--uninstall]` | read guard (Claude Code hooks): outline instead of a big unranged Read, one-line stub for an unchanged... | hoping agents read with offset/limit and batch their calls | qa_report line (+ per-rule lines for --stats) | low |
+| `guard_hook` | `python tools/guard_hook.py (hook JSON on stdin; installed by qa.py guard --install)` | hook entry point of the read guard: stdlib only, decides in a few ms, fails open (exit 2 + stderr = deny... | - | exit code + stderr / hook JSON | low |
 | `tools` | `python tools/qa.py tools` | the tools registry: find an existing tool before writing one, regenerate docs/TOOLS.md, detect... | grepping tools/ and reading the CLAUDE.md tool table | --find: name \| command \| purpose lines; report: one qa_report line | low |
 ### analyse - runs, balance, performance
 | tool | command | purpose | replaces | output | cost |
@@ -71,6 +73,7 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `effect_schema` | `python -m tools.effect_schema.itemcheck lua_content/items/x.lua` | Effect Schema v1 (Effect -> Ops[]): model, Lua generator and parser, validator, catalog, itemcheck | hand-writing item Lua | one line per finding | low |
 | `item` | `python tools/qa.py item check\|digest\|diff\|all` | Effect Schema items: itemcheck, one line per effect (digest), diff vs a git ref | reading generated item Lua | one line per effect | low |
 | `lua` | `python tools/qa.py lua check\|show FILE\|bench` | Lua content: every file loads with every backend (check), a file's data as compact JSON (show), load time... | reading Lua files | summary or JSON | low |
+| `lua:guards.lua` | `python tools/qa.py lua show lua_content/guards.lua` | settings of the tool-call guards of Claude Code hooks (tools/guard_hook.py, `qa.py guard`): thresholds,... | hard-coded thresholds, path patterns and messages in the hook | - | low |
 | `lua:qa.lua` | `python tools/qa.py lua show lua_content/qa.lua` | settings of the QA layer: checks, scenarios, budgets, thresholds and the tools-registry rows (read through... | hard-coded QA thresholds and check lists in Python | - | low |
 | `web_builder` | `python tools/web_builder/app.py --web` | Flet UI that builds items visually (Effect -> Ops[]); headless.py drives it without a window | hand-writing item Lua | UI / Lua file | - |
 ### kernels - Rust exports (import rust_core)
@@ -94,6 +97,7 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 ### shared libraries - import them, do not rewrite them
 | tool | command | purpose | replaces | output | cost |
 |---|---|---|---|---|---|
+| `file_toc` | `import file_toc` | table of contents helper (stdlib only): Python via ast with line ranges, other languages via the regexes... | reading a big file to see what is in it | list of `Lnn name` lines | - |
 | `lua_bridge` | `import lua_bridge` | alias of src/content/lua_bridge.py: load(path) runs a Lua file in the sandbox and returns its data... | reading Lua files or embedding a Lua runtime | dict from one JSON string | - |
 | `probe_analysis` | `import probe_analysis` | run analysis shared by dev_probe, agent_play and probe_db: hypotheses and one summary; the loops live in... | reading raw samples | summary text | - |
 | `probe_invariants` | `import probe_invariants` | world invariants checked on every frame of agent_play (HP over max, NaN, unit outside the map) | noticing broken state by eye | violation list | - |

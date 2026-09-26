@@ -28,7 +28,6 @@
 консоль - только вывод.
 """
 import argparse
-import ast
 import json
 import os
 import platform
@@ -45,6 +44,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import probe_kernels as kernels  # noqa: E402
 import qa_graph  # noqa: E402
+from file_toc import outline  # noqa: E402, F401 - `qa.outline`: the table of contents lives in file_toc, shared with the read guard
 from probe_settings import ROOT, qa_settings  # noqa: E402
 from qa_pool import Job, default_jobs, python_job, run_many  # noqa: E402
 
@@ -179,40 +179,6 @@ def cmd_dead(args):
         for p in dead:
             print(f"  {p}  ({graph[p]['loc']} LOC) {graph[p]['doc'][:60]}")
     return 0
-
-
-def outline(path):
-    """Оглавление файла: классы/методы/функции с сигнатурами и 1-й строкой docstring."""
-    tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
-    lines = []
-
-    def sig(fn):
-        a = fn.args
-        names = [x.arg for x in (*a.posonlyargs, *a.args)]
-        if a.vararg:
-            names.append("*" + a.vararg.arg)
-        names += [x.arg for x in a.kwonlyargs]
-        if a.kwarg:
-            names.append("**" + a.kwarg.arg)
-        return ", ".join(n for n in names if n not in ("self", "cls"))
-
-    def doc1(node):
-        d = (ast.get_docstring(node) or "").strip().splitlines()
-        return f"  # {d[0][:70]}" if d else ""
-
-    for node in tree.body:
-        if isinstance(node, ast.ClassDef):
-            lines.append(f"L{node.lineno} class {node.name}{doc1(node)}")
-            methods = [n for n in node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]
-            for m in methods:
-                if m.name.startswith("__") and m.name != "__init__":
-                    continue
-                lines.append(f"  L{m.lineno} .{m.name}({sig(m)}){doc1(m)}")
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            lines.append(f"L{node.lineno} def {node.name}({sig(node)}){doc1(node)}")
-        elif isinstance(node, ast.Assign) and all(isinstance(t, ast.Name) and t.id.isupper() for t in node.targets):
-            lines.append(f"L{node.lineno} {', '.join(t.id for t in node.targets)} = ...")
-    return lines
 
 
 def cmd_ctx(args):
