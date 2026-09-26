@@ -55,11 +55,9 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `dead` | `python tools/qa.py dead` | modules nobody imports (dead code) with LOC; --list names them | reading modules to see if they are still used | summary line + list | low |
 | `determinism` | `python tools/qa.py determinism "SCRIPT" --pairs 6` | why two same-seed runs differ: paired traced runs, first divergent frame, hypotheses | bisecting a desync by hand | verdict + first divergent frame | high |
 | `dev_probe` | `python tools/dev_probe.py` | long headless run with anomaly hunt: samples, combat stats, contact sheet, findings in probe_db | reading raw state.jsonl and screenshots | RESULT line + summary.md | high |
-| `dev_probe_async` | `python tools/dev_probe_async.py` | async multi-threaded probe framework that runs the tools/plugins/*.py analyzers | - | prose | - |
 | `dev_probe_diff` | `python tools/dev_probe_diff.py` | delta-only comparison of two dev_probe runs (--frames adds a visual diff) | diffing two summary.json by eye | changed metrics only | low |
 | `gauntlet` | `python tools/qa.py gauntlet [--campaign --lives 5]` | hero vs every boss (or a whole campaign), results in probe_db | playing bosses by hand | one line per boss | high |
 | `perf` | `python tools/qa.py perf "SCRIPT"` | hot functions of a game run (cProfile, fast mode) | ad-hoc cProfile runs | top-N table | medium |
-| `plugins` | - | analyzer plugins of dev_probe_async: balance, AI behaviour, CAS inspector, hot reload, stress test, profilers | - | prose | - |
 | `probe_db` | `python tools/probe_db.py stats\|why\|predict\|compare\|trend\|sql` | SQLite analytics over every recorded probe run: stats, why, predict, compare, trend, free SQL | reading state.jsonl / game.log | short tables | low |
 | `sweep` | `python tools/qa.py sweep "SCRIPT"` | one agent_play script over many seeds: metric distributions + bootstrap CI (Rust) | eyeballing a few seeds | table per metric | high |
 | `training_room` | `python tools/training_room.py` | training room with mannequins to try equipment and effects (v2.0) | - | prose | - |

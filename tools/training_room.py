@@ -43,9 +43,7 @@ from features.advanced_items import (
     create_sorrow_of_berserk
 )
 from core.cas_engine import (
-    CASManager, DamageCalculator, EffectTemplate, Condition, Action,
-    StatType as CASStatType, DamageType, ConditionOperator,
-    DamageProfile, DefenseProfile
+    CASManager, DamageCalculator, DamageType
 )
 
 # WARNING по умолчанию: INFO-лог на каждый удар (~120 строк за демо) - чистые

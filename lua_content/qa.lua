@@ -423,7 +423,6 @@ return {
       { id = "cas_training_demo", purpose = "demo run of the CAS engine 2.0 (conditional effect system)", replaces = "-", output = "prose", group = "analyse", status = "demo" },
       { id = "combat_smoke_test", purpose = "windowless smoke test of combat, effects, leveling and AI targeting (no Panda3D)", replaces = "hand-testing combat formulas", output = "passed/failed counts", group = "verify", cost = "low" },
       { id = "dev_probe", purpose = "long headless run with anomaly hunt: samples, combat stats, contact sheet, findings in probe_db", when = "unattended run or anything visual", replaces = "reading raw state.jsonl and screenshots", output = "RESULT line + summary.md", group = "analyse", cost = "high" },
-      { id = "dev_probe_async", purpose = "async multi-threaded probe framework that runs the tools/plugins/*.py analyzers", replaces = "-", output = "prose", group = "analyse" },
       { id = "guard_hook", command = "python tools/guard_hook.py  (hook JSON on stdin; installed by qa.py guard --install)", purpose = "hook entry point of the read guard: stdlib only, decides in a few ms, fails open (exit 2 + stderr = deny with the answer, JSON additionalContext = nudge)",
         replaces = "-", output = "exit code + stderr / hook JSON", group = "read", cost = "low", wraps = "python tools/qa.py guard" },
       { id = "dev_probe_diff", purpose = "delta-only comparison of two dev_probe runs (--frames adds a visual diff)", replaces = "diffing two summary.json by eye", output = "changed metrics only", group = "analyse", cost = "low" },
@@ -450,7 +449,6 @@ return {
       -- subdirectories of tools/
       { id = "effect_schema", command = "python -m tools.effect_schema.itemcheck lua_content/items/x.lua", purpose = "Effect Schema v1 (Effect -> Ops[]): model, Lua generator and parser, validator, catalog, itemcheck", when = "build or verify an item", replaces = "hand-writing item Lua", output = "one line per finding", group = "content", cost = "low" },
       { id = "web_builder", command = "python tools/web_builder/app.py --web", purpose = "Flet UI that builds items visually (Effect -> Ops[]); headless.py drives it without a window", replaces = "hand-writing item Lua", output = "UI / Lua file", group = "content" },
-      { id = "plugins", purpose = "analyzer plugins of dev_probe_async: balance, AI behaviour, CAS inspector, hot reload, stress test, profilers", replaces = "-", output = "prose", group = "analyse" },
       -- Rust exports (rust_core; purpose = the first sentence of the Rust `///` docs)
       { id = "rust:EventCorrelator", replaces = "-", cost = "low" },
       { id = "rust:FlowField", replaces = "-", cost = "low" },

@@ -99,15 +99,6 @@
    "dup_defs": 1,
    "vulture": 3
   },
-  "tools/dev_probe_async.py": {
-   "ARG002": 5,
-   "B019": 1,
-   "B905": 1,
-   "F401": 1,
-   "F841": 1,
-   "RET505": 1,
-   "vulture": 2
-  },
   "tools/dev_probe_diff.py": {
    "B007": 1,
    "C901": 1,
@@ -158,67 +149,6 @@
   },
   "tools/guard_hook.py": {
    "dup_defs": 1
-  },
-  "tools/plugins/agent_command_plugin.py": {
-   "ARG002": 3,
-   "BLE001": 3,
-   "F401": 2,
-   "F841": 1,
-   "RET505": 1,
-   "SIM102": 4
-  },
-  "tools/plugins/ai_behavior_analyzer.py": {
-   "F401": 1
-  },
-  "tools/plugins/auto_balance_plugin.py": {
-   "ARG002": 1,
-   "F401": 2
-  },
-  "tools/plugins/cas_inspector_plugin.py": {
-   "B007": 1,
-   "BLE001": 1,
-   "F401": 2,
-   "PERF102": 1,
-   "PERF401": 1,
-   "vulture": 1
-  },
-  "tools/plugins/cc_probe_plugin.py": {
-   "B007": 1,
-   "BLE001": 1,
-   "PLR0911": 1,
-   "RET505": 1
-  },
-  "tools/plugins/combat_advanced_plugin.py": {
-   "B007": 1,
-   "BLE001": 1,
-   "C901": 1,
-   "F401": 3,
-   "PLR0911": 1,
-   "PLR0912": 1,
-   "RET505": 2,
-   "vulture": 1
-  },
-  "tools/plugins/memory_profiler_plugin.py": {
-   "ARG002": 2,
-   "F401": 2,
-   "RET502": 1
-  },
-  "tools/plugins/ml_vision_plugin.py": {
-   "ARG002": 3,
-   "F401": 1
-  },
-  "tools/plugins/network_remote_plugin.py": {
-   "ARG002": 2,
-   "BLE001": 1,
-   "F401": 2
-  },
-  "tools/plugins/performance_monitor_plugin.py": {
-   "ARG002": 2,
-   "F401": 2,
-   "RET505": 1
-  },
-  "tools/plugins/stress_test_plugin.py": {
-   "F401": 1
   },
   "tools/probe_analysis.py": {
    "B905": 1,
@@ -335,10 +265,8 @@
   "tools/training_room.py": {
    "ARG002": 4,
    "BLE001": 1,
-   "F401": 7,
    "PLR0915": 1,
-   "RET504": 2,
-   "vulture": 3
+   "RET504": 2
   },
   "tools/training_room_demo.py": {
    "PLR0915": 1
@@ -400,9 +328,6 @@
   "tools/effect_schema/validate.py::_references": 21,
   "tools/effect_schema/validate.py::validate_effect": 34,
   "tools/effect_schema/validate.py::validate_op": 70,
-  "tools/plugins/auto_balance_plugin.py::AutoBalancePlugin._generate_report": 18,
-  "tools/plugins/combat_advanced_plugin.py::CombatAdvancedPlugin.execute_command": 13,
-  "tools/plugins/ml_vision_plugin.py::MLVisionPlugin._generate_report": 17,
   "tools/probe_analysis.py::combat_stats": 35,
   "tools/probe_analysis.py::forecast": 49,
   "tools/probe_analysis.py::format_forecast": 11,
@@ -477,40 +402,35 @@
   "tools/web_builder/app.py::OpForm.to_form": 21
  },
  "rules": {
-  "ARG002": 39,
-  "B007": 8,
-  "B019": 1,
+  "ARG002": 21,
+  "B007": 5,
   "B023": 10,
   "B904": 1,
-  "B905": 18,
-  "BLE001": 32,
-  "C901": 31,
-  "F401": 29,
-  "F841": 2,
-  "PERF102": 1,
-  "PERF401": 17,
-  "PLR0911": 8,
-  "PLR0912": 18,
+  "B905": 17,
+  "BLE001": 25,
+  "C901": 30,
+  "F401": 3,
+  "PERF401": 16,
+  "PLR0911": 6,
+  "PLR0912": 17,
   "PLR0913": 19,
   "PLR0915": 14,
   "PLW0603": 4,
   "PLW1510": 7,
   "PLW2901": 6,
-  "RET502": 1,
   "RET504": 5,
-  "RET505": 6,
-  "SIM102": 6,
+  "SIM102": 2,
   "SIM105": 2,
   "SIM115": 1
  },
  "totals": {
-  "blind_except": 32,
-  "cc11": 117,
+  "blind_except": 25,
+  "cc11": 114,
   "cc_max": 70,
   "dup_defs": 8,
   "layers_broken": 0,
-  "ruff": 286,
-  "vulture": 11
+  "ruff": 211,
+  "vulture": 4
  },
  "version": 1
 }
