@@ -20,7 +20,7 @@ CORPUS = json.loads(cov.CORPUS.read_text(encoding="utf-8"))
 def test_corpus_shape_and_doc_numbers():
     assert len(CORPUS) == 60
     c = cov.compute(CORPUS, cov.canon_kinds(), cov.alias_rows())
-    assert c["hand"] == 46.7 and c["spec"] == 80.0          # the numbers of docs/EFFECT_GAP.md
+    assert c["hand"] == 46.7 and c["spec"] == 78.3          # docs/EFFECT_GAP.md said 80.0 before #40 got its honest lack `unbounded_reality` (Reality warp is a model-breaker)
 
 
 def test_aliases_only_raise_coverage_and_inexact_are_not_counted():

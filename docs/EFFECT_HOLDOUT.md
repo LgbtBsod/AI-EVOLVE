@@ -54,3 +54,5 @@ Beyond these ~17 kinds the tail is 40+ distinct `+lacks` (each 1 ability): the m
 5. Economy family: market, inventory, loan/interest, crafting recipes with quality.
 6. World/knowledge store: terrain edits, persistent maps, roster of extracted minions.
 Re-measure after each slice; raise `coverage.holdout_floor` (never lower). Never tag new holdout rows after reading the implementation.
+
+**G1a (2026-09-27)**: 11 spec kinds implemented as bounded opt-in handlers (`src/effects/exchange.py`, data in `effect_rules.lua` `exchange`, rows `lua_content/corpus_holdout_abilities.lua`, proof `tests/test_effect_exchange_spec.py`): holdout 15.0% -> 23.3% (14/60), main 96.7% -> 98.3%. Unblocked outright: #134 Dream fold, #143 Doom, #160 Garden of Avalon; #101 (`+exchange.equal_mass`, recipe cost) and #119 (`+read.wand_history`) get their features. The rest of the 13 rows still carry a `lacks` (e.g. #114 retroactive window by power, #116 cost to resistance, #135 delayed single target, #146 near-death trigger, #159 ordered conditions). Left: `see_panels` (meta). Floor `coverage.holdout_floor` = 23.

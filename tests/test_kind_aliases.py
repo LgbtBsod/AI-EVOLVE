@@ -53,7 +53,7 @@ def test_validator_accepts_alias_and_rejects_unknown():
     assert validate_op({"kind": "consume", "stat": "mana", "value": {"flat": 1}}, "op") == \
         validate_op({"kind": "drain", "stat": "mana", "value": {"flat": 1}}, "op")
     assert validate_op({"kind": "dash", "target": "self"}, "op") == []                    # canonicalize_op injects mode=dash
-    assert validate_op({"kind": "debuff", "target": "self"}, "op") == ["op: unknown kind 'debuff'"]
+    assert validate_op({"kind": "debuff", "target": "self"}, "op") == []          # G1a: debuff is a canon op now (exchange.py)
     assert validate_op({"kind": "no_such"}, "op") == ["op: unknown kind 'no_such'"]
 
 

@@ -94,6 +94,30 @@ return {
     broken      = { min = 0, max = 1 },
   },
 
+  -- slice G1a (src/effects/exchange.py, docs/EFFECT_SCHEMA.md "Exchange"): every whitelist / cap of the bounded exchange ops
+  exchange = {
+    created_keep = 32,
+    recipes = {                                  -- the ONLY things create_ex_nihilo may make; cost = paid by the caster, per created unit
+      equal_exchange = { kind = "item",   id = "transmuted_blade", cost = { resource = "mana", amount = 40 } },
+      forge_weapon   = { kind = "item",   id = "iron_sword",       cost = { resource = "stamina", amount = 25 } },
+      dream_fold     = { kind = "object", id = "dream_bridge",     cost = { resource = "mana", amount = 30 } },
+      familiar       = { kind = "summon", id = "basic",            cost = { resource = "mana", amount = 20 }, max_count = 2 },
+    },
+    resurrect = { max_targets = 3, max_pct = 60, max_radius = 30, cost = { resource = "mana", amount = 50 } },
+    status_mod = { max_duration_mult = 2.0, max_potency_mult = 2.0 },
+    unbounded = { max_duration = 30, stats = { attack_damage = 3.0, move_speed = 2.0, defense = 2.0 } },   -- stat -> highest multiplier
+    steal = { cost = { resource = "mana", amount = 30 }, min_fidelity = 0.25 },
+    time_erase = { max_window = 10 },
+    tiers = {
+      stars = {
+        { id = "dusk",  stats = { { kind = "mod", stat = "defense", op = "add", value = { flat = 2 } } } },
+        { id = "dawn",  stats = { { kind = "mod", stat = "defense", op = "add", value = { flat = 5 } } } },
+        { id = "stars", stats = { { kind = "mod", stat = "defense", op = "add", value = { flat = 9 } },
+                                  { kind = "mod", stat = "attack_damage", op = "add", value = { flat = 4 } } } },
+      },
+    },
+  },
+
   -- slice F8 (src/effects/statecraft.py, docs/EFFECT_SCHEMA.md "Statecraft"): snapshots, loops, written names, bounded wishes
   statecraft = {
     ring = 8,                                    -- snapshots kept per scope (world / faction:x / entity:id), oldest dropped

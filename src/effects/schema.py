@@ -47,6 +47,7 @@ OP_KINDS = {
     "fusion_strike", "remove_restriction", "dispel", "copy_technique", "copy", "false_percept", "control_link", "break_link", "erase",   # F6a (src/effects/mimic.py, docs/EFFECT_SCHEMA.md "Mimic")
     "global_time_scale", "time_scale", "time_as_space", "apply_status_to_world", "polarity_control",   # F7 (src/effects/timeworld.py, docs/EFFECT_SCHEMA.md "Time and world")
     "snapshot", "restore_state", "respawn_at", "time_loop", "rename", "write", "wish", "confiscate",   # F8 (src/effects/statecraft.py, docs/EFFECT_SCHEMA.md "Statecraft")
+    "create_ex_nihilo", "mass_resurrect", "status_mod", "debuff", "unbounded", "copy_last_cast", "read", "steal", "learn_technique", "time_erase", "change_tier",   # G1a (src/effects/exchange.py, docs/EFFECT_SCHEMA.md "Exchange")
     "zone", "zone_mod", "rule_override",   # F5: зоны, ауры, реальности (src/effects/zones.py, docs/EFFECT_SCHEMA.md "Zones")
     "perceive", "reveal", "precognition",   # восприятие: данные на unit.external["perception"] (src/effects/perception.py, docs/EFFECT_SCHEMA.md "Perception")
     "hypnosis", "command", "possess", "dominance", "temptation", "tame",   # контроль цели (src/effects/control.py, docs/EFFECT_SCHEMA.md "Control")

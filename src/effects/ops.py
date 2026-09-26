@@ -30,6 +30,7 @@ from src.effects.perception import PERCEPTION_HANDLERS
 from src.effects.triggers import TRIGGER_HANDLERS
 from src.effects.zones import ZONE_HANDLERS
 from src.effects.statecraft import STATE_HANDLERS
+from src.effects.exchange import EXCHANGE_HANDLERS
 from src.effects.timeworld import TIME_HANDLERS
 from src.effects.mimic import MIMIC_HANDLERS, scaled
 
@@ -1053,7 +1054,7 @@ OP_HANDLERS: dict[str, Handler] = {
     "escalate": op_escalate, "deescalate": op_deescalate, "trigger_true_form": op_trigger_true_form,
     "rotate_wheel": op_rotate_wheel, "display_wheel": op_display_wheel, "halt_wheel": op_halt_wheel,
     "stance": op_stance, "transform": op_transform, "timed_power_up": op_timed_power_up,
-    **CONTROL_HANDLERS, **PERCEPTION_HANDLERS, **TRIGGER_HANDLERS, **ZONE_HANDLERS, **MIMIC_HANDLERS, **TIME_HANDLERS, **STATE_HANDLERS,
+    **CONTROL_HANDLERS, **PERCEPTION_HANDLERS, **TRIGGER_HANDLERS, **ZONE_HANDLERS, **MIMIC_HANDLERS, **TIME_HANDLERS, **STATE_HANDLERS, **EXCHANGE_HANDLERS,
 }
 
 

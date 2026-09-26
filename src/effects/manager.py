@@ -469,6 +469,7 @@ class EffectManager:
         self._zones: list[dict] = []     # F5 zones (src/effects/zones.py), creation order
         self._rules: list[dict] = []     # F5 timed rule_override layers {id, until, consts, flags}
         self._tw = timeworld.TimeState()  # F7 time / world (src/effects/timeworld.py)
+        self._last_cast: dict[int, str] = {}           # G1a: id(entity) -> last cast ability id (copy_last_cast / read)
         self._sc = statecraft.StateCraft()  # F8 snapshots / loops / writes (src/effects/statecraft.py)
         self._status_book: dict = {}     # (id сущности, status id) -> (стаки, до какого времени)
 
@@ -747,6 +748,7 @@ class EffectManager:
         for res, amount in (ab.get("cost") or {}).items():
             self._spend(st, res, float(amount))
         st.cooldowns[ab["id"]] = self.now + self.cooldown_of(st, ab)
+        self._last_cast[id(caster)] = ab["id"]
         tags = tuple(ab.get("tags") or ())
         if "attack" in tags:
             st.runtime._last_attack_at = self.now

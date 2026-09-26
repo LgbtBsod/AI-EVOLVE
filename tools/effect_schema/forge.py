@@ -311,6 +311,20 @@ def primitive_effects() -> list[dict]:
             {"kind": "wish", "target": "self", "outcome": "heal", "amount": 1},
             {"kind": "confiscate", "target": "self", "what": "ability", "id": "nothing"},
         ], "state"),
+        # обмен / ограниченные G1a (src/effects/exchange.py): отказ = запись, не ошибка
+        ev("prim.exchange", "use", [
+            {"kind": "create_ex_nihilo", "target": "self", "recipe": "dream_fold"},
+            {"kind": "mass_resurrect", "target": "self", "radius": 5},
+            {"kind": "status_mod", "target": "self", "status": "burn", "duration_add": 1},
+            {"kind": "debuff", "target": "self", "stat": "defense", "value": {"flat": 1}, "duration": dur(1)},
+            {"kind": "unbounded", "target": "self", "stat": "attack_damage", "mult": 2, "duration": dur(1)},
+            {"kind": "copy_last_cast", "target": "self"},
+            {"kind": "read", "target": "self"},
+            {"kind": "steal", "target": "self", "technique": "nothing"},
+            {"kind": "learn_technique", "target": "self", "technique": "nothing"},
+            {"kind": "time_erase", "target": "self", "window": 2, "when": "ctx.hp_pct < 0"},      # never fires on the hero itself
+            {"kind": "change_tier", "target": "self", "track": "stars", "steps": 1},
+        ], "exchange"),
         # кража и применение техники
         ev("prim.learn", "use", [
             {"kind": "learn", "target": "self", "ability_id": "forge_technique"},

@@ -360,3 +360,18 @@ Code `src/effects/statecraft.py`; numbers (ring size, entity fields, wish whitel
 - `wish` (`outcome`, `amount`, `stat`, `pct`): only outcomes of the Lua whitelist (heal | revive | grant_stat | erase), each with cost and cooldown, amounts clamped; anything else is refused (logged in `_sc.log`).
 - `confiscate` (`what` ability|item, `id`): the ability / item moves from the target to the caster (`unit.external["grants"]`; items wait in the vault).
 - Not modelled: #34 `reverse_causality`, #40 `create_ex_nihilo`. EffectRuntime (training room) logs the ops only. Tests: `tests/test_effect_statecraft_spec.py`.
+
+## Exchange (slice G1a)
+
+Code `src/effects/exchange.py`; every whitelist and cap is data in `lua_content/effect_rules.lua` `exchange`. Opt-in, bounded, deterministic; refusals are logged (`sc_state().log`), never raised. EffectRuntime only logs.
+
+- `create_ex_nihilo` (`recipe`, `count`): only a recipe of `exchange.recipes` (item | object | summon), paid per unit from the caster (`cost`); unknown recipe or short pay = refused. Products are recorded in `unit.external["created"]` (`+exchange.equal_mass`).
+- `mass_resurrect` (`radius`, `pct`, `faction`): dead, non-erased members of the faction (default the caster's) within `min(radius, max_radius)`, at most `max_targets`, hp fraction clamped to `max_pct`, cost paid once.
+- `status_mod` (`status`, `duration_mult`, `duration_add`, `stacks_delta`, `potency_mult`): an ACTIVE status only (status book + its periodic ticks); multipliers clamped by `exchange.status_mod`, stacks by the status row.
+- `debuff` (`stat`, `value`, `duration`): a timed `mod` add with the value forced negative.
+- `unbounded` (`stat`, `mult`, `duration`): timed `mul` mod lifting a stat; `mult` clamped by `exchange.unbounded.stats[stat]` (unlisted stat refused), duration by `max_duration`; expiry restores.
+- `copy_last_cast`: replays the target's last cast (`EffectManager._last_cast`) from the caster onto the target; never a copy of a `copy_last_cast` row. `read` (`fields`, `duration`): the target's identity / abilities / last cast into the caster's `perception["read"]` (`+read.wand_history`).
+- `steal` / `learn_technique` (`technique`, `fidelity`): the caster gains the technique (`mimic.learned`, spells) at fidelity >= `steal.min_fidelity`, cost `steal.cost`; `steal` also removes it from the target and records the grant.
+- `time_erase` (`window`): restores the newest F8 entity snapshot no older than `min(window, max_window)` seconds, then erases (F6a); without a snapshot a plain erase; `erase_immune` stops it.
+- `change_tier` (`track`, `to` | `steps`): moves along `exchange.tiers[track]` (clamped), the tier's stat mods replace the previous tier's (`unit.external["tiers"]`).
+- Tests: `tests/test_effect_exchange_spec.py`.

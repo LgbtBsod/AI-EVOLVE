@@ -1,5 +1,5 @@
 {
-"n_lua": 562,
+"n_lua": 577,
 "cases": [
 [
 "\"x\"",
@@ -740,6 +740,10 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 10}, \"kind\": \"debuff\", \"stat\": \"defense\", \"target\": \"enemy\", \"value\": {\"flat\": 6}}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 10}, \"kind\": \"grant_vision\", \"target\": \"self\", \"value\": {\"flat\": 15}}",
 []
 ],
@@ -933,6 +937,10 @@
 ],
 [
 "{\"duration\": {\"flat\": 20}, \"id\": \"sun_god\", \"kind\": \"transform\", \"stats\": [{\"kind\": \"mod\", \"op\": \"mul\", \"stat\": \"defense\", \"target\": \"self\", \"value\": {\"flat\": 1.5}}], \"target\": \"self\"}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 20}, \"kind\": \"unbounded\", \"mult\": 9, \"stat\": \"attack_damage\", \"target\": \"self\"}",
 []
 ],
 [
@@ -1368,6 +1376,10 @@
 []
 ],
 [
+"{\"duration_mult\": 0.5, \"kind\": \"status_mod\", \"potency_mult\": 0.5, \"status\": \"burn\", \"target\": \"enemy\"}",
+[]
+],
+[
 "{\"every\": 1, \"kind\": \"deal\", \"stat\": \"hp\", \"value\": 1}",
 [
 "op: every (periodic op) is for deal/heal and needs duration"
@@ -1410,6 +1422,14 @@
 "op.fail[1]: not a dict",
 "op.fail[2]: kind=buff requires buff_id"
 ]
+],
+[
+"{\"fidelity\": 0.8, \"kind\": \"steal\", \"target\": \"enemy\", \"technique\": \"wand_strike\"}",
+[]
+],
+[
+"{\"fields\": [\"name\", \"abilities\"], \"kind\": \"read\", \"target\": \"enemy\"}",
+[]
 ],
 [
 "{\"filter\": \"abilities\", \"kind\": \"nullify\", \"target\": \"enemy\"}",
@@ -1500,7 +1520,27 @@
 []
 ],
 [
+"{\"kind\": \"change_tier\", \"steps\": 1, \"target\": \"self\", \"track\": \"stars\"}",
+[]
+],
+[
 "{\"kind\": \"consume\", \"stat\": \"mana\", \"target\": \"self\", \"value\": {\"flat\": 20}}",
+[]
+],
+[
+"{\"kind\": \"copy_last_cast\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"kind\": \"create_ex_nihilo\", \"recipe\": \"dream_fold\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"kind\": \"create_ex_nihilo\", \"recipe\": \"equal_exchange\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"kind\": \"create_ex_nihilo\", \"recipe\": \"forge_weapon\", \"target\": \"self\"}",
 []
 ],
 [
@@ -2253,6 +2293,10 @@
 ]
 ],
 [
+"{\"kind\": \"heal\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 10}}",
+[]
+],
+[
 "{\"kind\": \"heal\", \"value\": 1}",
 [
 "op: kind=heal requires stat"
@@ -2266,6 +2310,14 @@
 ],
 [
 "{\"kind\": \"kill\", \"target\": \"enemy\", \"when\": \"ctx.enemy_hp_pct < 12\"}",
+[]
+],
+[
+"{\"kind\": \"mass_resurrect\", \"pct\": 100, \"radius\": 30, \"target\": \"self\"}",
+[]
+],
+[
+"{\"kind\": \"mass_resurrect\", \"pct\": 40, \"radius\": 10, \"target\": \"self\"}",
 []
 ],
 [
@@ -2518,6 +2570,10 @@
 []
 ],
 [
+"{\"kind\": \"read\", \"target\": \"enemy\"}",
+[]
+],
+[
 "{\"kind\": \"remove_buff\"}",
 [
 "op: kind=remove_buff requires buff_id"
@@ -2572,6 +2628,10 @@
 ],
 [
 "{\"kind\": \"teleport\", \"to\": [1, 2]}",
+[]
+],
+[
+"{\"kind\": \"time_erase\", \"target\": \"enemy\", \"window\": 6}",
 []
 ],
 [
