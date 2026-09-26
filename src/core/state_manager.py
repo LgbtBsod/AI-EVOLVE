@@ -21,7 +21,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Optional, TypeVar
+from typing import Any, Dict, Optional, TypeVar
 
 logger = logging.getLogger(__name__)
 

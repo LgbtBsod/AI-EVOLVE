@@ -17,7 +17,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, Dict, List
 
 from src.core.architecture import BaseComponent, ComponentType, Priority
 from src.core.constants import (

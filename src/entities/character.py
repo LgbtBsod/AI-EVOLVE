@@ -890,7 +890,6 @@ class Character(BaseEntity):
                           known_exit_positions, hint_positions):
         """Цель - по полезности (src/gameplay/hero_drive.py): база из ситуации x вес эмоции
         + интерес подсказки игрока. Подсказка тянет, но не приказывает: враг рядом важнее."""
-        import random
         from src.gameplay.hero_drive import Option
         now = getattr(getattr(self.game, "effect_manager", None), "now", None)
         now = time.perf_counter() if now is None else now
@@ -1074,7 +1073,6 @@ class Character(BaseEntity):
     
     def _explore_area(self, dt):
         """Исследование области с устойчивой целевой точкой, а не хаотичными рывками."""
-        import random
 
         now = time.perf_counter()
         need_new_target = (

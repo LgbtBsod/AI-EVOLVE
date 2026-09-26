@@ -32,6 +32,8 @@ check, printed only above the thresholds in `lua_content/qa.lua`. Exit 0 ok/warn
 - `python tools/qa.py ci [--wait] [--sha S | --run ID]` — GitHub Actions via `gh`: verdict + only the failing step's essentials (FAILED tests,
   assertion + 3 diff lines, last traceback frame, cargo errors, our RESULT lines); cleaned full log in `dev_probe_output/qa/ci_<run>.log`. Never `gh run view --log`.
 
+- `python tools/qa.py static [FILES]` — undefined names/redefinitions/syntax (ruff F821,F811,E9), Lua compile (LuaJIT+5.5), workflow lint; part of `check`. The guard hook also denies known-bad Bash forms once (`python3`, `gh run view --log`, sleep loops, raw `.jsonl` reads, unquoted backtick heredocs; rules in `lua_content/guards.lua`; `# allow:ID` or repeat the command to force) and lints edited `.py` files.
+
 Drill down only when a line fails — first tool that answers the question:
 
 | Question | Command (cost) |

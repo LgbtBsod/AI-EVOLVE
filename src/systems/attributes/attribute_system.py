@@ -559,7 +559,7 @@ class AttributeSystem(BaseComponent):
             'cache_size': len(self._stat_cache),
             'update_time': self.system_stats['update_time']
         }
-    
+
     def reset_stats(self):
         """Сброс статистики"""
         self.system_stats = {
@@ -570,20 +570,4 @@ class AttributeSystem(BaseComponent):
             'cache_hits': 0,
             'cache_misses': 0,
             'update_time': 0.0
-        }
-    
-    def get_system_info(self) -> dict[str, Any]:
-        """Получение информации о системе"""
-        return {
-            'name': self.component_id,
-            'state': self.state.value,
-            'priority': self.priority.value,
-            'total_entities': self.system_stats['total_entities'],
-            'active_modifiers': self.system_stats['active_modifiers'],
-            'stat_calculations': self.system_stats['stat_calculations'],
-            'modifier_applications': self.system_stats['modifier_applications'],
-            'cache_hits': self.system_stats['cache_hits'],
-            'cache_misses': self.system_stats['cache_misses'],
-            'cache_size': len(self._stat_cache),
-            'update_time': self.system_stats['update_time']
         }

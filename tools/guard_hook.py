@@ -497,9 +497,29 @@ def _read_call(ti: dict, ctx: Ctx) -> Decision:
     return read_flow(_abs(path, ctx.cwd), ti, ctx, (_rule_raw, _rule_repeat, _rule_big))
 
 
+def _bash_rule(cmd: str, ctx: Ctx) -> Decision:
+    """The first bash rule (guards.lua `bash.rules`) the command breaks: deny once with the fix; the identical repeat passes; `# allow:ID` passes at once."""
+    bcfg = ctx.cfg.get("bash") or {}
+    if not bcfg.get("enabled") or not cmd:
+        return Decision()
+    for rule in bcfg.get("rules") or ():
+        if ("allow:" + rule["id"]) in cmd or not _rx(rule["pattern"]).search(cmd):
+            continue
+        key = f"{ctx.owner}|bash|{rule['id']}|{crc_of(cmd.encode('utf-8', 'replace'))}"
+        if _take_denied(ctx, key):
+            return Decision("allow", "bash-retry", rule["id"], key=key)
+        msg = _fmt(ctx.cfg["messages"]["bash"], id=rule["id"], say=rule["say"], window=round(ctx.cfg["window_s"] / 60))
+        return Decision("deny", "bash-" + rule["id"], cmd[:80], msg, key=key)
+    return Decision()
+
+
 def _bash_call(ti: dict, ctx: Ctx) -> Decision:
-    """`cat FILE` is an unranged Read: only the raw-log rule applies to it (guard-bash owns the rest)."""
-    m = _rx(ctx.cfg["raw"]["bash_cat"]).match(str(ti.get("command") or ""))
+    """Known-bad forms first (guard-bash); then `cat FILE` is an unranged Read: only the raw-log rule applies to it."""
+    cmd = str(ti.get("command") or "")
+    hit = _bash_rule(cmd, ctx)
+    if hit.rule != "-":
+        return hit
+    m = _rx(ctx.cfg["raw"]["bash_cat"]).match(cmd)
     if not m:
         return Decision()
     d = read_flow(_abs(m.group("path").strip("\"'"), ctx.cwd), {}, ctx, (_rule_raw,))
@@ -696,6 +716,69 @@ def session_event(raw, env=None, root=ROOT, timeout: int = 8) -> str:
         return ""
 
 
+def _ruff_exe(root: str) -> str | None:
+    for rel in (".venv/Scripts/ruff.exe", ".venv/bin/ruff"):
+        cand = os.path.join(root, rel)
+        if os.path.isfile(cand):
+            return cand
+    import shutil
+    return shutil.which("ruff")
+
+
+def _ruff_row(row: str, root: str) -> str:
+    loc, msg = row.split(": ", 1)
+    parts = loc.rsplit(":", 2)
+    return f"{_rel(parts[0], root)}:{parts[1]} {msg}"
+
+
+def _py_problems(path: str, cfg: dict, root: str) -> list[str]:
+    """`file:line message` for a syntax error (ast, in-process) or, when ruff is found, an undefined name / redefinition (one ruff call, ~30 ms)."""
+    import ast
+    try:
+        with open(path, "rb") as fh:
+            src = fh.read()
+        ast.parse(src, path)
+    except SyntaxError as exc:
+        return [f"{os.path.basename(path)}:{exc.lineno or 1} E999 {exc.msg}"]
+    except (OSError, ValueError):
+        return []
+    ruff = _ruff_exe(root)
+    if not ruff:
+        return []
+    import subprocess
+    run = subprocess.run([ruff, "check", "--isolated", "--no-cache", "--select", cfg.get("select", "F821,E9"), "--output-format", "concise", path],
+                         capture_output=True, timeout=cfg.get("timeout_s", 5), check=False, cwd=root)
+    rows = [ln.strip() for ln in run.stdout.decode("utf-8", "replace").splitlines() if ln.strip() and ": " in ln]
+    return [_ruff_row(r, root) for r in rows]
+
+
+def _post_target(payload: dict, cfg: dict, env) -> str | None:
+    """The edited file when the lint applies (enabled, mode not off, Edit/Write/NotebookEdit, a configured extension), else None."""
+    pcfg = (cfg or {}).get("post_edit") or {}
+    path = (payload.get("tool_input") or {}).get("file_path") if payload.get("tool_name") in ("Edit", "Write", "NotebookEdit") else None
+    ok = pcfg.get("enabled") and cfg.get("mode") != "off" and isinstance(path, str) and path.rsplit(".", 1)[-1] in pcfg["exts"]
+    return path if ok else None
+
+
+def post_edit(raw, env=None, root=ROOT, cfg=None) -> str:
+    """PostToolUse Edit|Write|NotebookEdit on a .py file -> additionalContext `file:line message` (empty when clean). Never raises, never blocks; Lua is not checked here (a
+    lupa boot is far over the hook's latency budget): `qa.py static` covers it."""
+    env = os.environ if env is None else env
+    if (env.get("AI_EVOLVE_GUARD") or "").strip().lower() in ("off", "0", "false", "no") or b'"PostToolUse"' not in raw:
+        return ""
+    try:
+        payload = loads(raw)
+        cfg = cfg or load_cfg(root, out_dir(env, root))
+        path = _post_target(payload, cfg, env)
+        rows = _py_problems(_abs(path, payload.get("cwd") or root), cfg["post_edit"], str(root)) if path else []
+        if not rows:
+            return ""
+        text = _fmt(cfg["messages"]["post_edit"], n=len(rows), lines=chr(10).join(rows[: cfg["post_edit"].get("max_lines", 6)]))
+        return dumps({"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": text}})
+    except Exception:  # noqa: BLE001 - fail open: a lint hook must never get in the way
+        return ""
+
+
 def main() -> int:
     if sys.argv[1:2] == ["--compile"]:                       # child of _compile_in_child: `--compile ROOT OUT`
         compile_rules(*sys.argv[2:4])
@@ -704,7 +787,7 @@ def main() -> int:
         raw = sys.stdin.buffer.read()
     except OSError:
         return 0
-    session = session_event(raw)
+    session = session_event(raw) or post_edit(raw)
     if session:
         sys.stdout.write(session)
         return 0

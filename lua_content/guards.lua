@@ -45,6 +45,29 @@ return {
     bash_cat = [[^\s*(?:cat|type|more|less)\s+(?:--\s+)?(?P<path>"[^"]+"|'[^']+'|[^\s|;&<>]+)\s*$]],   -- `cat FILE` counts as an unranged Read
   },
 
+  -- BASH GUARD: known-bad command forms are denied once with the replacement command (soft: the identical repeat passes; `# allow:ID` in the command passes at once).
+  -- Each rule: id, pattern (Python `re`, searched in the whole command text), say = the fix (replaces = the tool-registry `replaces` column in lua_content/qa.lua).
+  bash = {
+    enabled = true,
+    rules = {
+      { id = "python3", pattern = [[(?:^|[\s;&|(])python3(?:\.\d+)?(?=\s|$)]],
+        say = "`python3` is the Windows Store stub and hangs: use `.venv/Scripts/python.exe` (or `python` from the activated venv)." },
+      { id = "gh_log", pattern = [[\bgh\s+run\s+(?:view\b[^\n]*--log|download\b)]],
+        say = "raw CI logs cost 10k+ tokens: use `python tools/qa.py ci [--wait] [--sha S | --run ID]` (verdict + the failing step only; cleaned log in dev_probe_output/qa/ci_<run>.log)." },
+      { id = "sleep", pattern = [[\bsleep\s+(?:3[1-9]|[4-9]\d|\d{3,})(?![\d.])|\b(?:until|while)\b[^\n]*\bsleep\b]],
+        say = "no sleep/poll loops: use `run_in_background` (you are re-invoked on exit), the Monitor tool with an until-loop, or `python tools/qa.py ci --wait`." },
+      { id = "raw_cat", pattern = [[^\s*(?:(?:head|tail|less|more|type)\b|cat\s+(?:-\S+\s+|[^\s|;&<>]+\s+[^\s|;&<>]))[^|;&\n]*(?:\.jsonl\b|game\.log\b|dev_probe_output/)]],
+        say = "raw dumps: `python tools/probe_db.py stats|why RUN|sql \"SELECT ...\"` for runs, `python tools/qa.py tokens` / `qa.py guard --stats` for transcripts and guard logs." },
+      { id = "heredoc", pattern = [[<<-?[ \t]*[A-Za-z_]\w*[^\n]*\n[\s\S]*(?:`|\$\()]],
+        say = "an unquoted heredoc delimiter executes backticks and $( ) in the body: quote it, `<<'EOF'`." },
+      { id = "winpath", pattern = [[\bpython[\w.-]*\s+(?:\S+\s+)*?[A-Za-z]:\\\S]],
+        say = "a bare backslash Windows path as a python argument loses its backslashes in bash: use forward slashes (`C:/x/y.py`) or a path relative to the repo root." },
+    },
+  },
+
+  -- POST-EDIT LINT (PostToolUse Edit|Write|NotebookEdit): a syntax error / undefined name in the edited .py file comes back as additionalContext (never blocks).
+  post_edit = { enabled = true, exts = { "py" }, select = "F821,F811,E9", timeout_s = 5, max_lines = 6 },
+
   -- BATCH NUDGE (additionalContext, never a deny): two single read-only calls in a row -> "put independent read-only calls into ONE message".
   batch = {
     enabled = true, prior_turns = 2, cooldown_s = 90, lookback_bytes = 262144,
@@ -75,5 +98,7 @@ return {
             .. "Retry with offset/limit for a specific part, or repeat the same call once within {window} min to force it.",
     batch = "GUARD batch: your last {n} tool calls were single read-only calls. Put ALL independent read-only calls "
          .. "(Read/Grep/Glob/qa.py ctx/sym) into ONE message; one turn re-reads the whole context, so N calls in one message cost one turn.",
+    bash = "GUARD bash denied ({id}): {say}\nRepeat the identical command once within {window} min to force it, or append `# allow:{id}`.",
+    post_edit = "GUARD lint: {n} problem(s) in the file you just edited (fix them in this turn):\n{lines}",
   },
 }

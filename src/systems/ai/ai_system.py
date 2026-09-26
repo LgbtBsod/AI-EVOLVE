@@ -33,7 +33,7 @@ except ImportError:
     logging.info("Scikit-learn не установлен - некоторые AI функции будут недоступны")
 
 from src.core.architecture import BaseComponent, ComponentType, Priority
-from src.core.constants import AIBehavior, AIState
+from src.core.constants import AIState
 
 
 # = ТИПЫ AI

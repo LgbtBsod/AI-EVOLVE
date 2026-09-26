@@ -392,7 +392,7 @@ def test_install_is_idempotent_and_keeps_foreign_settings():
     hook = pre[1]["hooks"][0]
     assert hook == {"type": "command", "command": "${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe",
                     "args": ["-S", "-E", "${CLAUDE_PROJECT_DIR}/tools/guard_hook.py"], "timeout": 10}
-    assert sorted(GP.installed_events(once)) == sorted(["PreToolUse", "PreCompact", "SessionStart", "Stop", "SubagentStop"])
+    assert sorted(GP.installed_events(once)) == sorted(["PreToolUse", "PostToolUse", "PreCompact", "SessionStart", "Stop", "SubagentStop"])
     assert GP.uninstall(once) == _settings()                                           # only OUR entries went away
     assert GP.uninstall(GP.uninstall(once)) == _settings()
 
@@ -536,3 +536,58 @@ def test_hook_process_does_not_import_json_or_re(tmp_path, cfg):
                          timeout=60, check=False)
     imported = {ln.split("|")[-1].strip() for ln in run.stderr.decode(errors="replace").splitlines() if ln.startswith("import time:")}
     assert run.returncode == 0 and {"os", "zlib"} <= imported and not imported & {"json", "re", "collections", "subprocess", "ast"}, sorted(imported)
+
+
+# ---------------------------------------------------------------- bash rules (guards.lua `bash`) + post-edit lint
+
+BS = chr(92)
+BAD_BASH = [
+    ("python3 tools/qa.py brief", "python3"), ("cd x && python3 -m pytest", "python3"),
+    ("gh run view 123 --log", "gh_log"), ("gh run view 123 --log-failed", "gh_log"), ("gh run download 5", "gh_log"),
+    ("sleep 60", "sleep"), ("until curl -s x; do sleep 2; done", "sleep"),
+    ("head -20 dev_probe_output/run/state.jsonl", "raw_cat"), ("tail -f game.log", "raw_cat"),
+    ("cat <<EOF\nrun `date`\nEOF", "heredoc"), ("cat <<EOF\nrun $(date)\nEOF", "heredoc"),
+    ("python C:" + BS + "Users" + BS + "a" + BS + "x.py", "winpath"),
+]
+GOOD_BASH = ["ls -la", "sleep 5", "sleep 30", "python tools/qa.py ci --wait", "gh run list", "cat <<'EOF'\nrun `date`\nEOF", "cat <<EOF\nplain text\nEOF",
+             'python "C:' + BS + 'Users' + BS + 'a.py"',"python C:/x/y.py", ".venv/Scripts/python.exe tools/qa.py brief", "head -5 notes.txt", "cat game.log | head -5",
+             "sleep 5; python3 x # allow:python3"]
+
+
+@pytest.mark.parametrize(("cmd", "rule"), BAD_BASH)
+def test_bash_rules_deny_once_then_the_identical_repeat_passes(g, cmd, rule):
+    d = g.call("Bash", command=cmd)
+    assert (d.action, d.rule) == ("deny", "bash-" + rule) and "GUARD bash denied" in d.message
+    retry = g.call("Bash", command=cmd)
+    assert (retry.action, retry.rule) == ("allow", "bash-retry")
+    assert g.call("Bash", command=cmd).action == "deny"                          # the retry was spent
+    assert [r["rule"] for r in g.log()][:2] == ["bash-" + rule, "bash-retry"]    # every decision is logged
+
+
+@pytest.mark.parametrize("cmd", GOOD_BASH)
+def test_bash_rules_leave_good_commands_alone(g, cmd):
+    assert g.call("Bash", command=cmd).action == "allow"
+
+
+def test_bash_rules_follow_mode_off_and_stats_count_per_rule(g):
+    g.cfg["mode"] = "log"
+    assert g.call("Bash", command="python3 x").rule == "would-bash-python3"
+    g.cfg["mode"] = "soft"
+    g.call("Bash", command="sleep 99")
+    assert GP.summarize(g.log())["by_rule"]["bash-sleep"]["n"] == 1
+
+
+def _post(g, name, text, tool="Edit"):
+    path = g.file(name, text)
+    payload = {"hook_event_name": "PostToolUse", "tool_name": tool, "tool_input": {"file_path": str(path)}, "cwd": str(g.root)}
+    return G.post_edit(json.dumps(payload).encode(), env={}, root=str(ROOT), cfg=g.cfg)
+
+
+def test_post_edit_reports_syntax_and_undefined_names_and_stays_silent_otherwise(g):
+    out = json.loads(_post(g, "a.py", "def f(:\n    pass\n"))
+    assert out["hookSpecificOutput"]["hookEventName"] == "PostToolUse" and "a.py:1 E999" in out["hookSpecificOutput"]["additionalContext"]
+    assert _post(g, "b.py", "x = 1\n") == "" and _post(g, "c.txt", "def f(:") == "" and _post(g, "d.py", "def f(:", tool="Read") == ""
+    if G._ruff_exe(str(ROOT)):
+        assert "d.py:2 F821" in json.loads(_post(g, "d.py", "def f():\n    return re.sub('a', 'b', x)\n"))["hookSpecificOutput"]["additionalContext"]
+    assert G.post_edit(b"{{{", env={}) == "" and G.post_edit(b'{"hook_event_name": "PostToolUse"}', env={}, cfg=g.cfg) == ""
+    assert G.post_edit(b'"PostToolUse"', env={"AI_EVOLVE_GUARD": "off"}) == ""

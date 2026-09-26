@@ -219,6 +219,10 @@ return {
     { name = "hygiene", cmd = "python tools/qa.py hygiene --result", parse = "result_line", cost = "low", always = true,
       tags = { "hygiene" }, detail = [[^(?!RESULT |repro:)\S]],
       what = "git ls-files has no .venv*/ target/ *.so *.pyd *.pyc saves/*.db dev_probe_output/ or file > 1 MB; .gitignore covers the required patterns" },
+    -- Static gate (tools/static_gate.py): ruff F821/F811/E9 + compile on Python, LuaJIT 2.1 + Lua 5.5 compile-only on every .lua, workflow structure lint.
+    { name = "static", cmd = "python tools/qa.py static --result", parse = "result_line", cost = "low", ci = true,
+      watches = { "src/**", "tools/**", "main.py", "lua_content/**", ".github/**" }, tags = { "hygiene", "static" }, detail = [[^(?!RESULT |repro:)\S]],
+      what = "no undefined name / redefinition / syntax error in Python, every Lua file compiles (LuaJIT + 5.5), workflows are structurally sound" },
     -- Tools registry (tools/tool_registry.py, data = the `tools` table below): every tool has a purpose, docs/TOOLS.md equals the harvest, no two tools alike,
     -- CLAUDE.md names only real qa.py commands. Same as `hygiene`: no `watches` needed beyond what the harvest reads; `always`: runs even when nothing changed.
     { name = "tools", cmd = "python tools/qa.py tools --result", parse = "result_line", cost = "low", always = true, ci = true,
@@ -428,7 +432,9 @@ return {
       { id = "item", command = "python tools/qa.py item check|digest|diff|all", purpose = "Effect Schema items: itemcheck, one line per effect (digest), diff vs a git ref", replaces = "reading generated item Lua", output = "one line per effect", group = "content", cost = "low" },
       { id = "lua", command = "python tools/qa.py lua check|show FILE|bench", purpose = "Lua content: every file loads with every backend (check), a file's data as compact JSON (show), load time (bench)", when = "any question about lua_content", replaces = "reading Lua files", output = "summary or JSON", group = "content", cost = "low" },
       { id = "quality", command = "python tools/qa.py quality [--worst N|--explain RULE]", replaces = "running ruff, radon, vulture, import-linter separately", output = "qa_report line + worst-N table", group = "verify", cost = "low" },
-      { id = "guard", command = "python tools/qa.py guard [--stats|--explain|--simulate FILE.json|--compile|--install|--uninstall]", purpose = "read guard (Claude Code hooks): outline instead of a big unranged Read, one-line stub for an unchanged re-read, digest command for raw logs, batch nudge",
+      { id = "static", command = "python tools/qa.py static [FILES]", purpose = "static gate: ruff F821/F811/E9 + compile on Python, Lua syntax (LuaJIT 2.1 + 5.5 via lupa), workflow structure lint; the PostToolUse hook runs the Python part after every edit",
+        when = "after editing Python/Lua/workflows, before a long run; a lost import shows here with file:line", replaces = "finding an undefined name by crashing a run", output = "qa_report line + file:line per error", group = "verify", cost = "low" },
+      { id = "guard", command = "python tools/qa.py guard [--stats|--explain|--simulate FILE.json|--compile|--install|--uninstall]", purpose = "tool-call guard (Claude Code hooks): outline instead of a big unranged Read, stub for an unchanged re-read, digest command for raw logs, batch nudge, deny of known-bad Bash forms (python3, gh run view --log, sleep loops, cat of jsonl, backtick heredoc, bare drive-letter path), post-edit lint",
         when = "an agent burns context on big or repeated reads; --stats shows the blocks and the tokens kept out of the context", replaces = "hoping agents read with offset/limit and batch their calls", output = "qa_report line (+ per-rule lines for --stats)", group = "read", cost = "low" },
       { id = "ckpt", command = "python tools/qa.py ckpt \"done\" --next \"next action\" [--files a,b] [--agent NAME] [--auto]", purpose = "checkpoint of unfinished work: one journal line + a safety snapshot (refs/qa/ckpt/N, working tree untouched), the last 20 kept",
         when = "about every 10 tool calls and at the call cap of an agent (relay), before a risky step", replaces = "a hand-written handoff brief", output = "one line: ckpt #N saved", group = "build", cost = "low" },

@@ -80,6 +80,23 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe",
+            "args": [
+              "-S",
+              "-E",
+              "${CLAUDE_PROJECT_DIR}/tools/guard_hook.py"
+            ],
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }

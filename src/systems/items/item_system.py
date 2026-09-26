@@ -69,7 +69,7 @@ class ItemSlot(Enum):
     TRINKET_1 = "trinket_1"            # Аксессуар 1
     TRINKET_2 = "trinket_2"            # Аксессуар 2
 
-class ItemEffect(Enum):
+class ItemEffectKind(Enum):
     """Эффекты предметов"""
     DAMAGE = "damage"                  # Урон
     HEAL = "heal"                      # Лечение

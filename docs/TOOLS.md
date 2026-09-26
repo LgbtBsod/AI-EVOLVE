@@ -24,6 +24,7 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `check:play:*` | `python tools/qa.py check --tag play` | 7 gameplay checks (agent_play scripts of qa.lua scenarios/plays): forced_attacks, golem_guard,... | playing the game to test behaviour | qa_report line | low |
 | `check:quality` | `python tools/qa.py check --name quality` | SOLID/DRY/SRP/SSOT ratchet: ruff + radon CC + vulture + import-linter layers + duplicate definitions vs... | running ruff, radon, vulture, import-linter separately | qa_report line | low |
 | `check:quality_tools` | `python tools/qa.py check --name quality_tools` | the quality ratchet for tools/ (ruff + radon CC + vulture + duplicate definitions vs... | - | qa_report line | low |
+| `check:static` | `python tools/qa.py check --name static` | no undefined name / redefinition / syntax error in Python, every Lua file compiles (LuaJIT + 5.5),... | - | qa_report line | low |
 | `check:tests` | `python tools/qa.py check --name tests` | pytest in parallel shards (only affected files in diff mode; known failures do not count as NEW) | raw pytest and its full output | qa_report line | medium |
 | `check:tokens` | `python tools/qa.py check --name tokens` | the transcript ledger parses the latest local session (turns=0 when there is no transcript dir) | - | qa_report line | low |
 | `check:tools` | `python tools/qa.py check --name tools` | every tool/plugin/check/script has a purpose line, docs/TOOLS.md equals the harvest, no near-duplicate... | grepping tools/ before writing a new tool; a hand-kept tool table in CLAUDE.md | qa_report line | low |
@@ -33,6 +34,7 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `hygiene` | `python tools/qa.py hygiene` | repo hygiene: no tracked virtualenv/build output/saves/big files, .gitignore keeps its patterns | eyeballing git ls-files and .gitignore | qa_report line | low |
 | `quality` | `python tools/qa.py quality [--worst N\|--explain RULE]` | code-quality ratchet: SOLID/DRY/SRP/SSOT violations may not grow | running ruff, radon, vulture, import-linter separately | qa_report line + worst-N table | low |
 | `repo_hygiene` | `python tools/repo_hygiene.py` | logic of the hygiene check: what git must never track (virtualenv, build output, saves, big files) and the... | - | RESULT line | low |
+| `static` | `python tools/qa.py static [FILES]` | static gate: ruff F821/F811/E9 + compile on Python, Lua syntax (LuaJIT 2.1 + 5.5 via lupa), workflow... | finding an undefined name by crashing a run | qa_report line + file:line per error | low |
 | `test` | `python tools/qa.py test [--changed]` | pytest in parallel shards; prints only NEW failures (--changed = tests your diff affects) | raw pytest and its full output | counts + new failures | medium |
 | `trace_compare` | `python tools/trace_compare.py` | did a refactor change behaviour: per-frame trace hashes of every play scenario, before vs after | eyeballing runs after a refactor | first divergent frame per scenario | medium |
 ### read / navigate - instead of reading raw files
@@ -43,7 +45,7 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `changed` | `python tools/qa.py changed [REV]` | semantic diff: +added -removed ~changed symbols per file, churn, RISK flags, checks to run | git diff | <= 30 lines | low |
 | `ctx` | `python tools/qa.py ctx FILE` | outline of a Python file: classes, functions, importers, tests | reading a big file whole | outline (about 40 lines) | low |
 | `docs` | `python tools/qa.py docs` | which .md files are stale (they name code that is missing or dead) | opening old .md reports | counts + top stale files | low |
-| `guard` | `python tools/qa.py guard [--stats\|--explain\|--simulate FILE.json\|--compile\|--install\|--uninstall]` | read guard (Claude Code hooks): outline instead of a big unranged Read, one-line stub for an unchanged... | hoping agents read with offset/limit and batch their calls | qa_report line (+ per-rule lines for --stats) | low |
+| `guard` | `python tools/qa.py guard [--stats\|--explain\|--simulate FILE.json\|--compile\|--install\|--uninstall]` | tool-call guard (Claude Code hooks): outline instead of a big unranged Read, stub for an unchanged... | hoping agents read with offset/limit and batch their calls | qa_report line (+ per-rule lines for --stats) | low |
 | `guard_hook` | `python tools/guard_hook.py (hook JSON on stdin; installed by qa.py guard --install)` | hook entry point of the read guard: stdlib only, decides in a few ms, fails open (exit 2 + stderr = deny... | - | exit code + stderr / hook JSON | low |
 | `tools` | `python tools/qa.py tools` | the tools registry: find an existing tool before writing one, regenerate docs/TOOLS.md, detect... | grepping tools/ and reading the CLAUDE.md tool table | --find: name \| command \| purpose lines; report: one qa_report line | low |
 ### analyse - runs, balance, performance
@@ -121,5 +123,6 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `qa_pytest_plugin` | `import qa_pytest_plugin` | pytest plugin (-p qa_pytest_plugin): every test outcome as one JSONL row for qa.py test | parsing pytest console output | JSONL | - |
 | `qa_report` | `import qa_report` | THE output format of every check: Result, format_line, worst-first budgeted report, history, deltas | ad-hoc print formats | one line per check | - |
 | `quality_metrics` | `import quality_metrics` | the code-quality ratchet behind qa.py quality: ruff, radon CC, vulture, import-linter, duplicate... | running the linters separately | Result | - |
+| `static_gate` | `import static_gate` | static_gate - the `static` check: undefined names, redefinitions and syntax errors before they reach a run. | - | - | - |
 | `token_ledger` | `import token_ledger` | Transcript waste ledger (stdlib + optional orjson): parse Claude Code session JSONL into per-log metrics. | - | - | - |
 | `tool_registry` | `import tool_registry` | harvest, render and gap detection of the tools registry (logic of qa.py tools) | a hand-written tool table | Result / markdown | - |

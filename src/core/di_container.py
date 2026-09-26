@@ -13,7 +13,7 @@ from __future__ import annotations
 import logging
 import threading
 from contextlib import contextmanager
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, Self, TypeVar
 
 from dependency_injector import containers, providers
 from dependency_injector.wiring import Provide, inject

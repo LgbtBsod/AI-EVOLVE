@@ -24,7 +24,7 @@ pytestmark = pytest.mark.skipif(not lua_bridge.available_backends(), reason="no 
 VALID_MODELS = {"sonnet", "opus", "haiku", "fable"}          # the `model` enum of the Agent tool / Workflow option / .claude/agents frontmatter
 CHEAP_STAGES = {"run-tests", "summarise-log", "mechanical-edit", "grep-research"}
 STRONG_STAGES = {"design", "judge", "adversarial-review"}
-KNOWN = {"check", "test", "ctx", "tools", "brief", "prompt", "route", "changed", "lua", "item", "ci", "golden", "determinism", "quality", "guard", "ckpt", "resume", "sym", "q", "tokens", "pack"}
+KNOWN = {"check", "test", "ctx", "tools", "brief", "prompt", "route", "changed", "lua", "item", "ci", "golden", "determinism", "quality", "guard", "ckpt", "resume", "sym", "q", "tokens", "pack", "static"}
 
 
 @pytest.fixture(scope="module")

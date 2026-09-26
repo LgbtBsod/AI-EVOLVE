@@ -860,6 +860,7 @@ class TestSystem(BaseComponent):
         """Тест производительности боевой системы"""
         try:
             # Создание системы боя
+            from src.systems.combat.combat_system import CombatSystem
             combat_system = CombatSystem()
             combat_system.initialize()
             
@@ -887,6 +888,7 @@ class TestSystem(BaseComponent):
         """Стресс-тест системы эффектов"""
         try:
             # Создание системы эффектов
+            from src.systems.effects.effect_system import EffectSystem
             effect_system = EffectSystem()
             effect_system.initialize()
             
@@ -916,6 +918,7 @@ class TestSystem(BaseComponent):
         """Стресс-тест системы боя"""
         try:
             # Создание системы боя
+            from src.systems.combat.combat_system import CombatSystem
             combat_system = CombatSystem()
             combat_system.initialize()
             

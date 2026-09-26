@@ -24,7 +24,7 @@ import qa_report as R
 from probe_settings import ROOT, qa_settings
 
 HOOK_FILE = "guard_hook.py"
-EVENTS = {"PreToolUse": "Read|Grep|Glob|Bash", "PreCompact": None, "SessionStart": None, "Stop": None, "SubagentStop": None}     # event -> matcher (None: no matcher)
+EVENTS = {"PreToolUse": "Read|Grep|Glob|Bash", "PostToolUse": "Edit|Write|NotebookEdit", "PreCompact": None, "SessionStart": None, "Stop": None, "SubagentStop": None}     # event -> matcher (None: no matcher)
 SETTINGS = ROOT / ".claude" / "settings.json"
 
 
@@ -162,6 +162,8 @@ def cmd_explain(_args, cfg: dict, _t0: float) -> int:
         f"REPEAT  second Read of an UNCHANGED file (content checksum) in the same context, >= {rp['min_chars']} chars -> one-line stub; forgotten on PreCompact",
         (f"RAW     Read/`cat` of {len(raw['rules'])} raw-dump patterns (state.jsonl, game.log, ci_*.log, dev_probe_output/**, *.jsonl ...) over {raw['max_bytes']} bytes "
          f"-> the digest command + {raw['head']}+{raw['tail']} sample lines"),
+        f"BASH    {len((cfg.get('bash') or {}).get('rules', []))} rules ({', '.join(r['id'] for r in (cfg.get('bash') or {}).get('rules', []))}) -> deny once with the replacement command; `# allow:ID` or the identical repeat passes",
+        "LINT    PostToolUse on .py after Edit/Write: syntax + undefined name (ruff) as additionalContext, never blocks",
         f"BATCH   {b['prior_turns']} single read-only calls in a row -> additionalContext 'put independent read-only calls into ONE message' (at most every {b['cooldown_s']} s)",
         "off     AI_EVOLVE_GUARD=off (this shell) | mode = \"off\" in lua_content/guards.lua (everyone) | `qa.py guard --uninstall` (removes the hooks)",
         "data    lua_content/guards.lua -> dev_probe_output/qa/guards.json; log dev_probe_output/qa/guards.jsonl; state dev_probe_output/qa/guard_state.json",
@@ -180,6 +182,11 @@ def cmd_stats(_args, cfg: dict, t0: float) -> int:
 
 def cmd_simulate(args, cfg: dict, t0: float) -> int:
     raw = sys.stdin.buffer.read() if args.simulate == "-" else Path(args.simulate).read_bytes()
+    post = G.post_edit(raw, cfg=cfg)
+    if post:                                        # PostToolUse payload: the lint answer, not a Pre decision
+        print(_line("guard", "ok", {"simulate": 1, "action": "lint", "rule": "post-edit"}, time.perf_counter() - t0))
+        print("\n".join(f"  {ln}" for ln in json.loads(post)["hookSpecificOutput"]["additionalContext"].splitlines()))
+        return 0
     d = G.decide(raw, {"dry": True, "cfg": cfg})
     code, out, err = G.render(d)
     print(_line("guard", "ok", {"simulate": 1, "action": d.action, "rule": d.rule, "exit": code, "chars": d.chars}, time.perf_counter() - t0))
@@ -200,7 +207,7 @@ def cmd_install(args, cfg: dict, t0: float) -> int:
     rel = path.relative_to(ROOT).as_posix() if path.is_relative_to(ROOT) else str(path)
     events = ",".join(installed_events(after)) or "none"
     print(_line("guard", "ok", {"hooks": events, "mode": cfg.get("mode")}, time.perf_counter() - t0))
-    print(f"  {verb} {rel}: PreToolUse (Read|Grep|Glob|Bash) + PreCompact + SessionStart (resume brief) + Stop/SubagentStop (auto ckpt) ->tools/{HOOK_FILE}. "
+    print(f"  {verb} {rel}: PreToolUse (Read|Grep|Glob|Bash: read guard + bash rules) + PostToolUse (Edit|Write|NotebookEdit: python lint) + PreCompact + SessionStart (resume brief) + Stop/SubagentStop (auto ckpt) ->tools/{HOOK_FILE}. "
           + ("Restart the session (or review /hooks) so it stops." if args.uninstall else
              f"Mode={cfg.get('mode')}; restart the session or review /hooks to activate; off: AI_EVOLVE_GUARD=off | qa.py guard --uninstall"))
     return 0
