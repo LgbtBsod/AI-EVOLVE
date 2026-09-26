@@ -359,6 +359,18 @@ return {
   },
   ckpt = { keep = 20, history_tail_bytes = 30000, hook_timeout_s = 8 },
 
+  -- qa.py relay: continue unfinished work after a usage-limit stop / crash (tick = what the OS scheduler runs). Mode notify|headless (relay.json, set by `relay install`).
+  relay = {
+    mode = "notify", every_min = 20, idle_min = 15, margin_min = 3, crash_idle_min = 45, lock_h = 6, max_per_day = 3, tail_bytes = 65536,
+    task_name = "AI-EVOLVE relay", cron_marker = "# ai-evolve-relay", toast_title = "AI-EVOLVE: unfinished work",
+    max_budget_usd = 5, model = "sonnet", permission_mode = "acceptEdits", timeout_h = 5,
+    allowed_tools = { "Read", "Grep", "Glob", "Edit", "Write", "Bash(.venv/Scripts/python.exe tools/qa.py:*)", "Bash(git status:*)", "Bash(git diff:*)" },
+    disallowed_tools = { "Bash(*qa.py ship*)", "Bash(git push*)", "Bash(git commit*)", "Bash(git stash*)", "Bash(git reset*)" },
+    claude_glob = "Claude/claude-code/*/claude.exe",
+    -- used when the tzdata package is missing (hours from UTC, no DST)
+    tz_fallback = { ["Asia/Yerevan"] = 4, ["UTC"] = 0, ["Europe/Moscow"] = 3, ["Europe/Kyiv"] = 2, ["Europe/Berlin"] = 1, ["Europe/London"] = 0, ["Asia/Tbilisi"] = 4 },
+  },
+
   -- qa.py trend + the `warn trend` lines inside `qa.py check` (history.jsonl). Skipped for checks with < min_rows rows.
   -- dur: median of the last `window` runs vs the newest; flagged only when the newest `confirm` runs ALL exceed median*(1+dur_pct/100) and +dur_abs seconds.
   trend = { window = 20, min_rows = 8, dur_pct = 30, dur_abs = 1.0, confirm = 3, flips = 3 },
@@ -454,6 +466,8 @@ return {
         when = "an agent burns context on big or repeated reads; --stats shows the blocks and the tokens kept out of the context", replaces = "hoping agents read with offset/limit and batch their calls", output = "qa_report line (+ per-rule lines for --stats)", group = "read", cost = "low" },
       { id = "ckpt", command = "python tools/qa.py ckpt \"done\" --next \"next action\" [--files a,b] [--agent NAME] [--auto]", purpose = "checkpoint of unfinished work: one journal line + a safety snapshot (refs/qa/ckpt/N, working tree untouched), the last 20 kept",
         when = "about every 10 tool calls and at the call cap of an agent (relay), before a risky step", replaces = "a hand-written handoff brief", output = "one line: ckpt #N saved", group = "build", cost = "low" },
+      { id = "relay", command = "python tools/qa.py relay detect|tick [--dry-run] [--force]|install [--mode notify|headless] [--every N] [--dry-run]|uninstall|status", purpose = "auto-continue unfinished work after a usage-limit stop or crash: OS scheduler runs `tick` (0 tokens while idle), notify (toast + relay_ready.md) or opt-in narrow headless claude run",
+        when = "once per machine (`relay install`), then never; `relay status` to look", replaces = "checking by hand when the usage limit resets", output = "one line: relay mode=.. installed=.. every=.. last_tick=.. last_action=.. limit=..", group = "build", cost = "low" },
       { id = "tokens", command = "python tools/qa.py tokens [--agents] [--top N] [--session latest|ID|PATH] [--json]", purpose = "transcript waste ledger: turns, calls per turn, batchable read-only runs, result and written tokens by tool, unbounded and repeated reads, retries, relays, guard stats, trend per session/agent",
         when = "before and after changing an agent prompt, a hook or a tool; to prove a token saving", replaces = "a hand-written transcript scan", output = "one QA line per metric group, worst first, each with `| use: CMD`", group = "build", cost = "low" },
       { id = "pack", command = "python tools/qa.py pack \"TASK\" [--files a,b] [--max-tok 1500] [--json]", purpose = "ranked context pack for a task: top files with symbol ranges, importers/tests, existing tools, state, verify command, do-not-read list",

@@ -98,6 +98,7 @@ today's violations are the baseline (`tests/quality_baseline.json`: per metric, 
 - Periodic spawns appear 30-50u from the hero (outside his 30u vision); `spawn enemy` guarantees a fight. Enemies see the hero via `EffectManager.can_see`, fight with a learned
   tactic (`src/gameplay/enemy_ai.py`, Rust bandit in `tactics.py`; tools use `AI_EVOLVE_TACTICS_MEMORY=off`). The hero learns "retreat" vs "press" (`hero_mind.py`, `AI_EVOLVE_HERO_MIND=off`).
 - **Workflows:** `python tools/qa.py wf new NAME` before writing one, `qa.py wf estimate SCRIPT` before running it; EVERY `agent()` gets `agentType` (explorer|implementer|verifier|reviewer): untyped = 67k cold start, typed = 12k (guard denies untyped; `qa.py tokens --workflow` audits a run).
+- Usage limit / crash: `qa.py relay install` once (notify mode; `--mode headless` opt-in, narrow tools, never commits), then `qa.py relay status`; `tick` costs 0 tokens when idle.
 - Spawn agents with `python tools/qa.py prompt ROLE --task "..." [--files a,b]` (short prompt; shared context = `docs/agent_context/`), not long hand-typed prompts; model/effort/turn budget per stage: `python tools/qa.py route --list`.
 
 ## Where things live

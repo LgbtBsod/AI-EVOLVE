@@ -12,3 +12,4 @@ vulture==2.16
 radon==6.0.1
 import-linter==2.15
 orjson>=3.10   # tools/token_ledger.py: fast transcript JSONL parsing (json fallback)
+tzdata; sys_platform == "win32"

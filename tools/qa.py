@@ -116,6 +116,25 @@ def cmd_doctor(args):
     return 0 if all(ok for ok, _, _ in checks) else 1
 
 
+def _print_recent_runs():
+    try:
+        import probe_db
+        con = probe_db.connect()
+        rows = con.execute("SELECT run_id, kind, status, kills, died FROM runs ORDER BY created DESC LIMIT 3").fetchall()
+        for r in rows:
+            print(f"run {r[0]}: {r[1]} {r[2]} kills={r[3]} died={r[4]}")
+        con.close()
+    except Exception:
+        pass
+
+
+def _print_relay_hint():
+    from qa_plugins import relay  # lazy: only `brief` needs it
+    line = relay.unread_line(ROOT)
+    if line:
+        print(line)
+
+
 def cmd_brief(args):
     graph = qa_graph.build()
     status = qa_graph.liveness(graph)
@@ -130,17 +149,10 @@ def cmd_brief(args):
           + (f" -> {len(tests)} test file(s), scripts: {', '.join(Path(s).name for s in scripts) or '-'}" if changed else ""))
     print(f"known failing tests: {len(known)} (tests/qa_known_failures.json)")
     print(f"code: {len(graph)} modules, {len(dead)} dead ({sum(graph[p]['loc'] for p in dead)} LOC) - `qa.py dead`")
-    try:
-        import probe_db
-        con = probe_db.connect()
-        rows = con.execute("SELECT run_id, kind, status, kills, died FROM runs ORDER BY created DESC LIMIT 3").fetchall()
-        for r in rows:
-            print(f"run {r[0]}: {r[1]} {r[2]} kills={r[3]} died={r[4]}")
-        con.close()
-    except Exception:
-        pass
+    _print_recent_runs()
     if GOLDEN_FILE.exists():
         print(f"golden scenarios: {len(json.loads(GOLDEN_FILE.read_text(encoding='utf-8'))['scenarios'])} recorded - `qa.py golden`")
+    _print_relay_hint()
     print("next: `qa.py check` (one line per check) | `qa.py changed` | `qa.py ci` | CLAUDE.md for the tool table")
     return 0
 
@@ -239,43 +251,56 @@ def _ctx_python(path, rel, args):
 _REF_RE = re.compile(r"(?<![\w/.-])((?:[\w-]+/)*[\w-]+\.(?:py|lua|rs|json|toml|md))\b")
 
 
+def _resolve_ref(ref, md, names, status):
+    """'missing' | 'dead' | None for one file reference found in a markdown file."""
+    hit = next((c for c in (ROOT / ref, md.parent / ref) if c.exists()), None)
+    if hit is None and "/" not in ref and names.get(ref):
+        hit = ROOT / names[ref][0]
+    if hit is None:
+        return "missing"
+    if hit.suffix == ".py" and status.get(relpath(hit.resolve())) == "dead":
+        return "dead"
+    return None
+
+
+def _doc_verdict(n, missing, dead) -> str:
+    if n == 0:
+        return "NO-REFS"
+    if len(missing) + len(dead) > max(1, n // 3):
+        return "STALE"
+    return "CHECK" if missing or dead else "OK"
+
+
+def _doc_row(md, names, status):
+    refs = set(_REF_RE.findall(md.read_text(encoding="utf-8", errors="replace")))
+    kinds = {ref: _resolve_ref(ref, md, names, status) for ref in refs}
+    missing = [r for r, k in kinds.items() if k == "missing"]
+    dead = [r for r, k in kinds.items() if k == "dead"]
+    return (_doc_verdict(len(refs), missing, dead), relpath(md), len(refs), missing, dead)
+
+
+def _doc_line(verdict, md, n, missing, dead) -> str:
+    extra = []
+    if missing:
+        extra.append(f"missing: {', '.join(sorted(missing)[:4])}{' ...' if len(missing) > 4 else ''}")
+    if dead:
+        extra.append(f"dead code: {', '.join(sorted(dead)[:3])}{' ...' if len(dead) > 3 else ''}")
+    return f"{verdict:7s} {md} ({n} refs) {'; '.join(extra)}"
+
+
 def cmd_docs(args):
     graph = qa_graph.build()
     status = qa_graph.liveness(graph)
     names = defaultdict(list)
     for p in graph:
         names[Path(p).name].append(p)
-    rows = []
-    for md in sorted(ROOT.rglob("*.md")):
-        if any(part in qa_graph.SKIP_DIRS for part in md.relative_to(ROOT).parts):
-            continue
-        text = md.read_text(encoding="utf-8", errors="replace")
-        refs = set(_REF_RE.findall(text))
-        missing, dead = [], []
-        for ref in refs:
-            cands = [ROOT / ref, md.parent / ref]
-            hit = next((c for c in cands if c.exists()), None)
-            if hit is None and "/" not in ref and names.get(ref):
-                hit = ROOT / names[ref][0]
-            if hit is None:
-                missing.append(ref)
-            elif hit.suffix == ".py" and status.get(relpath(hit.resolve())) == "dead":
-                dead.append(ref)
-        n = len(refs)
-        verdict = ("NO-REFS" if n == 0 else
-                   "STALE" if len(missing) + len(dead) > max(1, n // 3) else
-                   "CHECK" if missing or dead else "OK")
-        rows.append((verdict, relpath(md), n, missing, dead))
+    rows = [_doc_row(md, names, status) for md in sorted(ROOT.rglob("*.md"))
+            if not any(part in qa_graph.SKIP_DIRS for part in md.relative_to(ROOT).parts)]
     order = {"STALE": 0, "CHECK": 1, "NO-REFS": 2, "OK": 3}
     rows.sort(key=lambda r: (order[r[0]], r[1]))
     print(f"{len(rows)} markdown files: " + ", ".join(f"{k}={v}" for k, v in Counter(r[0] for r in rows).items()))
-    for verdict, md, n, missing, dead in rows[:args.top]:
-        extra = []
-        if missing:
-            extra.append(f"missing: {', '.join(sorted(missing)[:4])}{' ...' if len(missing) > 4 else ''}")
-        if dead:
-            extra.append(f"dead code: {', '.join(sorted(dead)[:3])}{' ...' if len(dead) > 3 else ''}")
-        print(f"{verdict:7s} {md} ({n} refs) {'; '.join(extra)}")
+    for row in rows[:args.top]:
+        print(_doc_line(*row))
     return 0
 
 
@@ -313,18 +338,15 @@ def _shards(files, n):
     return [s[1] for s in shards if s[1]]
 
 
-def cmd_test(args):
-    if args.changed:
-        graph = qa_graph.build()
-        files = qa_graph.impacted(graph, changed_files(args.base))[0]
-        if not files:
-            print("no test file is affected by the current changes (qa.py affected to see why)")
-            return 0
-    else:
-        files = _test_files(args.paths or ["tests"])
-    shards = _shards(files, args.jobs or default_jobs())
-    run_dir = out_dir("test")
-    env = {"PYTHONPATH": os.pathsep.join([str(ROOT / "tools"), os.environ.get("PYTHONPATH", "")])}
+def _select_test_files(args):
+    """Test files to run, or None when `--changed` touches no test."""
+    if not args.changed:
+        return _test_files(args.paths or ["tests"])
+    graph = qa_graph.build()
+    return qa_graph.impacted(graph, changed_files(args.base))[0] or None
+
+
+def _shard_jobs(shards, run_dir, env, args):
     jobs = []
     for i, shard in enumerate(shards):
         out = run_dir / f"shard{i}.jsonl"
@@ -332,9 +354,10 @@ def cmd_test(args):
                                       "-p", "no:cacheprovider", "--rootdir", str(ROOT), "--continue-on-collection-errors", *shard,
                                       *args.pytest_args],
                         env={**env, "QA_PYTEST_OUT": str(out)}, timeout=args.timeout))
-    start = time.perf_counter()
-    results = run_many(jobs, len(jobs))
-    wall = time.perf_counter() - start
+    return jobs
+
+
+def _collect_records(results, run_dir):
     recs = []
     for i, r in enumerate(results):
         (run_dir / f"shard{i}.log").write_text(r.stdout + r.stderr, encoding="utf-8")
@@ -343,43 +366,98 @@ def cmd_test(args):
             recs += [json.loads(line) for line in f.read_text(encoding="utf-8").splitlines() if line.strip()]
         elif r.rc not in (0, 1, 5):
             recs.append({"id": f"<shard {i}>", "outcome": "error", "s": 0, "msg": (r.stderr or r.stdout)[-300:]})
+    return recs
 
+
+def _save_durations(recs):
     per_file = defaultdict(float)
     for rec in recs:
         per_file[rec["id"].split("::")[0]] += rec.get("s", 0)
     old = json.loads(DURATIONS.read_text(encoding="utf-8")) if DURATIONS.exists() else {}
     DURATIONS.parent.mkdir(parents=True, exist_ok=True)
     DURATIONS.write_text(json.dumps({**old, **{k: round(v, 2) for k, v in per_file.items()}}), encoding="utf-8")
+    return per_file
 
-    counts = Counter(r["outcome"] for r in recs)
-    bad = [r for r in recs if r["outcome"] in ("failed", "error", "collect_error")]
-    known = load_known()
-    new = [r for r in bad if r["id"] not in known]
-    flaky = _rerun_for_flakes([r["id"] for r in new if r["outcome"] == "failed"], run_dir, env, args) \
-        if new and args.reruns else {}
-    fixed = [k for k in known if k not in {r["id"] for r in bad} and k.split("::")[0] in per_file]
-    serial = sum(per_file.values())
-    real_new = [r for r in new if r["id"] not in flaky]
-    print(f"tests: {counts['passed']} passed, {counts['skipped']} skipped, "
-          f"{len(bad)} failing ({len(real_new)} NEW, {len(flaky)} flaky, {len(bad) - len(new)} known) "
-          f"in {wall:.1f}s on {len(shards)} shard(s) (serial ~{serial:.0f}s)")
+
+def _print_new_failures(new, flaky, args, run_dir):
     for r in new[:args.show]:
         tag = f"FLAKY (passed {flaky[r['id']]})" if r["id"] in flaky else f"NEW {r['outcome']}"
         print(f"  {tag}: {r['id']} - {r.get('msg', '')}" + (f" [{r['at']}]" if r.get("at") else ""))
     if len(new) > args.show:
         print(f"  ... {len(new) - args.show} more NEW in {relpath(run_dir)}/shard*.jsonl")
-    if fixed:
-        print(f"  now passing (remove from known): {', '.join(fixed[:5])}")
+
+
+def _print_slowest(per_file, serial):
     slow = sorted(per_file.items(), key=lambda kv: -kv[1])[:3]
     if slow and serial > 10:
         print("  slowest: " + ", ".join(f"{Path(f).name} {s:.0f}s" for f, s in slow))
+
+
+def _record_known(bad, flaky):
+    payload = {"_comment": "Pre-existing failures: qa.py test reports them as known, not NEW. "
+                           "Update with `python tools/qa.py test --update-known`.",
+               "failures": {r["id"]: kernels.log_template(r.get("msg", "")) for r in bad if r["id"] not in flaky}}
+    known_path().parent.mkdir(parents=True, exist_ok=True)
+    known_path().write_text(json.dumps(payload, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
+    print(f"  recorded {len(payload['failures'])} known failure(s) -> {relpath(known_path())}")
+
+
+def _flaky_of(new, run_dir, env, args):
+    if not (new and args.reruns):
+        return {}
+    return _rerun_for_flakes([r["id"] for r in new if r["outcome"] == "failed"], run_dir, env, args)
+
+
+def _now_passing(known, bad, per_file):
+    bad_ids = {r["id"] for r in bad}
+    return [k for k in known if k not in bad_ids and k.split("::")[0] in per_file]
+
+
+def _classify_failures(recs, per_file, run_dir, env, args):
+    """(bad, new, flaky, fixed): failing records, those not in the known list, reruns that passed, known now green."""
+    bad = [r for r in recs if r["outcome"] in ("failed", "error", "collect_error")]
+    known = load_known()
+    new = [r for r in bad if r["id"] not in known]
+    flaky = _flaky_of(new, run_dir, env, args)
+    return bad, new, flaky, _now_passing(known, bad, per_file)
+
+
+def _test_header(recs, failing, timing) -> str:
+    """failing = (bad, NEW, flaky, known) counts; timing = (wall, shards, serial)."""
+    counts = Counter(r["outcome"] for r in recs)
+    bad, real_new, flaky, known = failing
+    wall, n_shards, serial = timing
+    return (f"tests: {counts['passed']} passed, {counts['skipped']} skipped, "
+            f"{bad} failing ({real_new} NEW, {flaky} flaky, {known} known) "
+            f"in {wall:.1f}s on {n_shards} shard(s) (serial ~{serial:.0f}s)")
+
+
+def cmd_test(args):
+    files = _select_test_files(args)
+    if files is None:
+        print("no test file is affected by the current changes (qa.py affected to see why)")
+        return 0
+    shards = _shards(files, args.jobs or default_jobs())
+    run_dir = out_dir("test")
+    env = {"PYTHONPATH": os.pathsep.join([str(ROOT / "tools"), os.environ.get("PYTHONPATH", "")])}
+    jobs = _shard_jobs(shards, run_dir, env, args)
+    start = time.perf_counter()
+    results = run_many(jobs, len(jobs))
+    wall = time.perf_counter() - start
+    recs = _collect_records(results, run_dir)
+    per_file = _save_durations(recs)
+
+    bad, new, flaky, fixed = _classify_failures(recs, per_file, run_dir, env, args)
+    serial = sum(per_file.values())
+    real_new = [r for r in new if r["id"] not in flaky]
+    print(_test_header(recs, (len(bad), len(real_new), len(flaky), len(bad) - len(new)),
+                       (wall, len(shards), serial)))
+    _print_new_failures(new, flaky, args, run_dir)
+    if fixed:
+        print(f"  now passing (remove from known): {', '.join(fixed[:5])}")
+    _print_slowest(per_file, serial)
     if args.update_known:
-        payload = {"_comment": "Pre-existing failures: qa.py test reports them as known, not NEW. "
-                               "Update with `python tools/qa.py test --update-known`.",
-                   "failures": {r["id"]: kernels.log_template(r.get("msg", "")) for r in bad if r["id"] not in flaky}}
-        known_path().parent.mkdir(parents=True, exist_ok=True)
-        known_path().write_text(json.dumps(payload, indent=1, ensure_ascii=False) + "\n", encoding="utf-8")
-        print(f"  recorded {len(payload['failures'])} known failure(s) -> {relpath(known_path())}")
+        _record_known(bad, flaky)
     return 1 if real_new else 0
 
 
@@ -424,15 +502,9 @@ def trajectory(result):
     return ts, [f"{h:016x}" for h in kernels.lines_fingerprint(lines)]
 
 
-def cmd_golden(args):
-    cfg = qa_settings()
-    scenarios = [s for s in cfg["scenarios"] if not args.only or s["name"] in args.only]
-    fields = cfg["golden_fields"]
-    base = out_dir("golden")
-    results = run_many([play_job(s["name"], s["script"], s["seed"], base / s["name"]) for s in scenarios],
-                       args.jobs)
+def _golden_current(scenarios, results, fields):
     current = {}
-    for s, r in zip(scenarios, results):
+    for s, r in zip(scenarios, results, strict=False):
         sess = read_session(r)
         if sess is None:
             print(f"{s['name']}: run failed (rc={r.rc}): {(r.stderr or r.stdout).strip()[-200:]}")
@@ -442,55 +514,87 @@ def cmd_golden(args):
                               "final": {k: sess["final"].get(k) for k in fields},
                               "invariants": sorted({v["id"] for v in sess.get("invariants", [])}),
                               "t": ts, "fingerprints": fp}
-    platform_tag = f"{platform.system()}-{platform.machine()}-py{platform.python_version()}"
-    if args.record:
-        GOLDEN_FILE.parent.mkdir(parents=True, exist_ok=True)
-        payload = {"_comment": "qa.py golden --record; scenarios in lua_content/qa.lua",
-                   "platform": platform_tag, "scenarios": current}
-        if args.only and GOLDEN_FILE.exists():
-            # --only NAME --record: refresh just these; the other scenarios stay exactly as recorded (their platform
-            # too), a refreshed one carries its own `platform`
-            payload = json.loads(GOLDEN_FILE.read_text(encoding="utf-8"))
-            payload["scenarios"].update({n: {**c, "platform": platform_tag} for n, c in current.items()})
-        GOLDEN_FILE.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8", newline="\n")
-        print(f"recorded {len(current)} scenario(s) -> {relpath(GOLDEN_FILE)} ({platform_tag})")
-        for name, c in current.items():
-            print(f"  {name}: {c['status']} " + " ".join(f"{k}={c['final'][k]}" for k in ("t", "hp", "kills", "lvl"))
-                  + (f" invariants={c['invariants']}" if c["invariants"] else ""))
-        return 0
-    if not GOLDEN_FILE.exists():
-        print("no golden file yet: run `python tools/qa.py golden --record` on a known-good tree")
-        return 2
-    golden = json.loads(GOLDEN_FILE.read_text(encoding="utf-8"))
+    return current
+
+
+def _golden_record(args, current, platform_tag):
+    GOLDEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"_comment": "qa.py golden --record; scenarios in lua_content/qa.lua",
+               "platform": platform_tag, "scenarios": current}
+    if args.only and GOLDEN_FILE.exists():
+        # --only NAME --record: refresh just these; the other scenarios stay exactly as recorded (their platform
+        # too), a refreshed one carries its own `platform`
+        payload = json.loads(GOLDEN_FILE.read_text(encoding="utf-8"))
+        payload["scenarios"].update({n: {**c, "platform": platform_tag} for n, c in current.items()})
+    GOLDEN_FILE.write_text(json.dumps(payload, indent=1) + "\n", encoding="utf-8", newline="\n")
+    print(f"recorded {len(current)} scenario(s) -> {relpath(GOLDEN_FILE)} ({platform_tag})")
+    for name, c in current.items():
+        print(f"  {name}: {c['status']} " + " ".join(f"{k}={c['final'][k]}" for k in ("t", "hp", "kills", "lvl"))
+              + (f" invariants={c['invariants']}" if c["invariants"] else ""))
+    return 0
+
+
+def _golden_platform_notes(golden, current, platform_tag):
     # a scenario refreshed by `--only --record` has its own platform; the others use the file's
     recorded_on = {r.get("platform") or golden.get("platform") for n, r in golden["scenarios"].items() if n in current}
     for other in sorted(p for p in recorded_on if p != platform_tag):
         print(f"(note: golden recorded on {other}, this is {platform_tag}; "
               "libm differences can shift float-sensitive trajectories)")
-    changed = 0
-    for name, cur in current.items():
-        ref = golden["scenarios"].get(name)
-        if ref is None:
-            print(f"{name}: NEW scenario (not in golden)")
-            changed += 1
-            continue
-        if ref["script"] != cur["script"] or ref["seed"] != cur["seed"]:
-            print(f"{name}: scenario definition changed - re-record")
-            changed += 1
-            continue
-        diffs = [f"{k} {ref['final'].get(k)}->{cur['final'].get(k)}" for k in fields
-                 if ref["final"].get(k) != cur["final"].get(k)]
-        if ref["status"] != cur["status"]:
-            diffs.insert(0, f"status {ref['status']}->{cur['status']}")
-        if ref["invariants"] != cur["invariants"]:
-            diffs.append(f"invariants {ref['invariants']}->{cur['invariants']}")
-        first = next((i for i, (a, b) in enumerate(zip(ref["fingerprints"], cur["fingerprints"])) if a != b), None)
-        if first is None and len(ref["fingerprints"]) != len(cur["fingerprints"]):
-            first = min(len(ref["fingerprints"]), len(cur["fingerprints"]))
-        if diffs or first is not None:
-            changed += 1
-            where = f"; trajectory diverges at t={cur['t'][first] if first < len(cur['t']) else '?'}" if first is not None else ""
-            print(f"{name}: CHANGED {', '.join(diffs) or 'final state equal'}{where}")
+
+
+def _first_fp_divergence(ref_fp, cur_fp):
+    first = next((i for i, (a, b) in enumerate(zip(ref_fp, cur_fp, strict=False)) if a != b), None)
+    if first is None and len(ref_fp) != len(cur_fp):
+        first = min(len(ref_fp), len(cur_fp))
+    return first
+
+
+def _golden_field_diffs(ref, cur, fields):
+    diffs = [f"{k} {ref['final'].get(k)}->{cur['final'].get(k)}" for k in fields
+             if ref["final"].get(k) != cur["final"].get(k)]
+    if ref["status"] != cur["status"]:
+        diffs.insert(0, f"status {ref['status']}->{cur['status']}")
+    if ref["invariants"] != cur["invariants"]:
+        diffs.append(f"invariants {ref['invariants']}->{cur['invariants']}")
+    return diffs
+
+
+def _golden_verdict(name, ref, cur, fields):
+    """One report line when scenario `name` differs from its golden, else None."""
+    if ref is None:
+        return f"{name}: NEW scenario (not in golden)"
+    if ref["script"] != cur["script"] or ref["seed"] != cur["seed"]:
+        return f"{name}: scenario definition changed - re-record"
+    diffs = _golden_field_diffs(ref, cur, fields)
+    first = _first_fp_divergence(ref["fingerprints"], cur["fingerprints"])
+    if not diffs and first is None:
+        return None
+    where = ""
+    if first is not None:
+        where = f"; trajectory diverges at t={cur['t'][first] if first < len(cur['t']) else '?'}"
+    return f"{name}: CHANGED {', '.join(diffs) or 'final state equal'}{where}"
+
+
+def cmd_golden(args):
+    cfg = qa_settings()
+    scenarios = [s for s in cfg["scenarios"] if not args.only or s["name"] in args.only]
+    fields = cfg["golden_fields"]
+    base = out_dir("golden")
+    results = run_many([play_job(s["name"], s["script"], s["seed"], base / s["name"]) for s in scenarios],
+                       args.jobs)
+    current = _golden_current(scenarios, results, fields)
+    platform_tag = f"{platform.system()}-{platform.machine()}-py{platform.python_version()}"
+    if args.record:
+        return _golden_record(args, current, platform_tag)
+    if not GOLDEN_FILE.exists():
+        print("no golden file yet: run `python tools/qa.py golden --record` on a known-good tree")
+        return 2
+    golden = json.loads(GOLDEN_FILE.read_text(encoding="utf-8"))
+    _golden_platform_notes(golden, current, platform_tag)
+    lines = [ln for ln in (_golden_verdict(n, golden["scenarios"].get(n), c, fields) for n, c in current.items()) if ln]
+    for line in lines:
+        print(line)
+    changed = len(lines)
     same = len(current) - changed
     print(f"golden: {same}/{len(current)} scenario(s) identical" + ("" if not changed else
           " - intended gameplay change? re-record with --record"))
@@ -501,38 +605,58 @@ def _fmt(v):
     return "-" if v is None or (isinstance(v, float) and v != v) else f"{v:.4g}"
 
 
+def _sweep_metric_rows(ok, metrics, resamples):
+    rows = []
+    for m in metrics:
+        vals = [float(s["final"][m]) for s in ok if isinstance(s["final"].get(m), (int, float))]
+        d = kernels.describe(vals, resamples, 12345)
+        rows.append(f"{m:8s} {_fmt(d['mean']):>9s} {_fmt(d['sd']):>8s} {_fmt(d['p5']):>8s} {_fmt(d['p50']):>8s} "
+                    f"{_fmt(d['p95']):>8s}  [{_fmt(d['ci_lo'])}, {_fmt(d['ci_hi'])}]")
+    return rows
+
+
+def _expects_suffix(ok) -> str:
+    exp_total = sum(len(s["expects"]) for s in ok)
+    exp_pass = sum(1 for s in ok for e in s["expects"] if e["passed"])
+    return f"; expects passed {exp_pass}/{exp_total}" if exp_total else ""
+
+
+def _invariant_lines(ok):
+    inv = Counter(v["id"] for s in ok for v in s.get("invariants", []))
+    if not inv:
+        return []
+    return ["invariant violations: " + ", ".join(f"{k} in {v} run(s)" for k, v in inv.most_common())]
+
+
+def _sweep_outcome_lines(ok):
+    died = sum(1 for s in ok if not s["final"]["alive"])
+    fails = Counter(s["status"] for s in ok)
+    lines = [f"hero died in {died}/{len(ok)} runs ({100 * died / len(ok):.0f}%); status {dict(fails)}"
+             + _expects_suffix(ok)]
+    lines += _invariant_lines(ok)
+    worst = [s for s in ok if s["status"] != "OK"][:1]
+    if worst:
+        lines.append(f"example failing run: {worst[0]['repro']}")
+    return lines
+
+
 def cmd_sweep(args):
     cfg = qa_settings()["sweep"]
     seeds = list(range(args.first_seed, args.first_seed + (args.seeds or cfg["seeds"])))
     base = out_dir("sweep")
     start = time.perf_counter()
     results = run_many([play_job(f"s{s}", args.script, s, base / f"seed{s}") for s in seeds], args.jobs or cfg["jobs"])
-    sessions = [(r, read_session(r)) for r in results]
-    ok = [s for _, s in sessions if s]
+    ok = [s for s in (read_session(r) for r in results) if s]
     if not ok:
         print("all runs failed; first stderr: " + (results[0].stderr[-300:] if results else ""))
         return 2
-    metrics = args.metrics or cfg["metrics"]
     print(f"sweep: {len(ok)}/{len(seeds)} runs of `{args.script}` in {time.perf_counter() - start:.1f}s "
           f"(seeds {seeds[0]}..{seeds[-1]}, stats backend={'rust' if kernels._rust_qa else 'python'})")
     print(f"{'metric':8s} {'mean':>9s} {'sd':>8s} {'p5':>8s} {'p50':>8s} {'p95':>8s}  95% CI of mean")
-    for m in metrics:
-        vals = [float(s["final"][m]) for s in ok if isinstance(s["final"].get(m), (int, float))]
-        d = kernels.describe(vals, cfg["bootstrap_resamples"], 12345)
-        print(f"{m:8s} {_fmt(d['mean']):>9s} {_fmt(d['sd']):>8s} {_fmt(d['p5']):>8s} {_fmt(d['p50']):>8s} "
-              f"{_fmt(d['p95']):>8s}  [{_fmt(d['ci_lo'])}, {_fmt(d['ci_hi'])}]")
-    died = sum(1 for s in ok if not s["final"]["alive"])
-    fails = Counter(s["status"] for s in ok)
-    exp_total = sum(len(s["expects"]) for s in ok)
-    exp_pass = sum(1 for s in ok for e in s["expects"] if e["passed"])
-    inv = Counter(v["id"] for s in ok for v in s.get("invariants", []))
-    print(f"hero died in {died}/{len(ok)} runs ({100 * died / len(ok):.0f}%); status {dict(fails)}"
-          + (f"; expects passed {exp_pass}/{exp_total}" if exp_total else ""))
-    if inv:
-        print("invariant violations: " + ", ".join(f"{k} in {v} run(s)" for k, v in inv.most_common()))
-    worst = [s for s in ok if s["status"] != "OK"][:1]
-    if worst:
-        print(f"example failing run: {worst[0]['repro']}")
+    for row in _sweep_metric_rows(ok, args.metrics or cfg["metrics"], cfg["bootstrap_resamples"]):
+        print(row)
+    for line in _sweep_outcome_lines(ok):
+        print(line)
     print(f"details: {relpath(base)}/seed*/session.json (each run is also in probe_db)")
     return 0
 

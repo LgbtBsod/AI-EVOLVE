@@ -699,41 +699,37 @@ def cmd_diff(args, cfg) -> int:
     return 1
 
 
-def cmd_determinism(args) -> int:
-    cfg = settings()
-    if args.diff:
-        return cmd_diff(args, cfg)
+def _validate_args(args, cfg):
+    """(specs, None) or (None, exit_code) after printing the reason."""
     if not args.script:
         print("give a SCRIPT (e.g. \"spawn enemy x2; wait 8\") or --diff TRACE_A TRACE_B")
-        return 2
-    pairs = args.pairs or int(cfg["pairs"])
-    seed = int(cfg["seed"]) if args.seed is None else args.seed
+        return None, 2
     names = [v.strip() for v in (args.variants or ",".join(cfg["variants"])).split(",") if v.strip()]
     try:
         specs = {n: variant_spec(n) for n in dict.fromkeys(names)}
     except ValueError as exc:
         print(exc)
-        return 2
+        return None, 2
     try:
         from agent_play import ScriptError, parse_script
         parse_script(args.script)
     except ScriptError as exc:  # fail before booting 2N games
         print(f"script error: {exc}")
-        return 2
-    wrap = shlex.split(args.wrap) if args.wrap else []
-    if args.out:
-        base = Path(args.out).resolve()
-        base.mkdir(parents=True, exist_ok=True)
-    else:
-        QA_OUT.mkdir(parents=True, exist_ok=True)
-        base = Path(tempfile.mkdtemp(prefix=f"determinism_{time.strftime('%H%M%S')}_", dir=QA_OUT))
-    skipped = {n: s[2] for n, s in specs.items() if s[2]}
-    active = {n: s for n, s in specs.items() if not s[2]}
-    started = time.perf_counter()
-    jobs = build_jobs(args.script, seed, pairs, active, wrap, base, float(cfg["timeout"]), not args.no_leaks)
-    results = {r.name: r for r in run_many(jobs, args.jobs or int(cfg["jobs"]) or default_jobs())}
+        return None, 2
+    return specs, None
 
-    # a variant that cannot start at all (setarch without permission) is skipped, not an error
+
+def _output_dir(out) -> Path:
+    if out:
+        base = Path(out).resolve()
+        base.mkdir(parents=True, exist_ok=True)
+        return base
+    QA_OUT.mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(prefix=f"determinism_{time.strftime('%H%M%S')}_", dir=QA_OUT))
+
+
+def _drop_unstartable(active, results, skipped) -> None:
+    """A variant that cannot start at all (setarch without permission) is skipped, not an error."""
     for name in list(active):
         rs = [r for r in results.values() if r.meta["variant"] == name]
         if rs and not any(run_ok(r) for r in rs) and any(
@@ -741,73 +737,164 @@ def cmd_determinism(args) -> int:
             skipped[name] = "setarch refused (container without personality permission?)"
             del active[name]
 
+
+def _analyse_all(active, results, pairs, cfg):
     pair_results, errors = [], []
     for name in active:
         for k in range(pairs):
             pr = analyse_pair(name, k, results[f"{name}/pair{k + 1}/a"], results[f"{name}/pair{k + 1}/b"], cfg)
             (errors if pr.error else pair_results).append(pr)
-    errors = [e.error for e in errors]
-    diverged = [p for p in pair_results if p.div is not None]
-    fps = {fp for p in pair_results for fp in (p.fp_a, p.fp_b) if fp}
-    classes = len(fps)
-    stats = {n: {"pairs": sum(1 for p in pair_results if p.variant == n),
-                 "diverged": sum(1 for p in diverged if p.variant == n)} for n in active}
-    leaks = rank_leaks(merge_leaks([d / "leaks.json" for n in active for d in run_dirs(base, n, 0)]), cfg)
-    first = diverged[0] if diverged else None
-    hyps = []
-    if first is not None:
-        ctx = build_context(first.div, cfg, stats, classes, 2 * len(pair_results))
-        hyps = evaluate_rules(ctx, cfg)
+    return pair_results, [e.error for e in errors]
 
-    total_pairs = len(pair_results)
-    head = (f"RESULT determinism pairs={total_pairs} diverged={len(diverged)} classes={classes} "
-            + (f"first_frame={first.div.frame} t={first.div.t:.2f} channel={first.div.channel}" if first else
-               "first_frame=- t=- channel=none") + (f" errors={len(errors)}" if errors else ""))
-    var_bits = [f"{n} {s['pairs'] - s['diverged']}/{s['pairs']} identical" for n, s in stats.items()]
-    var_bits += [f"{n} skipped ({why})" for n, why in skipped.items()]
-    sections = [[head], ["variants: " + " | ".join(var_bits)]]
-    if first is not None:
-        sections.append([f"first divergent: {first.variant}/pair{first.pair + 1} (a vs b), classes across runs: {classes}"])
-        sections.append(pair_lines(first.div, cfg, hyps))
+
+@dataclass
+class _Outcome:
+    """Everything the report of one `qa.py determinism` run is rendered from."""
+    args: object
+    plan: tuple            # (seed, pairs, wrap)
+    active: dict
+    skipped: dict
+    pair_results: list
+    errors: list
+    started: float = 0.0
+    hyps: list = field(default_factory=list)
+    stats: dict = field(default_factory=dict)
+
+    @property
+    def diverged(self) -> list:
+        return [p for p in self.pair_results if p.div is not None]
+
+    @property
+    def first(self):
+        return self.diverged[0] if self.diverged else None
+
+    @property
+    def classes(self) -> int:
+        return len({fp for p in self.pair_results for fp in (p.fp_a, p.fp_b) if fp})
+
+
+def _head_line(o) -> str:
+    first = o.first
+    where = (f"first_frame={first.div.frame} t={first.div.t:.2f} channel={first.div.channel}" if first
+             else "first_frame=- t=- channel=none")
+    return (f"RESULT determinism pairs={len(o.pair_results)} diverged={len(o.diverged)} classes={o.classes} "
+            + where + (f" errors={len(o.errors)}" if o.errors else ""))
+
+
+def _divergence_sections(o, cfg):
+    first, diverged = o.first, o.diverged
+    out = [[f"first divergent: {first.variant}/pair{first.pair + 1} (a vs b), classes across runs: {o.classes}"],
+           pair_lines(first.div, cfg, o.hyps)]
+    if len(diverged) > 1:
         others = sorted({p.div.frame for p in diverged})
-        if len(diverged) > 1:
-            sections.append([f"divergent frames over {len(diverged)} pairs: " + ", ".join(
-                f"f{f} x{sum(1 for p in diverged if p.div.frame == f)}" for f in others[:6])])
-    elif pair_results:
-        p0 = pair_results[0]
-        sections.append([f"all {total_pairs} pairs identical: {p0.frames} frames, RNG + state hashes equal "
+        out.append([f"divergent frames over {len(diverged)} pairs: " + ", ".join(
+            f"f{f} x{sum(1 for p in diverged if p.div.frame == f)}" for f in others[:6])])
+    return out
+
+
+def _summary_sections(o, cfg):
+    var_bits = [f"{n} {s['pairs'] - s['diverged']}/{s['pairs']} identical" for n, s in o.stats.items()]
+    var_bits += [f"{n} skipped ({why})" for n, why in o.skipped.items()]
+    sections = [[_head_line(o)], ["variants: " + " | ".join(var_bits)]]
+    if o.first is not None:
+        sections += _divergence_sections(o, cfg)
+    elif o.pair_results:
+        p0 = o.pair_results[0]
+        sections.append([f"all {len(o.pair_results)} pairs identical: {p0.frames} frames, RNG + state hashes equal "
                          f"(trajectory {p0.fp_a}); a flake needs more pairs or another variant/--wrap"])
-    for e in errors[:3]:
-        sections.append([f"run error: {e}"])
-    sections.append(leak_lines(leaks, cfg))
+    sections += [[f"run error: {e}"] for e in o.errors[:3]]
+    return sections
 
-    report = {
-        "schema": 1, "script": args.script, "seed": seed, "pairs_per_variant": pairs, "wrap": wrap,
-        "variants": {n: {"env": s[1], "prefix": s[0], "pairs": [
-            {"pair": p.pair + 1, "dir_a": rel(p.dir_a), "dir_b": rel(p.dir_b), "frames": p.frames,
-             "fp_a": p.fp_a, "fp_b": p.fp_b, "diverged": p.div is not None,
-             "divergence": p.div.to_dict() if p.div else None} for p in pair_results if p.variant == n]}
-            for n, s in active.items()},
-        "skipped": skipped, "errors": errors, "classes": classes, "diverged": len(diverged),
-        "hypotheses": hyps, "leaks": leaks, "env": env_fingerprint(),
-        "seconds": round(time.perf_counter() - started, 1), "cmd": " ".join(map(shlex.quote, sys.argv)),
+
+def _variant_report(n, s, pair_results) -> dict:
+    return {"env": s[1], "prefix": s[0], "pairs": [
+        {"pair": p.pair + 1, "dir_a": rel(p.dir_a), "dir_b": rel(p.dir_b), "frames": p.frames,
+         "fp_a": p.fp_a, "fp_b": p.fp_b, "diverged": p.div is not None,
+         "divergence": p.div.to_dict() if p.div else None} for p in pair_results if p.variant == n]}
+
+
+def _build_report(o, leaks) -> dict:
+    seed, pairs, wrap = o.plan
+    return {
+        "schema": 1, "script": o.args.script, "seed": seed, "pairs_per_variant": pairs, "wrap": wrap,
+        "variants": {n: _variant_report(n, s, o.pair_results) for n, s in o.active.items()},
+        "skipped": o.skipped, "errors": o.errors, "classes": o.classes, "diverged": len(o.diverged),
+        "hypotheses": o.hyps, "leaks": leaks, "env": env_fingerprint(),
+        "seconds": round(time.perf_counter() - o.started, 1), "cmd": " ".join(map(shlex.quote, sys.argv)),
     }
-    (base / "report.json").write_text(json.dumps(report, indent=1, default=str), encoding="utf-8")
 
-    target = first or (pair_results[0] if pair_results else None)
-    if target is not None:
-        prefix, env, _ = active[target.variant]
-        what = (f"first divergent pair {target.variant}/pair{target.pair + 1}: f{target.div.frame} "
-                f"t={target.div.t:.2f} channel={target.div.channel}" if first else
-                f"no divergence observed - pair {target.variant}/pair{target.pair + 1} shown")
-        write_repro(base / "repro_determinism.sh", args.script, seed, target.variant, wrap, prefix, env, what)
-        sections.append([f"repro: sh {rel(base / 'repro_determinism.sh')}  (TRIES=20 loops until it diverges) | "
-                         f"details: {rel(base / 'report.json')}"])
-    for line in fit_lines(sections, int(cfg["max_lines"])):
-        print(line)
+
+def _repro_section(base, o):
+    first = o.first
+    target = first or (o.pair_results[0] if o.pair_results else None)
+    if target is None:
+        return None
+    seed, _, wrap = o.plan
+    prefix, env, _ = o.active[target.variant]
+    what = (f"first divergent pair {target.variant}/pair{target.pair + 1}: f{target.div.frame} "
+            f"t={target.div.t:.2f} channel={target.div.channel}" if first else
+            f"no divergence observed - pair {target.variant}/pair{target.pair + 1} shown")
+    write_repro(base / "repro_determinism.sh", o.args.script, seed, target.variant, wrap, prefix, env, what)
+    return [f"repro: sh {rel(base / 'repro_determinism.sh')}  (TRIES=20 loops until it diverges) | "
+            f"details: {rel(base / 'report.json')}"]
+
+
+def _run_all(args, cfg, specs, base, plan):
+    """Run every job; returns (active, skipped, results)."""
+    seed, pairs, wrap = plan
+    skipped = {n: s[2] for n, s in specs.items() if s[2]}
+    active = {n: s for n, s in specs.items() if not s[2]}
+    jobs = build_jobs(args.script, seed, pairs, active, wrap, base, float(cfg["timeout"]), not args.no_leaks)
+    results = {r.name: r for r in run_many(jobs, args.jobs or int(cfg["jobs"]) or default_jobs())}
+    _drop_unstartable(active, results, skipped)
+    return active, skipped, results
+
+
+def _variant_stats(active, pair_results, diverged) -> dict:
+    return {n: {"pairs": sum(1 for p in pair_results if p.variant == n),
+                "diverged": sum(1 for p in diverged if p.variant == n)} for n in active}
+
+
+def _exit_code(diverged, errors, pair_results) -> int:
     if diverged:
         return 1
     return 2 if errors or not pair_results else 0
+
+
+def _collect(args, cfg, specs, base):
+    """Run the games and analyse the pairs -> _Outcome (hypotheses evaluated)."""
+    plan = (int(cfg["seed"]) if args.seed is None else args.seed, args.pairs or int(cfg["pairs"]),
+            shlex.split(args.wrap) if args.wrap else [])
+    started = time.perf_counter()
+    active, skipped, results = _run_all(args, cfg, specs, base, plan)
+    pair_results, errors = _analyse_all(active, results, plan[1], cfg)
+    o = _Outcome(args, plan, active, skipped, pair_results, errors, started)
+    o.stats = _variant_stats(active, pair_results, o.diverged)
+    if o.first is not None:
+        o.hyps = evaluate_rules(build_context(o.first.div, cfg, o.stats, o.classes, 2 * len(pair_results)), cfg)
+    return o
+
+
+def cmd_determinism(args) -> int:
+    cfg = settings()
+    if args.diff:
+        return cmd_diff(args, cfg)
+    specs, code = _validate_args(args, cfg)
+    if specs is None:
+        return code
+    base = _output_dir(args.out)
+    o = _collect(args, cfg, specs, base)
+    leaks = rank_leaks(merge_leaks([d / "leaks.json" for n in o.active for d in run_dirs(base, n, 0)]), cfg)
+    sections = _summary_sections(o, cfg)
+    sections.append(leak_lines(leaks, cfg))
+    report = _build_report(o, leaks)
+    (base / "report.json").write_text(json.dumps(report, indent=1, default=str), encoding="utf-8")
+    repro = _repro_section(base, o)
+    if repro:
+        sections.append(repro)
+    for line in fit_lines(sections, int(cfg["max_lines"])):
+        print(line)
+    return _exit_code(o.diverged, o.errors, o.pair_results)
 
 
 def register(sub) -> None:
