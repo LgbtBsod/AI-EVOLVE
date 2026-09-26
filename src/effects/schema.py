@@ -43,6 +43,7 @@ OP_KINDS = {
     "stance",       # форма-стойка: id, exclusive_group, conflict_with, duration, on_enter/on_exit ops (docs/EFFECT_SCHEMA.md "Forms")
     "transform",    # stance + stats (mod-ops, пока форма активна) + abilities {add, remove}
     "timed_power_up",  # временное усиление: transform со своей группой; duration обязателен, on_exit = расплата
+    "perceive", "reveal", "precognition",   # восприятие: данные на unit.external["perception"] (src/effects/perception.py, docs/EFFECT_SCHEMA.md "Perception")
     "hypnosis", "command", "possess", "dominance", "temptation", "tame",   # контроль цели (src/effects/control.py, docs/EFFECT_SCHEMA.md "Control")
 
     # --- примитивы боя (аудит Сукуна/Годжо/Тоджи): все через существующие поля Op ---

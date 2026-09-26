@@ -92,7 +92,7 @@ return {
   k("timed_power_up", "op_timed_power_up", { "id", "duration" }, { "stats", "on_enter", "on_exit" }, "temporary power-up; on_exit = the drawback at expiry"),
 
   -- управление / восприятие ------------------------------------------------------
-  k("dodge", "planned", { "chance" }, {}, "гарантированное уклонение на окно"),
+  k("dodge", "alias:precognition", { "target" }, { "duration", "cooldown" }, "alias of precognition negate warn=false (kind_aliases.lua)"),
   k("block", "planned", { "amount" }, {}, "блок (конвейер block_chance/block_reduction)"),
   k("resist", "planned", { "damage_type", "value" }, {}, "временный резист типа"),
   k("immune", "planned", { "damage_type", "value" }, {}, "иммунитет (jubi: all 90%)"),
@@ -101,8 +101,11 @@ return {
   k("reflect", "planned", { "pct" }, {}, "отражение урона"),
   k("redirect_harm", "planned", { "to" }, {}, "перенаправление урона на другую сущность"),
   k("untargetable", "planned", { "duration" }, {}, "цель невыбираема селекторами"),
-  k("reveal", "planned", { "radius" }, {}, "снять стелс/невидимость в зоне"),
-  k("grant_vision", "planned", { "to", "value" }, {}, "дать зрение (mod vision_range союзнику)"),
+  k("reveal", "op_reveal", { "target" }, { "duration", "to" }, "снять стелс/невыбираемость цели на duration (to=caster: только заклинателю)"),
+  k("grant_vision", "alias:mod", { "target", "value" }, { "duration" }, "alias of mod vision_range add (kind_aliases.lua)"),
+  k("perceive", "op_perceive", { "target" }, { "duration", "what", "stat_names" }, "заклинатель узнаёт hp/stats/statuses/hidden/intent цели: данные EffectManager.perceived"),
+  k("precognition", "op_precognition", { "target" }, { "duration", "cooldown", "negate", "warn", "chance", "id" },
+    "предвидение: предупреждение + отмена удара не чаще cooldown (EffectManager.warnings)"),
 
   -- адаптация / кража / обучение ---------------------------------------------------
   k("adapt", "planned", { "of", "rate" }, {},

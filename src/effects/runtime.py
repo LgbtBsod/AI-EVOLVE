@@ -486,6 +486,9 @@ _NOTES: dict[str, Callable[..., str]] = {
     "control_start": lambda tg, kind: f"control {kind} -> {tg.name}",
     "control_blocked": lambda tg, why: f"control blocked ({why}) -> {tg.name}",
     "control_end": lambda tg, cid: f"control_end {cid} -> {tg.name}",
+    "perceive": lambda tg, what: f"perceive {what} -> {tg.name}",
+    "reveal": lambda tg, to: f"reveal (to {to}) -> {tg.name}",
+    "precognition": lambda tg, pid: f"precognition {pid} -> {tg.name}",
     "set_aggro": lambda tg, mode: f"set_aggro {mode} -> {tg.name}",
     "set_targeting": lambda tg: f"set_targeting -> {tg.name}",
     "retarget": lambda tg, ref: f"retarget {ref} -> {tg.name}",
@@ -1048,6 +1051,12 @@ class EffectRuntime:
 
     def op_controller(self, cx: OpCall) -> Any:
         return getattr(cx.source, "name", None)
+
+    def op_perception(self, tgt: Unit) -> dict:       # комната записывает восприятие, но не читает (запросы - у EffectManager)
+        return tgt.external.setdefault("perception", {})
+
+    def op_ident(self, tgt: Unit) -> Any:
+        return getattr(tgt, "name", None)
 
     def op_faction(self, _cx: OpCall, tgt: Unit, new: Any = None) -> Any:
         ag = tgt.external.setdefault("aggro", {})

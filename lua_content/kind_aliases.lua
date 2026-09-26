@@ -21,6 +21,9 @@ return {
     -- control family (src/effects/control.py)
     blood_manipulation = { canon = "possess",   exact = true, params = { action = "puppet" }, note = "possess action=puppet: the caster drives the target's body (faction + targeting override)" },
     enter_dream        = { canon = "hypnosis",  exact = true, params = { perception = "dream" }, note = "hypnosis perception=dream: the target lives in the caster's illusion" },
+    -- perception family (src/effects/perception.py)
+    grant_vision = { canon = "mod", exact = true, params = { stat = "vision_range", op = "add" }, note = "mod vision_range add: can_see honours it" },
+    dodge        = { canon = "precognition", exact = true, params = { negate = true, warn = false }, note = "precognition negate=true warn=false: the first hit per cooldown is dodged" },
     debuff   = { canon = "buff", exact = false, note = "buff carries mods via a buff record; semantics differ" },
     erase    = { canon = "kill", exact = false, note = "kill is weaker: no removal from the world / memory" },
     copy_technique = { canon = "learn", exact = false, note = "learn needs observed_technique from perception" },

@@ -46,6 +46,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Optional, Protocol
 
 from . import damage
+from . import perception
 from .control import release_control
 from .ops import OpCall, Periodic, Tracked, apply_op, form_abilities, replace_contribution_game
 from .runtime import EffectRuntime, Unit, buff_fields, resolve_value, rules
@@ -673,8 +674,21 @@ class EffectManager:
         if st is None or not st.vision_vs:
             return base
         tid = entity_id(target)
+        tst = self.state(target)
+        if tst is not None and perception.revealed_to(tst.unit.external.get("perception"), entity_id(observer), self.now):
+            return base                                # reveal: the stealth circle is suppressed while it lasts
         delta = sum(v for until, t, v in st.vision_vs.values() if t == tid and until > self.now)
         return max(0.0, base + delta)
+
+    def perceived(self, caster) -> dict:
+        """Что caster знает сейчас благодаря `perceive`: {id цели: {hp, stats, statuses, hidden, intent}} (только данные, ИИ/HUD читают)."""
+        return perception.view(self, caster, entity_id)
+
+    def warnings(self, entity) -> list:
+        """Предупреждения precognition для entity: [{t, from}] (по одному на срабатывание, не чаще cooldown)."""
+        st = self.state(entity)
+        rec = ((st.unit.external.get("perception") or {}).get("precog") or {}) if st else {}
+        return list(rec.get("warnings") or [])
 
     def can_see(self, observer, target) -> bool:
         """Заметил ли observer цель: дистанция до края цели <= обзор на неё."""
@@ -831,7 +845,8 @@ class EffectManager:
         affects, by = o.get("affects", "all"), str(o.get("by", "all"))     # affects: френдли фаер по умолчанию (все в круге)
         return [s.entity for s in self.states.values()
                 if is_alive(s.entity) and not math.dist((cx, cy), position(s.entity)) > r
-                and not self._area_excludes(st, s, affects, arc, primary) and not self._untargetable(s, by)]
+                and not self._area_excludes(st, s, affects, arc, primary)
+                and (o.get("kind") == "reveal" or not self._untargetable(s, by, entity_id(st.entity)))]   # reveal finds the hidden
 
     @staticmethod
     def _area_radius(st: EntityState, o: dict, radius: float) -> float:
@@ -853,9 +868,11 @@ class EffectManager:
             return True
         return bool(arc) and s is not st and not _in_arc(st.entity, primary, s.entity, arc)
 
-    def _untargetable(self, s: EntityState, by: str) -> bool:
+    def _untargetable(self, s: EntityState, by: str, viewer: Any = None) -> bool:
         """Сущность невыбираема этим селектором (Toji для six_eyes / en): живой бафф `untargetable:<scope>`, scope = all
-        или список селекторов через запятую."""
+        или список селекторов через запятую. Активный `reveal` (для viewer) снимает невыбираемость на время действия."""
+        if perception.revealed_to(s.unit.external.get("perception"), viewer, self.now):
+            return False
         for bid, rec in s.unit.buffs.items():
             if bid.startswith("untargetable:") and rec.get("until", 1e18) > self.now:
                 scope = bid.split(":", 1)[1]
@@ -1022,6 +1039,12 @@ class EffectManager:
 
     def op_controller(self, cx: OpCall) -> Any:
         return entity_id(cx.source.entity)
+
+    def op_perception(self, tgt: EntityState) -> dict:
+        return tgt.unit.external.setdefault("perception", {})
+
+    def op_ident(self, tgt: EntityState) -> Any:
+        return entity_id(tgt.entity)
 
     def op_faction(self, _cx: OpCall, tgt: EntityState, new: Any = None) -> Any:
         old = tgt.faction
@@ -1227,6 +1250,11 @@ class EffectManager:
         if not is_alive(tgt) or amount <= 0:
             return None
         info = HitInfo(entity_id(src), entity_id(tgt), 0.0, ability=ability)
+        if perception.try_negate(self, tgt_st, src, entity_id(src)):   # precognition: warned + the hit is dodged (once per cooldown)
+            info.is_dodged = True
+            self._notify(info)
+            self.emit(tgt, "dodge", other=src)
+            return info
         kind = damage.type_of_flags(flags)
         out = damage.roll_hit(self._hit_params(st, tgt_st, amount, flags, kind), self.rng, damage.config().consts)
         damage.fill_info(info, out, kind)

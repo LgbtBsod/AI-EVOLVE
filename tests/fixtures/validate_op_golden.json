@@ -1,5 +1,5 @@
 {
-"n_lua": 489,
+"n_lua": 499,
 "cases": [
 [
 "\"x\"",
@@ -31,6 +31,10 @@
 ],
 [
 "{\"action\": \"stand_still\", \"duration\": {\"flat\": 4}, \"id\": \"voice\", \"kind\": \"command\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"affects\": \"enemies\", \"center\": \"self\", \"duration\": {\"flat\": 20}, \"kind\": \"reveal\", \"radius\": 10, \"target\": \"area\"}",
 []
 ],
 [
@@ -284,11 +288,27 @@
 []
 ],
 [
+"{\"chance\": 60, \"cooldown\": {\"flat\": 10}, \"duration\": {\"flat\": 10}, \"id\": \"gae_bolg\", \"kind\": \"precognition\", \"target\": \"self\"}",
+[]
+],
+[
 "{\"conflict_with\": [\"gear_fifth\"], \"duration\": {\"flat\": 10}, \"exclusive_group\": \"gear2\", \"id\": \"gear_second\", \"kind\": \"stance\", \"target\": \"self\"}",
 []
 ],
 [
 "{\"conflict_with\": [\"gear_second\"], \"duration\": {\"flat\": 20}, \"exclusive_group\": \"gear\", \"id\": \"gear_fifth\", \"kind\": \"stance\", \"on_enter\": [{\"kind\": \"heal\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"flat\": 10}}], \"target\": \"self\"}",
+[]
+],
+[
+"{\"cooldown\": {\"flat\": 3}, \"duration\": {\"flat\": 10}, \"kind\": \"dodge\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"cooldown\": {\"flat\": 4}, \"duration\": {\"flat\": 20}, \"id\": \"spider_sense\", \"kind\": \"precognition\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"cooldown\": {\"flat\": 5}, \"duration\": {\"flat\": 15}, \"id\": \"prescience\", \"kind\": \"precognition\", \"negate\": false, \"target\": \"self\"}",
 []
 ],
 [
@@ -612,6 +632,10 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 10}, \"kind\": \"grant_vision\", \"target\": \"self\", \"value\": {\"flat\": 15}}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 10}, \"kind\": \"mark\", \"mark_id\": \"shunshin\", \"target\": \"enemy\", \"value\": {\"flat\": 1}}",
 []
 ],
@@ -696,6 +720,10 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 10}, \"kind\": \"perceive\", \"stat_names\": [\"attack\", \"defense\"], \"target\": \"enemy\", \"what\": [\"stats\", \"intent\"]}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 12}, \"id\": \"infinite_tsukuyomi\", \"kind\": \"hypnosis\", \"perception\": \"dream\", \"target\": \"enemy\"}",
 []
 ],
@@ -756,6 +784,10 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 15}, \"kind\": \"perceive\", \"target\": \"enemy\", \"what\": [\"hp\", \"statuses\", \"intent\"]}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 2.5}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"move_speed\", \"target\": \"enemy\", \"value\": {\"pct\": -85}}",
 []
 ],
@@ -773,6 +805,14 @@
 ],
 [
 "{\"duration\": {\"flat\": 30}, \"id\": \"kurama_chakra\", \"kind\": \"timed_power_up\", \"on_exit\": [{\"kind\": \"drain\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"flat\": 5}}], \"target\": \"self\"}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 30}, \"kind\": \"perceive\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 30}, \"kind\": \"reveal\", \"target\": \"enemy\", \"to\": \"caster\"}",
 []
 ],
 [

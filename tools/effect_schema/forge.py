@@ -259,6 +259,12 @@ def primitive_effects() -> list[dict]:
             {"kind": "temptation", "target": "self", "duration": dur(3), "action": "follow"},
             {"kind": "tame", "target": "self", "chance": 50},
         ], "control"),
+        # восприятие (src/effects/perception.py): данные о цели, снятие скрытности, предвидение с окном
+        ev("prim.perception", "combat_start", [
+            {"kind": "perceive", "target": "self", "duration": dur(3), "what": ["hp", "intent"]},
+            {"kind": "reveal", "target": "self", "duration": dur(3), "to": "caster"},
+            {"kind": "precognition", "target": "self", "id": "forge_pre", "duration": dur(3), "cooldown": dur(1), "chance": 70},
+        ], "perception"),
         # кража и применение техники
         ev("prim.learn", "use", [
             {"kind": "learn", "target": "self", "ability_id": "forge_technique"},

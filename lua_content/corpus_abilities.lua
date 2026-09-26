@@ -90,5 +90,24 @@ return {
       ops = { { kind = "tame", target = "enemy", chance = 50 } } },
     { id = "corpus_temptation", family = "control", tags = { "spell" }, trigger = "cast", range = 8, needs_target = true,
       ops = { { kind = "temptation", target = "enemy", duration = { flat = 6 }, action = "follow", requires = { stat = "max_hp", cmp = "lt", vs = 1000 } } } },
+
+    -- ---- slice F3: PERCEPTION family (family = "perception"; src/effects/perception.py, docs/EFFECT_SCHEMA.md "Perception") ----
+    { id = "corpus_spider_sense", corpus = 39, family = "perception", tags = { "spell" }, trigger = "cast", cooldown = 30,
+      ops = { { kind = "precognition", target = "self", id = "spider_sense", duration = { flat = 20 }, cooldown = { flat = 4 } },
+              { kind = "reveal", target = "area", radius = 10, center = "self", affects = "enemies", duration = { flat = 20 } } } },
+    { id = "corpus_prescience", corpus = 50, family = "perception", tags = { "spell" }, trigger = "cast", range = 30, cooldown = 30, needs_target = true,
+      ops = { { kind = "perceive", target = "enemy", duration = { flat = 15 }, what = { "hp", "statuses", "intent" } },
+              { kind = "precognition", target = "self", id = "prescience", duration = { flat = 15 }, cooldown = { flat = 5 }, negate = false } } },
+    { id = "corpus_shinigami_eyes", corpus = 55, family = "perception", tags = { "spell" }, trigger = "cast", range = 40, cooldown = 10, needs_target = true,
+      ops = { { kind = "perceive", target = "enemy", duration = { flat = 30 } },
+              { kind = "reveal", target = "enemy", duration = { flat = 30 }, to = "caster" } } },
+    { id = "corpus_sharingan_watch", family = "perception", tags = { "spell" }, trigger = "cast", range = 25, needs_target = true,   -- perceive part of #10 (copy_technique is not unblocked)
+      ops = { { kind = "perceive", target = "enemy", duration = { flat = 10 }, what = { "stats", "intent" }, stat_names = { "attack", "defense" } } } },
+    { id = "corpus_gae_bolg_foresight", family = "perception", tags = { "spell" }, trigger = "cast", cooldown = 20,   -- precognition part of #34 only (reverse_causality stays a model-breaker)
+      ops = { { kind = "precognition", target = "self", id = "gae_bolg", duration = { flat = 10 }, cooldown = { flat = 10 }, chance = 60 } } },
+    { id = "corpus_far_sight", family = "perception", tags = { "spell" }, trigger = "cast",   -- grant_vision = mod vision_range
+      ops = { { kind = "grant_vision", target = "self", value = { flat = 15 }, duration = { flat = 10 } } } },
+    { id = "corpus_evade", family = "perception", tags = { "spell" }, trigger = "cast",       -- dodge = precognition without a warning
+      ops = { { kind = "dodge", target = "self", duration = { flat = 10 }, cooldown = { flat = 3 } } } },
   },
 }
