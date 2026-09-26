@@ -242,6 +242,13 @@ MOD_MATH: dict[str, Callable[[float, float, float], float]] = {
 }
 
 
+class FoldLayer(NamedTuple):
+    """Временный слой mul/div/set/min/max: применяется поверх накопленного значения стата при каждом pull."""
+    stat: Optional[str]
+    op: str
+    amount: float
+
+
 def apply_mod_math(dst: dict, base: float, stat: Optional[str], mo: str, amount: float) -> None:
     """Записать вклад mod-операции `mo` в dst[stat] (dst - unit.mods или слой-накопитель)."""
     fn = MOD_MATH.get(mo)

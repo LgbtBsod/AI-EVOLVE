@@ -263,7 +263,6 @@
   "src/effects/manager.py::EffectManager.emit": 24,
   "src/effects/manager.py::EffectManager.update": 20,
   "src/effects/manager.py::EffectManager.use_item": 16,
-  "src/effects/manager.py::EntityState.pull": 11,
   "src/effects/runtime.py::EffectRuntime.attack": 11,
   "src/effects/runtime.py::EffectRuntime.fire_event": 16,
   "src/effects/runtime.py::_compile": 29,
@@ -326,7 +325,7 @@
  },
  "totals": {
   "blind_except": 81,
-  "cc11": 40,
+  "cc11": 39,
   "cc_max": 29,
   "dup_defs": 4,
   "layers_broken": 10,

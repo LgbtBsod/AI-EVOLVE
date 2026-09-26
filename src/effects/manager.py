@@ -52,7 +52,7 @@ from . import zones
 from .control import release_control
 from . import mimic
 from . import social, statecraft, timeworld
-from .ops import OpCall, Periodic, Tracked, apply_op, form_abilities, replace_contribution_game
+from .ops import MOD_MATH, FoldLayer, OpCall, Periodic, Tracked, apply_op, form_abilities, replace_contribution_game
 from .runtime import EffectRuntime, Unit, buff_fields, resolve_value, rules
 
 logger = logging.getLogger(__name__)
@@ -177,6 +177,17 @@ class StatCache:
 
 # ================================================================ entity state
 
+def _add_layer(new: dict, layer: Any) -> None:
+    """Слой external -> в стат-словарь: dict = числа-вклады; кортеж FoldLayer (stat, op, amount) - свёртка поверх накопленного."""
+    if isinstance(layer, tuple):     # не isinstance(FoldLayer): тесты перезагружают модули
+        stat, mo, amount = layer
+        cur = new.get(stat, 0.0)
+        new[stat] = cur + MOD_MATH[mo](cur, 0.0, amount)
+        return
+    for k, v in layer.items():
+        new[k] = new.get(k, 0.0) + v
+
+
 class EntityState:
     """Статы схемы одной сущности поверх её полей и рантайм её пассивов."""
 
@@ -293,8 +304,7 @@ class EntityState:
             new[k] = new.get(k, 0.0) + v
         for until, layer in self.external.values():
             if until > now:
-                for k, v in layer.items():
-                    new[k] = new.get(k, 0.0) + v
+                _add_layer(new, layer)
         u.assign_base(new)                    # version растёт только если база и правда изменилась
         self.pull_resources()
         return base
@@ -986,11 +996,21 @@ class EffectManager:
         tgt.vision_vs[(entity_id(st.entity), cx.src, cx.key[1])] = (
             self._mod_until(o, cx.ctx), entity_id(st.entity), scratch.get(o.get("stat"), 0.0))
 
+    @staticmethod
+    def _timed_layer(st: EntityState, tgt: EntityState, o: dict, ctx: dict) -> Any:
+        """Слой временного мода. add/sub - число-вклад; mul/div/set/min/max - FoldLayer: считается заново от
+        ТЕКУЩЕГО живого набора слоёв в pull (иначе вклад замораживался от базы с чужими слоями и после
+        истечения одного из них стат врал)."""
+        mo, amount = st.runtime.mod_amount(o, ctx, tgt.unit)
+        stat = o.get("stat")
+        if mo in ("add", "sub"):
+            return {stat: amount if mo == "add" else -amount}
+        return FoldLayer(stat, mo, amount)
+
     def _mod_timed(self, cx: OpCall, tgt: EntityState, o: dict) -> None:
         st = cx.source
-        scratch: dict[str, float] = {}
-        st.runtime._apply_mod(o, cx.ctx, tgt.unit, sink=scratch)
-        tgt.external[(entity_id(st.entity), cx.src, cx.key[1])] = (self._mod_until(o, cx.ctx), scratch)
+        tgt.external[(entity_id(st.entity), cx.src, cx.key[1])] = (
+            self._mod_until(o, cx.ctx), self._timed_layer(st, tgt, o, cx.ctx))
         tgt.refresh(self.now)
 
     def _mod_event(self, cx: OpCall, st: EntityState, o: dict) -> None:
@@ -1043,9 +1063,8 @@ class EffectManager:
 
     def op_form_mods(self, cx: OpCall, tgt: EntityState, fid: str, mods: list, until: Optional[float]) -> None:
         for i, mo in enumerate(mods):                  # stat override: mod set/mul, пока форма активна
-            scratch: dict[str, float] = {}
-            tgt.runtime._apply_mod(mo, cx.ctx, tgt.unit, sink=scratch)
-            tgt.external[("form", fid, i)] = (1e18 if until is None else until, scratch)
+            tgt.external[("form", fid, i)] = (1e18 if until is None else until,
+                                              self._timed_layer(tgt, tgt, mo, cx.ctx))
         tgt.refresh(self.now)
 
     def op_form_clear_mods(self, _cx: OpCall, tgt: EntityState, fid: str) -> None:

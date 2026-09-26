@@ -1122,15 +1122,20 @@ class EffectRuntime:
         """pct без `of` - процент от того же стата ЦЕЛИ операции."""
         return default_stat_of(o, self._prefix(unit))
 
+    def mod_amount(self, o: dict, ctx: dict, unit: Unit, mult: float = 1.0) -> tuple[str, float]:
+        """(op, значение) mod-операции; op не задан (или null из формы) - add."""
+        amount = compute_amount(o, ctx, self._default_stat(o, unit))
+        mo = o.get("op") or "add"
+        if mo in ("add", "sub"):
+            amount *= mult  # Effect.amplify (Lost My Self при 1 HP)
+        return mo, amount
+
     def _apply_mod(self, o: dict, ctx: dict, unit: Unit,
                    sink: Optional[dict] = None, mult: float = 1.0):
         """Применить mod-оп к юниту. sink=None -> unit.mods (событийный путь);
         sink=dict -> накопление в отдельный слой (пассивный)."""
         stat = o.get("stat")
-        amount = compute_amount(o, ctx, self._default_stat(o, unit))
-        mo = o.get("op") or "add"  # op не задан (или null из формы) - add; раньше мод молча не применялся
-        if mo in ("add", "sub"):
-            amount *= mult  # Effect.amplify (Lost My Self при 1 HP)
+        mo, amount = self.mod_amount(o, ctx, unit, mult)
         apply_mod_math(unit.mods if sink is None else sink, unit.base.get(stat, 0.0), stat, mo, amount)
 
     def _duration(self, d, ctx) -> float:
