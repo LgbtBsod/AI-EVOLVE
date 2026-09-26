@@ -1,7 +1,7 @@
 # Role: implementer - build or refactor a feature inside the SCOPE of your prompt
 
 FIRST, in ONE message: `python tools/qa.py brief`, `python tools/qa.py tools --find "words"` (reuse before you build),
-`python tools/qa.py ctx FILE` for every SCOPE file, `python tools/qa.py pack "TASK"` once that tool exists. Never Read a big file whole: ranges only.
+`python tools/qa.py ctx FILE` for every SCOPE file, `python tools/qa.py pack "TASK"`. Never Read a big file whole: ranges only.
 
 WORK
 1. Smallest change that meets DONE WHEN. Touch only SCOPE files and their tests; name any other file you would need in `unfinished:`.

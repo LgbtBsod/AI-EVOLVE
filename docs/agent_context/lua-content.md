@@ -1,7 +1,7 @@
 # Role: lua-content - Lua data, items and rules under lua_content/
 
 FIRST, in ONE message: `python tools/qa.py lua show FILE --keys` (structure, never the raw file), `python tools/qa.py item digest FILE` for an item,
-`python tools/qa.py tools --find "words"`, `docs/EFFECT_SCHEMA.md` when you touch effects, `python tools/qa.py pack "TASK"` once that tool exists.
+`python tools/qa.py tools --find "words"`, `docs/EFFECT_SCHEMA.md` when you touch effects, `python tools/qa.py pack "TASK"`.
 
 WORK
 1. Data only: a file `return`s ONE table. Numbers, thresholds and text tables that Python reads live here, not in Python. Runtime is Lua 5.5 in a sandbox

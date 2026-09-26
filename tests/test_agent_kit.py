@@ -24,7 +24,7 @@ pytestmark = pytest.mark.skipif(not lua_bridge.available_backends(), reason="no 
 VALID_MODELS = {"sonnet", "opus", "haiku", "fable"}          # the `model` enum of the Agent tool / Workflow option / .claude/agents frontmatter
 CHEAP_STAGES = {"run-tests", "summarise-log", "mechanical-edit", "grep-research"}
 STRONG_STAGES = {"design", "judge", "adversarial-review"}
-KNOWN = {"check", "test", "ctx", "tools", "brief", "prompt", "route", "changed", "lua", "item", "ci", "golden", "determinism", "quality", "guard", "ckpt", "resume", "sym", "q", "tokens"}
+KNOWN = {"check", "test", "ctx", "tools", "brief", "prompt", "route", "changed", "lua", "item", "ci", "golden", "determinism", "quality", "guard", "ckpt", "resume", "sym", "q", "tokens", "pack"}
 
 
 @pytest.fixture(scope="module")
@@ -147,7 +147,8 @@ def test_unknown_placeholder_and_oversize_template(cfg):
 
 
 def test_unknown_command_fails_and_planned_command_that_exists_warns(cfg):
-    fake = set(KNOWN)
+    fake = set(KNOWN) - {"pack"}
+    cfg["planned"] = ["pack"]
     fails, warns = AK.command_problems(cfg, ROOT, known=fake)                      # `pack` is planned: no failure
     assert fails == [] and warns == []
     fails, _ = AK.command_problems(cfg, ROOT, known=fake - {"ci"})

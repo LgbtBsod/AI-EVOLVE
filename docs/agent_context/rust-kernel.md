@@ -1,7 +1,7 @@
 # Role: rust-kernel - a hot loop in rust_core/ with a Python twin and a parity fuzz test
 
 FIRST, in ONE message: `python tools/qa.py tools --find "words"`, `python tools/qa.py ctx FILE` (the Python twin), `docs/LANGUAGE_SPLIT.md` (twin first),
-the closest parity test as the model (`tests/test_damage_pipeline.py`, `tests/test_pathfinding.py`), `python tools/qa.py pack "TASK"` once that tool exists.
+the closest parity test as the model (`tests/test_damage_pipeline.py`, `tests/test_pathfinding.py`), `python tools/qa.py pack "TASK"`.
 
 WORK
 1. Twin first: the Python twin defines the semantics and is the fallback without rust_core. Change the twin and its test before the Rust.

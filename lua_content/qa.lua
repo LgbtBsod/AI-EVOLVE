@@ -335,6 +335,24 @@ return {
   -- `qa.py ckpt` / `qa.py resume` (relay of short agents): journal dev_probe_output/qa/journal.jsonl, snapshots refs/qa/ckpt/N
   -- `qa.py sym` / `qa.py q`: read-only query caps (lines)
   q = { sym_lines = 60, callers = 8, max_line_chars = 160, total_lines = 120, per_query_lines = 30, grep_files = 12, grep_per_file = 3 },
+  -- qa.py pack: ranked context pack. weights = points per task word matched in path / symbol names / docstring; neighbor = imports or is imported by --files.
+  pack = {
+    max_tok = 1500, chars_per_token = 4, top = 5, pointers = 3, links = 6, tools = 4, churn_commits = 150, history_rows = 300,
+    weights = { path = 3, symbol = 2, doc = 1, neighbor = 2, churn = 1 },
+    stopwords = { "add", "fix", "the", "for", "and", "check", "test", "flaky", "make", "with", "that", "this", "from", "into", "new", "use", "why", "does", "not", "all" },
+    do_not_read = { "dev_probe_output/*", "*.log", "*.jsonl", "tests/fixtures/*", "*_COMPLETE.md", "rust_core/target/*", ".venv*", "*/__pycache__/*", "*.sqlite" },
+    answers = {
+      { words = { "ci ", "actions", "workflow run", "github" }, use = "qa.py ci [--wait]", why = "CI verdict + failing step only; never gh run view --log" },
+      { words = { "flaky", "same-seed", "same seed", "determinism", "nondetermin" }, use = "qa.py determinism \"SCRIPT\" --pairs 6", why = "first divergent frame + hypotheses" },
+      { words = { "slow", "perf", "speed", "faster" }, use = "qa.py perf \"SCRIPT\"", why = "timing of a play script" },
+      { words = { "dead code", "unused", "unimported" }, use = "qa.py dead", why = "unimported modules list" },
+      { words = { "token", "spend", "waste" }, use = "qa.py tokens [--agents]", why = "transcript waste ledger" },
+      { words = { "stale doc", "docs" }, use = "qa.py docs", why = "which .md files are stale" },
+      { words = { "hygiene", "gitignore", "tracked venv" }, use = "qa.py hygiene", why = "tracked junk / big files" },
+      { words = { "quality", "complexity", "duplicate", "solid" }, use = "qa.py quality --worst 10", why = "ratchet offenders" },
+      { words = { "balance", "kills", "gameplay", "hero" }, use = "python tools/agent_play.py \"spawn enemy x3; until kills>=3 or dead max 90; expect alive\"", why = "play like the player" },
+    },
+  },
   ckpt = { keep = 20, history_tail_bytes = 30000, hook_timeout_s = 8 },
   -- qa.py tokens: transcript waste ledger. Read-only = calls that may share one message; a warn needs a value past its limit.
   tokens = {
@@ -416,6 +434,8 @@ return {
         when = "about every 10 tool calls and at the call cap of an agent (relay), before a risky step", replaces = "a hand-written handoff brief", output = "one line: ckpt #N saved", group = "build", cost = "low" },
       { id = "tokens", command = "python tools/qa.py tokens [--agents] [--top N] [--session latest|ID|PATH] [--json]", purpose = "transcript waste ledger: turns, calls per turn, batchable read-only runs, result and written tokens by tool, unbounded and repeated reads, retries, relays, guard stats, trend per session/agent",
         when = "before and after changing an agent prompt, a hook or a tool; to prove a token saving", replaces = "a hand-written transcript scan", output = "one QA line per metric group, worst first, each with `| use: CMD`", group = "build", cost = "low" },
+      { id = "pack", command = "python tools/qa.py pack \"TASK\" [--files a,b] [--max-tok 1500] [--json]", purpose = "ranked context pack for a task: top files with symbol ranges, importers/tests, existing tools, state, verify command, do-not-read list",
+        when = "start of any agent task, instead of exploring the repo", replaces = "5-20 exploratory grep/ctx/Read turns", output = "<= 1500 tokens, one grouped block", group = "build", cost = "low" },
       { id = "sym", command = "python tools/qa.py sym FILE:NAME [--callers] [--context N]", purpose = "one function/class/struct/impl/Lua function with line numbers (+ static callers), capped",
         when = "instead of reading a big file for one symbol", replaces = "Read of a whole file", output = "<= 60 numbered lines", group = "build", cost = "low" },
       { id = "q", command = "python tools/qa.py q \"grep:PAT@glob+ctx\" \"sym:FILE:NAME\" \"ctx:FILE\" \"read:FILE:A-B\" \"find:GLOB\" \"changed\"", purpose = "N read-only queries in parallel in one call, one grouped capped output",

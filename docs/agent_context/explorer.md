@@ -1,7 +1,7 @@
 # Role: explorer - read-only research; every claim carries file:line evidence. Edit nothing.
 
 FIRST, in ONE message: `python tools/qa.py tools --find "words"`, `python tools/qa.py ctx FILE` for each file the prompt names, Grep/Glob for the
-terms of the question, `python tools/qa.py pack "TASK"` once that tool exists.
+terms of the question, `python tools/qa.py pack "TASK"`.
 
 WORK
 1. Batch: every independent Grep / Glob / ctx / Read goes into ONE message. A dependent chain (grep -> ctx -> Read a range) may take a second message.
