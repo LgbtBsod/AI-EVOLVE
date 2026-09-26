@@ -52,7 +52,7 @@ Drill down only when a line fails — first tool that answers the question:
 | Lua / items without reading Lua | `qa.py lua show FILE --keys\|--key a.b` · `qa.py item diff FILE\|digest FILE\|all` · `python -m tools.effect_schema.itemcheck FILE` |
 | Build an item like a designer | `tools/web_builder/headless.py` (`UI().pick("Шаблон из каталога", "venom_bite")…click("Проверить предмет (itemcheck)")`) |
 
-**Quality ratchet** (`qa.py check --name quality`; ruff + radon + vulture + import-linter `.importlinter` + an ast duplicate-definition detector on the live game modules; rules, scope, thresholds, hints = `quality` in `lua_content/qa.lua`):
+**Quality ratchet** (`qa.py check --name quality,quality_tools`; scopes `qa.py quality --scope game|tools|all`, tools/ has its own `tests/quality_baseline_tools.json`; ruff + radon + vulture + import-linter `.importlinter` + an ast duplicate-definition detector on the live game modules; rules, scope, thresholds, hints = `quality` in `lua_content/qa.lua`):
 today's violations are the baseline (`tests/quality_baseline.json`: per metric, file, function with CC>=11); a NEW one fails, an improvement prints `improved=N` (warn) and
 `qa.py quality --update-baseline` locks it in (refuses to raise a number without `--force`). Fix a new violation (`--explain RULE`); never grow the baseline or `ignore_imports`.
 

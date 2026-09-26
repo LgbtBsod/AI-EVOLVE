@@ -62,6 +62,17 @@ def load_cfg(settings: dict | None = None) -> dict:
 
 # ---------------------------------------------------------------- scope
 
+def scoped_cfg(cfg: dict, scope: str = "game") -> dict:
+    """The `quality` table for one scope: `game` = the table itself, any other name = it overridden by `quality.scopes.<name>`
+    (own baseline, own liveness/exclude; `layers = false` skips import-linter)."""
+    if scope == "game":
+        return cfg
+    over = (cfg.get("scopes") or {}).get(scope)
+    if not over:
+        raise ToolError(f"unknown quality scope {scope!r}; in qa.lua: game {' '.join((cfg.get('scopes') or {}))}")
+    return {**cfg, **over}
+
+
 def live_files(cfg: dict, graph: dict | None = None) -> list:
     """Live game modules: files whose qa_graph.liveness is `scope.liveness` (default 'game'), minus `scope.exclude` globs."""
     import qa_graph
@@ -263,13 +274,15 @@ def build_jobs(cfg: dict, files: list) -> list:
     select = ",".join(seq(cfg["ruff"]["select"]))
     conf = str((cfg.get("vulture") or {}).get("min_confidence", 80))
     layers_cfg = (cfg.get("layers") or {}).get("config", ".importlinter")
+    use_layers = cfg.get("layers") is not False
     jobs = []
     for i, part in enumerate(chunks(files, limit)):
         jobs += [qa_pool.Job(f"ruff#{i}", [sys.executable, "-m", "ruff", "check", "--select", select, "--output-format", "json",
                                            "--no-cache", *part]),
                  qa_pool.Job(f"radon#{i}", [sys.executable, "-m", "radon", "cc", "-n", rank, "-j", *part]),
                  qa_pool.Job(f"vulture#{i}", [sys.executable, "-m", "vulture", "--min-confidence", conf, *part])]
-    jobs.append(qa_pool.Job("layers#0", [sys.executable, "-c", LINT_IMPORTS, "--config", layers_cfg, "--no-cache"]))
+    if use_layers:
+        jobs.append(qa_pool.Job("layers#0", [sys.executable, "-c", LINT_IMPORTS, "--config", layers_cfg, "--no-cache"]))
     return jobs
 
 
@@ -295,8 +308,8 @@ def measure(cfg: dict, root: Path = ROOT, runner=None, files: list | None = None
     if not files:
         raise ToolError("empty scope: no file has liveness 'game' (qa_graph cannot see main.py?)")
     cc_min = int((cfg.get("cc") or {}).get("min", 11))
-    config = root / (cfg.get("layers") or {}).get("config", ".importlinter")
-    entries = ignore_entries(config)
+    use_layers = cfg.get("layers") is not False
+    entries = ignore_entries(root / (cfg.get("layers") or {}).get("config", ".importlinter")) if use_layers else []
     by = _outputs((runner or qa_pool.run_many)(build_jobs(cfg, files), jobs=4))
     m = Measurement(files=list(files), cc_min=cc_min, groups={k: seq(v) for k, v in ((cfg["ruff"].get("groups")) or {}).items()})
     for text in _stdout("ruff", by["ruff"], (0, 1)):
@@ -305,10 +318,11 @@ def measure(cfg: dict, root: Path = ROOT, runner=None, files: list | None = None
         m.functions.update(parse_radon(text, cc_min, root))
     for text in _stdout("vulture", by["vulture"], (0, 3)):
         m.unused += parse_vulture(text, root)
-    (layers,) = by["layers"]
-    if layers.rc not in (0, 1):
-        raise ToolError(f"import-linter exited {layers.rc}: {R.one_line(layers.stderr.strip()[-200:], 120)}  [{INSTALL}]")
-    m.layers = parse_layers(layers.stdout + "\n" + layers.stderr, entries)
+    if use_layers:
+        (layers,) = by["layers"]
+        if layers.rc not in (0, 1):
+            raise ToolError(f"import-linter exited {layers.rc}: {R.one_line(layers.stderr.strip()[-200:], 120)}  [{INSTALL}]")
+        m.layers = parse_layers(layers.stdout + "\n" + layers.stderr, entries)
     m.dups = find_dup_defs(root, files, cfg.get("dup_defs"))
     m.loc = sum(_loc(root / f) for f in files)
     return m
@@ -479,10 +493,10 @@ def baseline_path(cfg: dict, root: Path = ROOT) -> Path:
 result_lines = R.result_lines     # the machine form of a Result lives in qa_report (shared by every Lua-declared check)
 
 
-def check(runner=None, root: Path = ROOT, settings: dict | None = None) -> R.Result:
+def check(runner=None, root: Path = ROOT, settings: dict | None = None, scope: str = "game") -> R.Result:
     """What the `quality` check runs: measure, compare with the baseline, one Result."""
     try:
-        cfg = load_cfg(settings)
+        cfg = scoped_cfg(load_cfg(settings), scope)
         return evaluate(cfg, measure(cfg, root, runner), load_baseline(baseline_path(cfg, root)))
     except ToolError as exc:
         return R.Result("error", {}, [str(exc)], "python tools/qa.py doctor")

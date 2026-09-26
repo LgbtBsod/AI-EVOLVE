@@ -229,11 +229,16 @@ return {
       watches = { "lua_content/agent_kit.lua", "docs/agent_context/**", ".claude/agents/**", "tools/agent_kit.py", "tools/qa_plugins/route.py", "tools/qa_plugins/prompt.py" } },
     -- Code-quality ratchet: the logic is tools/quality_metrics.py, the data is the `quality` table below. It prints detail lines, `repro:` and one
     -- RESULT line (`qa.py quality --result`); `ci = false`: CI runs it once on Linux (`check --name quality --no-cache`), not on every OS.
-    { name = "quality", cmd = "python tools/qa.py quality --result", parse = "result_line", cost = "low", ci = false,
+    { name = "quality", cmd = "python tools/qa.py quality --scope game --result", parse = "result_line", cost = "low", ci = false,
       needs = { "ruff", "radon", "vulture", "importlinter" }, tags = { "hygiene", "quality" }, detail = [[^(?!RESULT |repro:)\S]],
       what = "SOLID/DRY/SRP/SSOT ratchet: ruff + radon CC + vulture + import-linter layers + duplicate definitions vs tests/quality_baseline.json (a NEW violation fails)",
       watches = { "src/**/*.py", "main.py", "pyproject.toml", ".importlinter", "tests/quality_baseline.json", "lua_content/qa.lua",
                   "tools/quality_metrics.py", "tools/qa_plugins/quality.py" } },
+    -- Same ratchet for tools/ (quality.scopes.tools below; own baseline tests/quality_baseline_tools.json).
+    { name = "quality_tools", cmd = "python tools/qa.py quality --scope tools --result", parse = "result_line", cost = "low", ci = false,
+      needs = { "ruff", "radon", "vulture" }, tags = { "hygiene", "quality" }, detail = [[^(?!RESULT |repro:)\S]],
+      what = "the quality ratchet for tools/ (ruff + radon CC + vulture + duplicate definitions vs tests/quality_baseline_tools.json; a NEW violation fails)",
+      watches = { "tools/**/*.py", "pyproject.toml", "tests/quality_baseline_tools.json", "lua_content/qa.lua" } },
   },
 
   -- ===== code-quality RATCHET (tools/quality_metrics.py) =====
@@ -244,6 +249,9 @@ return {
   -- import-linter (.importlinter: layers; its `ignore_imports` IS the layering baseline), plus a ~20-line ast detector for duplicated definitions.
   quality = {
     baseline = "tests/quality_baseline.json",
+    -- Second scope: tool modules (qa_graph.liveness == 'tool') with their own baseline; each key overrides the table above (`layers = false`: no
+    -- import-linter contract for tools/). `qa.py quality --scope game|tools|all`.
+    scopes = { tools = { baseline = "tests/quality_baseline_tools.json", scope = { liveness = "tool", exclude = { "src/*", "python_layer/*", "tests/*", "AI-EVOLVE/*", "ai_evolve/*" } }, layers = false } },
     -- Scope: live game modules = qa_graph.liveness == 'game' (reachable from main.py), recomputed every run - no file list to maintain.
     scope = { liveness = "game", exclude = { "setup.py" } },   -- setup.py = Panda3D build script, an entry point but not a game module
     ruff = {
@@ -341,7 +349,7 @@ return {
   tools = {
     required = { "purpose" },
     dup_threshold = 0.5,          -- token-set (Jaccard) similarity of name + purpose from which two tools are near-duplicates (today's closest pair: 0.54)
-    dup_allow = { "bench_pathfinding~check:pathfinding" },   -- intended look-alikes: "a~b" (ids sorted): the benchmark script and the pytest twin check
+    dup_allow = { "bench_pathfinding~check:pathfinding", "check:quality~check:quality_tools", "check:quality_tools~quality_metrics" },   -- intended look-alikes: "a~b" (ids sorted): the benchmark script and the pytest twin check
     stopwords = { "the", "and", "for", "with", "from", "into", "that", "this", "are", "one", "per", "not", "all", "any", "its", "can", "use", "via",
                   "has", "was", "of", "to", "in", "on", "by", "or", "is", "it", "as", "no", "qa", "py", "python", "tool", "tools", "file", "files" },
     skip_dirs = { "qa_plugins", "qa_checks" },   -- extension points: each file inside is harvested as its own tool

@@ -1,0 +1,516 @@
+{
+ "dup_defs": {
+  "AGENT_PLAY": [
+   "tools/qa.py",
+   "tools/qa_plugins/determinism.py"
+  ],
+  "Check": [
+   "tools/effect_schema/itemcheck.py",
+   "tools/qa_report.py"
+  ],
+  "DEFAULTS": [
+   "tools/probe_settings.py",
+   "tools/qa_plugins/ckpt.py",
+   "tools/qa_plugins/determinism.py"
+  ],
+  "Finding": [
+   "tools/quality_metrics.py",
+   "tools/repo_hygiene.py"
+  ],
+  "HAS_RUST": [
+   "tools/bench_damage.py",
+   "tools/bench_pathfinding.py"
+  ],
+  "QA_OUT": [
+   "tools/qa.py",
+   "tools/qa_plugins/determinism.py",
+   "tools/qa_report.py"
+  ],
+  "ROOT": [
+   "tools/bench_damage.py",
+   "tools/bench_pathfinding.py",
+   "tools/boot_smoke_test.py",
+   "tools/boss_gauntlet.py",
+   "tools/combat_smoke_test.py",
+   "tools/dev_probe.py",
+   "tools/guard_hook.py",
+   "tools/probe_runtime.py",
+   "tools/probe_settings.py",
+   "tools/qa_graph.py",
+   "tools/qa_pool.py",
+   "tools/qa_report.py",
+   "tools/quality_metrics.py",
+   "tools/repo_hygiene.py",
+   "tools/trace_compare.py",
+   "tools/web_builder/app.py",
+   "tools/web_builder/headless.py"
+  ],
+  "Result": [
+   "tools/qa_pool.py",
+   "tools/qa_report.py"
+  ]
+ },
+ "files": {
+  "tools/_dev_probe_compare.py": {
+   "C901": 1,
+   "PERF401": 4
+  },
+  "tools/agent_kit.py": {
+   "PLR0913": 1
+  },
+  "tools/agent_play.py": {
+   "B023": 1,
+   "BLE001": 2,
+   "C901": 3,
+   "PLR0912": 1,
+   "PLR0915": 1,
+   "SIM115": 1
+  },
+  "tools/bench_damage.py": {
+   "B023": 8,
+   "dup_defs": 2
+  },
+  "tools/bench_pathfinding.py": {
+   "PLR0915": 1,
+   "dup_defs": 2
+  },
+  "tools/boot_smoke_test.py": {
+   "dup_defs": 1
+  },
+  "tools/boss_gauntlet.py": {
+   "PERF401": 1,
+   "PLR0913": 3,
+   "PLW2901": 1,
+   "dup_defs": 1
+  },
+  "tools/combat_smoke_test.py": {
+   "PLW0603": 1,
+   "RET504": 1,
+   "dup_defs": 1
+  },
+  "tools/dev_probe.py": {
+   "B007": 2,
+   "B904": 1,
+   "BLE001": 13,
+   "C901": 4,
+   "PLR0912": 3,
+   "PLR0915": 3,
+   "PLW2901": 4,
+   "dup_defs": 1,
+   "vulture": 3
+  },
+  "tools/dev_probe_async.py": {
+   "ARG002": 5,
+   "B019": 1,
+   "B905": 1,
+   "F401": 1,
+   "F841": 1,
+   "RET505": 1,
+   "vulture": 2
+  },
+  "tools/dev_probe_diff.py": {
+   "B007": 1,
+   "C901": 1,
+   "PLR0912": 1
+  },
+  "tools/effect_schema/cli.py": {
+   "F401": 1,
+   "vulture": 1
+  },
+  "tools/effect_schema/digest.py": {
+   "PERF401": 1
+  },
+  "tools/effect_schema/forge.py": {
+   "PLR0911": 1
+  },
+  "tools/effect_schema/itemcheck.py": {
+   "B007": 1,
+   "B905": 4,
+   "BLE001": 2,
+   "C901": 2,
+   "F401": 1,
+   "PLR0911": 1,
+   "dup_defs": 1
+  },
+  "tools/effect_schema/lua_gen.py": {
+   "C901": 1,
+   "PERF401": 2,
+   "PLR0912": 1
+  },
+  "tools/effect_schema/pred_lua.py": {
+   "B905": 1,
+   "C901": 1,
+   "PLR0911": 1,
+   "PLR0912": 1
+  },
+  "tools/effect_schema/ui_logic.py": {
+   "C901": 1,
+   "PLR0911": 1,
+   "SIM102": 1
+  },
+  "tools/effect_schema/validate.py": {
+   "BLE001": 1,
+   "C901": 3,
+   "PERF401": 1,
+   "PLR0912": 2,
+   "PLR0915": 1,
+   "SIM102": 1
+  },
+  "tools/guard_hook.py": {
+   "dup_defs": 1
+  },
+  "tools/plugins/agent_command_plugin.py": {
+   "ARG002": 3,
+   "BLE001": 3,
+   "F401": 2,
+   "F841": 1,
+   "RET505": 1,
+   "SIM102": 4
+  },
+  "tools/plugins/ai_behavior_analyzer.py": {
+   "F401": 1
+  },
+  "tools/plugins/auto_balance_plugin.py": {
+   "ARG002": 1,
+   "F401": 2
+  },
+  "tools/plugins/cas_inspector_plugin.py": {
+   "B007": 1,
+   "BLE001": 1,
+   "F401": 2,
+   "PERF102": 1,
+   "PERF401": 1,
+   "vulture": 1
+  },
+  "tools/plugins/cc_probe_plugin.py": {
+   "B007": 1,
+   "BLE001": 1,
+   "PLR0911": 1,
+   "RET505": 1
+  },
+  "tools/plugins/combat_advanced_plugin.py": {
+   "B007": 1,
+   "BLE001": 1,
+   "C901": 1,
+   "F401": 3,
+   "PLR0911": 1,
+   "PLR0912": 1,
+   "RET505": 2,
+   "vulture": 1
+  },
+  "tools/plugins/memory_profiler_plugin.py": {
+   "ARG002": 2,
+   "F401": 2,
+   "RET502": 1
+  },
+  "tools/plugins/ml_vision_plugin.py": {
+   "ARG002": 3,
+   "F401": 1
+  },
+  "tools/plugins/network_remote_plugin.py": {
+   "ARG002": 2,
+   "BLE001": 1,
+   "F401": 2
+  },
+  "tools/plugins/performance_monitor_plugin.py": {
+   "ARG002": 2,
+   "F401": 2,
+   "RET505": 1
+  },
+  "tools/plugins/stress_test_plugin.py": {
+   "F401": 1
+  },
+  "tools/probe_analysis.py": {
+   "B905": 1,
+   "C901": 2,
+   "PLR0912": 2,
+   "PLR0913": 1,
+   "PLR0915": 2
+  },
+  "tools/probe_db.py": {
+   "B905": 2,
+   "BLE001": 1,
+   "PLR0913": 2
+  },
+  "tools/probe_invariants.py": {
+   "C901": 1,
+   "PLR0912": 1
+  },
+  "tools/probe_kernels.py": {
+   "B905": 1,
+   "PERF401": 1,
+   "PLR0913": 2
+  },
+  "tools/probe_runtime.py": {
+   "ARG002": 1,
+   "BLE001": 3,
+   "PERF401": 1,
+   "PLR0911": 1,
+   "PLR0913": 1,
+   "PLW0603": 1,
+   "SIM105": 2,
+   "dup_defs": 1
+  },
+  "tools/probe_settings.py": {
+   "BLE001": 1,
+   "dup_defs": 2
+  },
+  "tools/qa.py": {
+   "B007": 1,
+   "B905": 4,
+   "BLE001": 1,
+   "C901": 3,
+   "PLR0912": 2,
+   "PLR0913": 2,
+   "PLR0915": 2,
+   "PLW1510": 2,
+   "PLW2901": 1,
+   "dup_defs": 2
+  },
+  "tools/qa_graph.py": {
+   "C901": 1,
+   "PERF401": 1,
+   "dup_defs": 1
+  },
+  "tools/qa_plugins/changed.py": {
+   "PLW1510": 1
+  },
+  "tools/qa_plugins/check.py": {
+   "B905": 1,
+   "C901": 1,
+   "PLR0911": 1,
+   "PLR0912": 1,
+   "PLR0913": 1,
+   "RET504": 1
+  },
+  "tools/qa_plugins/ci.py": {
+   "C901": 1,
+   "PLR0912": 1,
+   "PLR0913": 1,
+   "PLR0915": 1,
+   "PLW1510": 1
+  },
+  "tools/qa_plugins/ckpt.py": {
+   "PLR0913": 1,
+   "dup_defs": 1
+  },
+  "tools/qa_plugins/determinism.py": {
+   "B023": 1,
+   "B905": 2,
+   "C901": 2,
+   "PERF401": 1,
+   "PLR0912": 1,
+   "PLR0913": 2,
+   "PLR0915": 1,
+   "dup_defs": 3
+  },
+  "tools/qa_plugins/item.py": {
+   "PLW1510": 1
+  },
+  "tools/qa_pool.py": {
+   "dup_defs": 2
+  },
+  "tools/qa_report.py": {
+   "C901": 1,
+   "PLR0913": 1,
+   "PLW0603": 2,
+   "RET504": 1,
+   "dup_defs": 4
+  },
+  "tools/quality_metrics.py": {
+   "C901": 1,
+   "PERF401": 1,
+   "PLW1510": 1,
+   "dup_defs": 2
+  },
+  "tools/repo_hygiene.py": {
+   "PERF401": 1,
+   "dup_defs": 2
+  },
+  "tools/trace_compare.py": {
+   "B905": 1,
+   "PLW1510": 1,
+   "dup_defs": 1
+  },
+  "tools/training_room.py": {
+   "ARG002": 4,
+   "BLE001": 1,
+   "F401": 7,
+   "PLR0915": 1,
+   "RET504": 2,
+   "vulture": 3
+  },
+  "tools/training_room_demo.py": {
+   "PLR0915": 1
+  },
+  "tools/web_builder/app.py": {
+   "ARG002": 15,
+   "PERF401": 1,
+   "dup_defs": 1
+  },
+  "tools/web_builder/headless.py": {
+   "ARG002": 1,
+   "F401": 1,
+   "dup_defs": 1
+  },
+  "tools/web_builder/screenshot.py": {
+   "PLR0913": 1
+  }
+ },
+ "functions": {
+  "tools/_dev_probe_compare.py::diff_summaries": 20,
+  "tools/_dev_probe_compare.py::format_diff": 11,
+  "tools/agent_play.py::PlaySession.finish": 28,
+  "tools/agent_play.py::PlaySession.metrics": 14,
+  "tools/agent_play.py::PlaySession.run_command": 19,
+  "tools/agent_play.py::PlaySession.story_lines": 11,
+  "tools/agent_play.py::main": 11,
+  "tools/agent_play.py::parse_args": 11,
+  "tools/agent_play.py::parse_script": 27,
+  "tools/bench_damage.py::main": 11,
+  "tools/bench_damage.py::make_hits": 14,
+  "tools/bench_pathfinding.py::main": 20,
+  "tools/boot_smoke_test.py::main": 13,
+  "tools/boss_gauntlet.py::Session._battle": 20,
+  "tools/boss_gauntlet.py::campaign": 14,
+  "tools/boss_gauntlet.py::run": 18,
+  "tools/dev_probe.py::_cluster_similar_frames": 11,
+  "tools/dev_probe.py::_detect_ui_changes": 19,
+  "tools/dev_probe.py::_track_entities_across_frames": 12,
+  "tools/dev_probe.py::analyze_screenshot": 22,
+  "tools/dev_probe_diff.py::compare_frames": 22,
+  "tools/effect_schema/digest.py::diff": 12,
+  "tools/effect_schema/digest.py::op_brief": 15,
+  "tools/effect_schema/forge.py::PredGen.num": 14,
+  "tools/effect_schema/forge.py::random_effect": 11,
+  "tools/effect_schema/itemcheck.py::_first_diff": 14,
+  "tools/effect_schema/itemcheck.py::_invariants": 16,
+  "tools/effect_schema/itemcheck.py::check_preds": 18,
+  "tools/effect_schema/itemcheck.py::coverage": 13,
+  "tools/effect_schema/itemcheck.py::coverage.ops": 21,
+  "tools/effect_schema/lua_gen.py::_parts": 14,
+  "tools/effect_schema/lua_gen.py::_table_expr": 11,
+  "tools/effect_schema/lua_gen.py::collect_predicates": 11,
+  "tools/effect_schema/lua_gen.py::render_effect": 23,
+  "tools/effect_schema/lua_gen.py::render_item": 12,
+  "tools/effect_schema/pred_lua.py::_emit": 28,
+  "tools/effect_schema/ui_logic.py::_looks_like_json_effect": 20,
+  "tools/effect_schema/ui_logic.py::effect_from_form": 17,
+  "tools/effect_schema/ui_logic.py::op_from_form": 16,
+  "tools/effect_schema/validate.py::_references": 21,
+  "tools/effect_schema/validate.py::validate_effect": 34,
+  "tools/effect_schema/validate.py::validate_op": 70,
+  "tools/plugins/auto_balance_plugin.py::AutoBalancePlugin._generate_report": 18,
+  "tools/plugins/combat_advanced_plugin.py::CombatAdvancedPlugin.execute_command": 13,
+  "tools/plugins/ml_vision_plugin.py::MLVisionPlugin._generate_report": 17,
+  "tools/probe_analysis.py::combat_stats": 35,
+  "tools/probe_analysis.py::forecast": 49,
+  "tools/probe_analysis.py::format_forecast": 11,
+  "tools/probe_analysis.py::format_hypotheses": 11,
+  "tools/probe_analysis.py::hypotheses": 51,
+  "tools/probe_db.py::cmd_compare": 11,
+  "tools/probe_db.py::cmd_trend": 11,
+  "tools/probe_db.py::ingest": 19,
+  "tools/probe_db.py::table": 12,
+  "tools/probe_invariants.py::InvariantChecker.check": 27,
+  "tools/probe_kernels.py::py_scan_hero": 16,
+  "tools/probe_kernels.py::py_stuck_interval": 11,
+  "tools/probe_runtime.py::LeakRecorder.classify": 19,
+  "tools/probe_runtime.py::LeakRecorder.static_bindings": 11,
+  "tools/qa.py::cmd_brief": 11,
+  "tools/qa.py::cmd_docs": 25,
+  "tools/qa.py::cmd_doctor": 12,
+  "tools/qa.py::cmd_fuzz": 18,
+  "tools/qa.py::cmd_golden": 43,
+  "tools/qa.py::cmd_perf": 12,
+  "tools/qa.py::cmd_sweep": 29,
+  "tools/qa.py::cmd_test": 42,
+  "tools/qa.py::shrink": 17,
+  "tools/qa_graph.py::_edges": 14,
+  "tools/qa_graph.py::_parse": 27,
+  "tools/qa_graph.py::impacted": 11,
+  "tools/qa_plugins/changed.py::_diff_rows": 12,
+  "tools/qa_plugins/changed.py::compact_names": 11,
+  "tools/qa_plugins/changed.py::merge_plain": 13,
+  "tools/qa_plugins/changed.py::risk_flags": 12,
+  "tools/qa_plugins/changed.py::summarize": 19,
+  "tools/qa_plugins/check.py::cache_key": 12,
+  "tools/qa_plugins/check.py::cmd_check": 24,
+  "tools/qa_plugins/check.py::execute": 11,
+  "tools/qa_plugins/check.py::run_checks": 20,
+  "tools/qa_plugins/check.py::select": 30,
+  "tools/qa_plugins/ci.py::build_report": 17,
+  "tools/qa_plugins/ci.py::cmd_ci": 16,
+  "tools/qa_plugins/ci.py::essentials": 64,
+  "tools/qa_plugins/ci.py::resolve_run": 21,
+  "tools/qa_plugins/determinism.py::build_context": 13,
+  "tools/qa_plugins/determinism.py::cmd_determinism": 70,
+  "tools/qa_plugins/determinism.py::compare_traces": 37,
+  "tools/qa_plugins/determinism.py::diff_states": 11,
+  "tools/qa_plugins/determinism.py::float_sites": 11,
+  "tools/qa_plugins/determinism.py::pair_lines": 15,
+  "tools/qa_plugins/item.py::cmd_all": 15,
+  "tools/qa_plugins/item.py::load": 14,
+  "tools/qa_plugins/lua.py::cmd_check": 17,
+  "tools/qa_plugins/quality.py::_one": 15,
+  "tools/qa_plugins/resume.py::gather": 11,
+  "tools/qa_plugins/resume.py::lines": 12,
+  "tools/qa_plugins/resume.py::orphans": 11,
+  "tools/qa_plugins/route.py::_check": 11,
+  "tools/qa_report.py::_p_pytest": 17,
+  "tools/qa_report.py::delta_tokens": 12,
+  "tools/qa_report.py::interpret": 26,
+  "tools/quality_metrics.py::compare": 16,
+  "tools/quality_metrics.py::evaluate": 11,
+  "tools/quality_metrics.py::explain_lines": 18,
+  "tools/quality_metrics.py::find_dup_defs": 19,
+  "tools/quality_metrics.py::measure": 15,
+  "tools/quality_metrics.py::update_baseline": 11,
+  "tools/repo_hygiene.py::evaluate": 20,
+  "tools/repo_hygiene.py::scan": 18,
+  "tools/training_room.py::TrainingRoom.run_dps_test": 20,
+  "tools/web_builder/app.py::EffectEditor.load": 16,
+  "tools/web_builder/app.py::EffectEditor.load#2": 16,
+  "tools/web_builder/app.py::EffectEditor.to_form": 21,
+  "tools/web_builder/app.py::EffectEditor.to_form#2": 21,
+  "tools/web_builder/app.py::OpForm.__init__": 19,
+  "tools/web_builder/app.py::OpForm.to_form": 21
+ },
+ "rules": {
+  "ARG002": 39,
+  "B007": 8,
+  "B019": 1,
+  "B023": 10,
+  "B904": 1,
+  "B905": 18,
+  "BLE001": 32,
+  "C901": 31,
+  "F401": 29,
+  "F841": 2,
+  "PERF102": 1,
+  "PERF401": 17,
+  "PLR0911": 8,
+  "PLR0912": 18,
+  "PLR0913": 19,
+  "PLR0915": 14,
+  "PLW0603": 4,
+  "PLW1510": 7,
+  "PLW2901": 6,
+  "RET502": 1,
+  "RET504": 5,
+  "RET505": 6,
+  "SIM102": 6,
+  "SIM105": 2,
+  "SIM115": 1
+ },
+ "totals": {
+  "blind_except": 32,
+  "cc11": 117,
+  "cc_max": 70,
+  "dup_defs": 8,
+  "layers_broken": 0,
+  "ruff": 286,
+  "vulture": 11
+ },
+ "version": 1
+}

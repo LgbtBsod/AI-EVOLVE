@@ -413,7 +413,7 @@ def test_worst_and_explain_screens():
 def test_the_check_is_declared_in_qa_lua_and_not_part_of_ci_on_every_os():
     chk = C.load_registry(qa_settings())["quality"]
     assert chk.fn is None and chk.ci is False and chk.spec["parse"] == "result_line"        # data check: no Python check file needed
-    assert chk.spec["argv"][1:] == ["tools/qa.py", "quality", "--result"] and set(chk.needs) == {"ruff", "radon", "vulture", "importlinter"}
+    assert chk.spec["argv"][1:] == ["tools/qa.py", "quality", "--scope", "game", "--result"] and set(chk.needs) == {"ruff", "radon", "vulture", "importlinter"}
     assert {"tests/quality_baseline.json", "lua_content/qa.lua", ".importlinter", "pyproject.toml", "tools/quality_metrics.py"} <= set(chk.watches)
     assert C.matches(chk, ["src/effects/runtime.py"]) and not C.matches(chk, ["docs/x.md"])
     assert "quality" not in [c.name for c in C.load_registry(qa_settings()).values() if c.ci]          # `check --ci` skips it; CI runs it on Linux
@@ -477,3 +477,16 @@ def test_real_tools_on_the_real_repo_smoke():
     assert res.metrics["ruff"] > 0 and res.metrics["cc11"] > 0 and res.metrics["layers_broken"] >= 0
     out = subprocess.run([sys.executable, str(ROOT / "tools" / "qa.py"), "quality", "--explain", "BLE001"], capture_output=True, text=True, cwd=ROOT)
     assert out.returncode == 0 and "what:" in out.stdout and "fix:" in out.stdout
+
+
+@needs_lua
+def test_tools_scope_has_own_baseline_and_no_layer_job():
+    cfg = QM.load_cfg(qa_settings())
+    tools = QM.scoped_cfg(cfg, "tools")
+    assert QM.scoped_cfg(cfg, "game") is cfg and tools["baseline"] == "tests/quality_baseline_tools.json"
+    assert tools["scope"]["liveness"] == "tool" and tools["ruff"] == cfg["ruff"]
+    assert not any(j.name.startswith("layers") for j in QM.build_jobs(tools, ["tools/x.py"]))
+    assert any(j.name.startswith("layers") for j in QM.build_jobs(cfg, ["src/x.py"]))
+    assert QM.load_baseline(QM.baseline_path(tools)) is not None
+    with pytest.raises(QM.ToolError):
+        QM.scoped_cfg(cfg, "nope")
