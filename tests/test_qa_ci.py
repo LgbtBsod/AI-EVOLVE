@@ -150,6 +150,15 @@ def test_header_for_a_green_and_a_red_run():
     assert ci.verdict_of({**run_json("run_ok"), "conclusion": "cancelled", "jobs": []}) == "CANCELLED"
 
 
+def test_a_cancelled_job_is_not_a_failure():
+    run = run_json("run_ok")
+    jobs = [dict(j) for j in run["jobs"]]
+    jobs[0]["conclusion"] = "cancelled"
+    run = {**run, "conclusion": "cancelled", "jobs": jobs}
+    assert ci.verdict_of(run) == "CANCELLED"
+    assert "cancelled=1" in ci.header(run) and "fail=0" in ci.header(run)
+
+
 def test_report_for_a_failed_run_is_short_and_points_at_the_full_log():
     lines = ci.build_report(run_json("run_failed"), log("determinism_failed"), 8, 30, "dev_probe_output/qa/ci_35988866453.log")
     assert lines[0].startswith("CI verdict=FAIL run=35988866453")

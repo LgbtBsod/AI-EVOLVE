@@ -236,6 +236,8 @@ def run_duration(run: dict) -> float | None:
 def job_state(job: dict) -> str:
     if job.get("status") != "completed":
         return "running"
+    if job.get("conclusion") == "cancelled":
+        return "cancelled"
     return "ok" if job.get("conclusion") in OK_CONCLUSIONS else "fail"
 
 
@@ -245,7 +247,9 @@ def verdict_of(run: dict) -> str:
         return "RUNNING"
     if "fail" in states:
         return "FAIL"
-    c = (run.get("conclusion") or "").lower()
+    if "cancelled" in states:
+        return "CANCELLED"
+    c =(run.get("conclusion") or "").lower()
     return {"success": "OK", "failure": "FAIL", "timed_out": "FAIL", "cancelled": "CANCELLED", "skipped": "SKIPPED",
             "neutral": "OK"}.get(c, c.upper() or "UNKNOWN")
 
@@ -255,6 +259,8 @@ def header(run: dict) -> str:
     parts = [f"CI verdict={verdict_of(run)}", f"run={run.get('databaseId')}",
              f"wf={'_'.join(str(run.get('workflowName') or '?').split())}", f"sha={str(run.get('headSha') or '?')[:7]}",
              f"jobs={len(states)}", f"ok={states.count('ok')}", f"fail={states.count('fail')}"]
+    if states.count("cancelled"):
+        parts.append(f"cancelled={states.count('cancelled')}")
     if states.count("running"):
         parts.append(f"running={states.count('running')}")
     d = run_duration(run)
