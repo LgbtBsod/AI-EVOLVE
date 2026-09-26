@@ -26,6 +26,8 @@ return {
     dodge        = { canon = "precognition", exact = true, params = { negate = true, warn = false }, note = "precognition negate=true warn=false: the first hit per cooldown is dodged" },
     -- mimic family (src/effects/mimic.py)
     technique_absorb = { canon = "copy_technique", exact = true, note = "copy_technique: the caster takes an observed technique (learned set, fidelity)" },
+    -- state family (src/effects/statecraft.py)
+    state_rewind = { canon = "restore_state", exact = true, params = { keep = {} }, note = "restore_state keep=[]: the whole image back (a forward restore, never a rewrite of simulated ticks)" },
     -- time / world family (src/effects/timeworld.py)
     rule = { canon = "rule_override", exact = true, note = "rule_override: bounded consts / flags override (F5), global for `duration` or zone-scoped; the corpus `rule` is that, not a new world-law editor" },
     telekinetic_weapon = { canon = "polarity_control", exact = true, params = { select = { tag = "weapon" } }, note = "polarity_control select tag=weapon: pull / push weapon-tagged entities" },

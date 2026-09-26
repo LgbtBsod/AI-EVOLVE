@@ -300,6 +300,17 @@ def primitive_effects() -> list[dict]:
             {"kind": "apply_status_to_world", "target": "world", "status": "slow", "duration": dur(1), "filter": {"faction": "nobody"}},
             {"kind": "polarity_control", "target": "self", "sign": "attract", "select": {"tag": "metal"}, "strength": 1, "radius": 5},
         ], "time"),
+        # состояние (src/effects/statecraft.py): образы, петля, записанные имена, ограниченные желания
+        ev("prim.state", "use", [
+            {"kind": "snapshot", "target": "self", "scope": "self", "id": "forge_snap", "anchor": "forge_anchor"},
+            {"kind": "restore_state", "target": "self", "id": "forge_snap"},
+            {"kind": "respawn_at", "target": "self", "anchor": "forge_anchor"},
+            {"kind": "time_loop", "target": "self", "id": "forge_loop", "count": 1, "duration": dur(1), "persist": ["insight"]},
+            {"kind": "rename", "target": "self", "name": "forge_name", "tags_add": ["forged"]},
+            {"kind": "write", "target": "self", "id": "forge_note", "effect": "heart_attack", "after": dur(5)},
+            {"kind": "wish", "target": "self", "outcome": "heal", "amount": 1},
+            {"kind": "confiscate", "target": "self", "what": "ability", "id": "nothing"},
+        ], "state"),
         # кража и применение техники
         ev("prim.learn", "use", [
             {"kind": "learn", "target": "self", "ability_id": "forge_technique"},

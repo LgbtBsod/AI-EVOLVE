@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import math
 import random
+import re
 from typing import Any
 
 TIME_FEATURES = ("time_scale.exempt", "subjective_time", "filter.sample")   # spec additions provided by these ops (qa.py coverage)
@@ -327,10 +328,14 @@ def sample_spec(o: dict) -> dict | None:
     return s if isinstance(s, dict) else None
 
 
+def _natural(eid: str) -> tuple:
+    return tuple((0, int(p), "") if p.isdigit() else (1, 0, p) for p in re.split(r"(\d+)", str(eid)) if p)
+
+
 def sample(m: Any, entities: list, spec: dict) -> list:
     """Deterministic random SAMPLE of `entities` (`fraction` rounded half up, or `count`): stable order by entity id, then a draw on a
     named stream derived ONCE from the manager rng (later unrelated draws do not shift it)."""
-    ordered = sorted(entities, key=_eid)
+    ordered = sorted(entities, key=lambda e: _natural(_eid(e)))    # natural order: f9 before f10 (a plain string sort flips at digit boundaries)
     n = len(ordered)
     k = int(spec["count"]) if spec.get("count") is not None else int(n * float(spec.get("fraction", 0.5)) + 0.5)
     k = max(0, min(k, n))

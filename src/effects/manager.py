@@ -51,7 +51,7 @@ from . import triggers
 from . import zones
 from .control import release_control
 from . import mimic
-from . import timeworld
+from . import statecraft, timeworld
 from .ops import OpCall, Periodic, Tracked, apply_op, form_abilities, replace_contribution_game
 from .runtime import EffectRuntime, Unit, buff_fields, resolve_value, rules
 
@@ -469,6 +469,7 @@ class EffectManager:
         self._zones: list[dict] = []     # F5 zones (src/effects/zones.py), creation order
         self._rules: list[dict] = []     # F5 timed rule_override layers {id, until, consts, flags}
         self._tw = timeworld.TimeState()  # F7 time / world (src/effects/timeworld.py)
+        self._sc = statecraft.StateCraft()  # F8 snapshots / loops / writes (src/effects/statecraft.py)
         self._status_book: dict = {}     # (id сущности, status id) -> (стаки, до какого времени)
 
     # ---------------------------------------------------------------- registry
@@ -556,6 +557,7 @@ class EffectManager:
         self._run_delayed()
         zones.update(self)
         mimic.update(self)
+        statecraft.update(self)                        # F8: loops / writes; returns at once when nothing is recorded
 
     def _run_delayed(self) -> None:
         """F4 `delay`: due records in (at, seq) order; a dead caster cancels its record unless `persist`."""
@@ -1133,6 +1135,33 @@ class EffectManager:
         return mimic.restriction_lifted(self, entity, rid)
 
     # F4 triggers (src/effects/triggers.py) -------------------------------------------------------------
+    # F8 statecraft (src/effects/statecraft.py) ---------------------------------------------------------
+    def sc_state(self):
+        return self._sc
+
+    def snapshot_of(self, tgt, o: dict) -> dict:
+        return statecraft.take(self, str(o.get("scope", "self")), tgt, o.get("id"), (o.get("anchor"), o.get("at")))
+
+    def snapshot(self, scope: str = "world", entity=None, sid=None) -> dict:
+        """Plain-data (JSON-safe) image of `scope` (world | faction | self, the last two around `entity`) into its bounded ring."""
+        st = self.state(entity) if entity is not None else next(iter(self.states.values()), None)
+        return statecraft.take(self, scope, st, sid)
+
+    def restore(self, snap, keep: tuple = ()) -> dict:
+        """Put a snapshot (image or id) back bit for bit; {restored, missing, extra}."""
+        img = statecraft.find(self, snap) if isinstance(snap, str) else snap
+        return statecraft.restore(self, img, tuple(keep)) if img is not None else {"restored": [], "missing": [], "extra": []}
+
+    def restore_by_id(self, sid, keep: tuple = ()):
+        return self.restore(sid, keep) if isinstance(sid, str) else None
+
+    def sc_take_item(self, st, item) -> None:
+        self.equip(st.entity, [i for i in st.items if i is not item])
+
+    def op_death_cause(self, _cx: OpCall, tgt: EntityState, cause: str) -> None:
+        if not is_alive(tgt.entity):
+            tgt.unit.external["death"] = {"cause": cause, "t": self.now}
+
     # F7 time / world (src/effects/timeworld.py) -------------------------------------------------------
     def tw_state(self):
         return self._tw

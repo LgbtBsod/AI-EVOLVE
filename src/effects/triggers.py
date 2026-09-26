@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from . import statecraft
+
 
 def op_on_lethal(h: Any, cx: Any, tgt: Any, o: dict, amount: float) -> None:
     """Arm a lethal-hit interceptor on the target. charges default 1 (0 = unlimited), keep = hp left (default 1), restore = % max hp instead."""
@@ -74,7 +76,7 @@ def _fire(m: Any, victim: Any, attacker: Any, rec: dict, hit: tuple) -> float:
     else:
         amount = max(0.0, hp - rec["keep"])
     m.op_run_nested(victim, rec["ops"], attacker, f"{rec['id']}#lethal")
-    return amount
+    return 0.0 if statecraft.take_restored(m, victim) else amount     # F8 restore_state inside: the hit is void
 
 
 def intercept_lethal(m: Any, victim: Any, attacker: Any, amount: float, kind: str) -> float:

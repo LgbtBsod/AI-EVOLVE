@@ -499,6 +499,8 @@ _NOTES: dict[str, Callable[..., str]] = {
         "fusion_strike", "remove_restriction", "dispel", "copy_technique", "copy", "false_percept", "control_link", "break_link", "erase")},
     **{k: (lambda tg, *a, _k=k: f"{_k} {' '.join(map(str, a))} -> {tg.name}") for k in (      # F7 time / world (src/effects/timeworld.py): room = log line only
         "global_time_scale", "time_scale", "time_as_space", "apply_status_to_world", "polarity_control")},
+    **{k: (lambda tg, *a, _k=k: f"{_k} {' '.join(map(str, a))} -> {tg.name}") for k in (      # F8 statecraft (src/effects/statecraft.py): room = log line only
+        "snapshot", "restore_state", "respawn_at", "time_loop", "rename", "write", "wish", "confiscate")},
     "set_aggro": lambda tg, mode: f"set_aggro {mode} -> {tg.name}",
     "set_targeting": lambda tg: f"set_targeting -> {tg.name}",
     "retarget": lambda tg, ref: f"retarget {ref} -> {tg.name}",
@@ -966,6 +968,9 @@ class EffectRuntime:
 
     def op_nested(self, cx: OpCall, ops: list, suffix: str, keep_event: bool) -> None:
         self.run_ops(ops, cx.ctx, cx.t, cx.src + suffix, event=cx.event if keep_event else None)
+
+    def op_death_cause(self, cx: OpCall, tgt: Unit, cause: str) -> None:
+        """Комната: причина смерти не хранится."""
 
     def op_kill(self, cx: OpCall, tgt: Unit) -> None:
         t, src = cx.t, cx.src

@@ -1,5 +1,5 @@
 {
-"n_lua": 550,
+"n_lua": 562,
 "cases": [
 [
 "\"x\"",
@@ -198,7 +198,23 @@
 []
 ],
 [
+"{\"after\": {\"flat\": 40}, \"effect\": \"heart_attack\", \"id\": \"note\", \"kind\": \"write\", \"target\": \"enemy\"}",
+[]
+],
+[
 "{\"after\": {\"flat\": 5}, \"kind\": \"delay\", \"ops\": [{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 20}}], \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"amount\": 120, \"kind\": \"wish\", \"outcome\": \"heal\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"anchor\": \"horcrux_vault\", \"at\": {\"x\": 40, \"y\": 40}, \"id\": \"horcrux\", \"kind\": \"snapshot\", \"scope\": \"self\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"anchor\": \"horcrux_vault\", \"kind\": \"respawn_at\", \"target\": \"self\"}",
 []
 ],
 [
@@ -340,6 +356,10 @@
 []
 ],
 [
+"{\"charges\": 1, \"id\": \"horcrux\", \"kind\": \"on_lethal\", \"ops\": [{\"id\": \"horcrux\", \"kind\": \"restore_state\", \"target\": \"self\"}, {\"anchor\": \"horcrux_vault\", \"kind\": \"respawn_at\", \"target\": \"self\"}], \"target\": \"self\"}",
+[]
+],
+[
 "{\"charges\": 1, \"id\": \"ls_a\", \"keep\": 1, \"kind\": \"on_lethal\", \"priority\": 0, \"target\": \"self\"}",
 []
 ],
@@ -441,6 +461,10 @@
 ],
 [
 "{\"count\": 2, \"kind\": \"summon\", \"summon\": \"wraith\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"count\": 3, \"duration\": {\"flat\": 30}, \"id\": \"dormammu\", \"kind\": \"time_loop\", \"on\": \"either\", \"persist\": [\"insight\"], \"target\": \"self\"}",
 []
 ],
 [
@@ -585,6 +609,10 @@
 ],
 [
 "{\"distance\": 4, \"kind\": \"move\", \"mode\": \"knockback\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"distance\": 4, \"kind\": \"move\", \"mode\": \"push\", \"target\": \"enemy\"}",
 []
 ],
 [
@@ -1426,6 +1454,14 @@
 ]
 ],
 [
+"{\"id\": \"dormammu_start\", \"kind\": \"snapshot\", \"scope\": \"world\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"id\": \"horcrux\", \"kind\": \"restore_state\", \"target\": \"self\"}",
+[]
+],
+[
 "{\"id\": \"p\", \"kind\": \"timed_power_up\"}",
 [
 "op: kind=timed_power_up requires duration"
@@ -1433,6 +1469,10 @@
 ],
 [
 "{\"id\": \"s\", \"kind\": \"stance\"}",
+[]
+],
+[
+"{\"id\": \"wand_strike\", \"kind\": \"confiscate\", \"target\": \"enemy\", \"what\": \"ability\"}",
 []
 ],
 [
@@ -1450,6 +1490,10 @@
 [
 "op: kind=buff requires buff_id"
 ]
+],
+[
+"{\"kind\": \"cancel_technique\", \"target\": \"enemy\"}",
+[]
 ],
 [
 "{\"kind\": \"cancel_technique\", \"target\": \"enemy\"}",
@@ -2478,6 +2522,10 @@
 [
 "op: kind=remove_buff requires buff_id"
 ]
+],
+[
+"{\"kind\": \"rename\", \"name\": \"target_one\", \"tags_add\": [\"written\"], \"target\": \"enemy\"}",
+[]
 ],
 [
 "{\"kind\": \"rule_override\", \"rules\": [\"block_physics\"], \"scope\": \"self\"}",

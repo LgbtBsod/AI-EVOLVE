@@ -93,4 +93,19 @@ return {
     damage_taken = { min = -90 },
     broken      = { min = 0, max = 1 },
   },
+
+  -- slice F8 (src/effects/statecraft.py, docs/EFFECT_SCHEMA.md "Statecraft"): snapshots, loops, written names, bounded wishes
+  statecraft = {
+    ring = 8,                                    -- snapshots kept per scope (world / faction:x / entity:id), oldest dropped
+    entity_fields = { "health", "max_health", "mana", "max_mana", "stamina", "max_stamina", "x", "y", "is_defeated", "state" },
+    restore_keep = { "triggers" },               -- external keys the `restore_state` op keeps (a spent on_lethal charge stays spent)
+    write_effects = { kill = "written", heart_attack = "heart_attack" },   -- allowed `write` effects -> default death cause
+    wish = {                                     -- the ONLY outcomes a `wish` may produce; cost = {resource, amount}, cooldown in game seconds
+      heal       = { cost = { resource = "mana", amount = 30 }, cooldown = 20, max = 300 },
+      revive     = { cost = { resource = "mana", amount = 60 }, cooldown = 120, max_pct = 50 },
+      grant_stat = { cost = { resource = "mana", amount = 40 }, cooldown = 60, max = 10, duration = 30,
+                     stats = { "attack_damage", "defense", "move_speed" } },
+      erase      = { cost = { resource = "mana", amount = 90 }, cooldown = 300 },
+    },
+  },
 }

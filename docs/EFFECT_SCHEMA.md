@@ -346,3 +346,17 @@ op kind before validation (`validate_op`), parsing (`Op.from_json`) and dispatch
 - `polarity_control` (`sign` attract|repel, `select` {tag} | {stat: "polarity"} (negative value flips the sign), `strength`, `radius`): a `move` pull / push of each selected entity toward / away from the caster. `telekinetic_weapon` = alias (select tag weapon).
 - `filter.sample` (`filter: {sample: {fraction | count}}` on `target = area`): a deterministic random SAMPLE of the selected targets (stable order by entity id, fraction rounded half up, stream derived once from the manager rng, so unrelated draws do not shift it). `rule` = alias of `rule_override`.
 - EffectRuntime (training room) logs the ops only. Tests: `tests/test_effect_timeworld_spec.py`.
+
+## Statecraft (slice F8)
+
+Code `src/effects/statecraft.py`; numbers (ring size, entity fields, wish whitelist, write effects) in `lua_content/effect_rules.lua` `statecraft`. Forward-only: a restore puts a SAVED state back and the sim continues from there.
+
+- `snapshot` (`scope` self|faction|world, `id`, `anchor`, `at` {x, y}): a plain-data (JSON-safe) image: entity fields, cooldowns, effect books, stat layers, external layers, periodic ticks; the world scope adds the game clock, the RNG stream positions (manager + sample stream), the delay queue, zones, rule layers, time / world records, the status book, telegraphs. Bounded ring per scope, the same `id` replaces. API: `EffectManager.snapshot(scope, entity, sid)` / `restore(snap_or_id, keep)` -> `{restored, missing, extra}` (vanished entities are skipped and reported). O(state).
+- `restore_state` (`id`, `keep`): bit-exact put-back; keeps `restore_keep` external layers by default (a spent `on_lethal` charge stays spent) and, inside an `on_lethal`, voids the lethal part of the hit. Alias `state_rewind` = `restore_state` `keep=[]`.
+- `respawn_at` (`+respawn_at`; `anchor` | `x`, `y`): moves the target to the anchor recorded by `snapshot anchor=`.
+- `time_loop` (`id`, `count`, `duration`, `on` death|expiry|either, `persist` [memory keys]): snapshots the world now; at each death / expiry of the caster restores it, `count` times. The loop record and the `persist` keys of `unit.external["memory"]` live outside the image and survive every rewind; `memory.loop_count` is the loop number.
+- `write` (`id`, `effect` kill|heart_attack, `name`, `after`, `when` {hp_pct_below}, `cause`, `persist`, `cancel`): a recorded instruction run at the exact game time; `name` is resolved at execution (see `rename`). `kill` takes `cause` (`+kill.cause`): the death is stored in `unit.external["death"]` = `{cause, t}` only if the target really died.
+- `rename` (`name`, `tags_add`, `tags_remove`): `unit.external["identity"]`.
+- `wish` (`outcome`, `amount`, `stat`, `pct`): only outcomes of the Lua whitelist (heal | revive | grant_stat | erase), each with cost and cooldown, amounts clamped; anything else is refused (logged in `_sc.log`).
+- `confiscate` (`what` ability|item, `id`): the ability / item moves from the target to the caster (`unit.external["grants"]`; items wait in the vault).
+- Not modelled: #34 `reverse_causality`, #40 `create_ex_nihilo`. EffectRuntime (training room) logs the ops only. Tests: `tests/test_effect_statecraft_spec.py`.

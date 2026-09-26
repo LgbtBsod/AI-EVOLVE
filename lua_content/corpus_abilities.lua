@@ -226,5 +226,25 @@ return {
       ops = { { kind = "polarity_control", target = "self", sign = "attract", select = { tag = "metal" }, strength = 4, radius = 25 } } },
     { id = "corpus_magnetism_repel", family = "time", tags = { "spell" }, trigger = "cast", cooldown = 8,
       ops = { { kind = "polarity_control", target = "self", sign = "repel", select = { stat = "polarity" }, strength = 4, radius = 25 } } },
+
+    -- ---- slice F8: STATE family (family = "state"; src/effects/statecraft.py, docs/EFFECT_SCHEMA.md "Statecraft") ----
+    { id = "corpus_horcrux", corpus = 46, family = "state", tags = { "spell" }, trigger = "cast", cooldown = 600,
+      ops = { { kind = "snapshot", target = "self", scope = "self", id = "horcrux", anchor = "horcrux_vault", at = { x = 40, y = 40 } },
+              { kind = "on_lethal", target = "self", id = "horcrux", charges = 1,
+                ops = { { kind = "restore_state", target = "self", id = "horcrux" }, { kind = "respawn_at", target = "self", anchor = "horcrux_vault" } } } } },
+
+    { id = "corpus_time_loop", corpus = 37, family = "state", tags = { "spell" }, trigger = "cast", cooldown = 300,
+      ops = { { kind = "snapshot", target = "self", scope = "world", id = "dormammu_start" },
+              { kind = "time_loop", target = "self", id = "dormammu", count = 3, duration = { flat = 30 }, on = "either", persist = { "insight" } } } },
+
+    { id = "corpus_death_note", corpus = 54, family = "state", tags = { "spell" }, trigger = "cast", range = 999, cooldown = 10, needs_target = true,
+      ops = { { kind = "write", target = "enemy", id = "note", effect = "heart_attack", after = { flat = 40 } },
+              { kind = "rename", target = "enemy", name = "target_one", tags_add = { "written" } },
+              { kind = "wish", target = "self", outcome = "heal", amount = 120 } } },
+
+    { id = "corpus_expelliarmus", corpus = 44, family = "state", tags = { "spell" }, trigger = "cast", range = 20, cooldown = 6, needs_target = true,
+      ops = { { kind = "cancel_technique", target = "enemy" },
+              { kind = "confiscate", target = "enemy", what = "ability", id = "wand_strike" },
+              { kind = "move", target = "enemy", mode = "push", distance = 4 } } },
   },
 }
