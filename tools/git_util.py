@@ -23,6 +23,16 @@ def git(*args: str, root: Path | None = None, env: dict | None = None, timeout: 
     return run.stdout.rstrip("\r\n") if raw else run.stdout.strip()
 
 
+def git_rc(*args: str, root: Path | None = None, timeout: float = 300) -> tuple[int, str]:
+    """(returncode, stdout + stderr stripped) of one git call: for callers that must tell a failure from an empty answer (127 = no git)."""
+    try:
+        run = subprocess.run(["git", *args], cwd=root or _ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                             timeout=timeout, check=False)
+    except (OSError, subprocess.SubprocessError) as exc:
+        return 127, str(exc)
+    return run.returncode, (run.stdout + run.stderr).strip()
+
+
 def head(root: Path | None = None) -> str:
     """Short sha of HEAD ('' outside a repo)."""
     return git("rev-parse", "--short", "HEAD", root=root)

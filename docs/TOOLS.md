@@ -61,8 +61,10 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `dev_probe` | `python tools/dev_probe.py` | long headless run with anomaly hunt: samples, combat stats, contact sheet, findings in probe_db | reading raw state.jsonl and screenshots | RESULT line + summary.md | high |
 | `dev_probe_diff` | `python tools/dev_probe_diff.py` | delta-only comparison of two dev_probe runs (--frames adds a visual diff) | diffing two summary.json by eye | changed metrics only | low |
 | `gauntlet` | `python tools/qa.py gauntlet [--campaign --lives 5]` | hero vs every boss (or a whole campaign), results in probe_db | playing bosses by hand | one line per boss | high |
+| `new` | `python tools/qa.py new` | scaffold a tool: script or plugin + smoke test + docs/TOOLS.md, with a look-alike (DRY) guard | - | - | - |
 | `perf` | `python tools/qa.py perf "SCRIPT"` | hot functions of a game run (cProfile, fast mode) | ad-hoc cProfile runs | top-N table | medium |
 | `probe_db` | `python tools/probe_db.py stats\|why\|predict\|compare\|trend\|sql` | SQLite analytics over every recorded probe run: stats, why, predict, compare, trend, free SQL | reading state.jsonl / game.log | short tables | low |
+| `ship` | `python tools/qa.py ship` | check -> stage -> commit -> push -> ci --wait for that sha, one command, one line | - | - | - |
 | `sweep` | `python tools/qa.py sweep "SCRIPT"` | one agent_play script over many seeds: metric distributions + bootstrap CI (Rust) | eyeballing a few seeds | table per metric | high |
 | `training_room` | `python tools/training_room.py` | training room with mannequins to try equipment and effects (v2.0) | - | prose | - |
 | `training_room_demo` | `python tools/training_room_demo.py` | demo run of the training room: equipment on mannequins [demo] | - | prose | - |

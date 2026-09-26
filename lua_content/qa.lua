@@ -383,6 +383,15 @@ return {
       relays = "qa.py resume (continue the relay)", guard = "qa.py guard --stats",
     },
   },
+  -- qa.py ship (tools/qa_plugins/ship.py): check -> stage -> commit -> push -> ci for exactly that sha, one command
+  ship = {
+    branches = { "main" },       -- ship only from these branches
+    exclude = { "=4.3.0", "*.pyc", "dev_probe_output/**", ".env*", "*.sqlite" },   -- never staged (gitignore syntax, any depth)
+    trailer = "Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>",
+    ci_find_tries = 6, ci_find_wait = 5,   -- the run of a fresh push appears after a few seconds
+  },
+  -- qa.py new tool: a purpose that scores >= similar_score against an existing tool (qa.py tools --find scoring) needs --force
+  new_tool = { similar_score = 6, show = 3 },
   hygiene = {
     max_file_kb = 1024,          -- a tracked file above this fails (assets that must be bigger: list them in `allow`)
     allow = {},
