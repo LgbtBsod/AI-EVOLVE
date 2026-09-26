@@ -493,6 +493,9 @@ _NOTES: dict[str, Callable[..., str]] = {
     "rotate_wheel": lambda tg, wheel: f"rotate_wheel {wheel} -> {tg.name}",
     "display_wheel": lambda tg, wheel, mode: f"display_wheel {wheel} mode={mode} -> {tg.name}",
     "halt_wheel": lambda tg, wheel: f"halt_wheel {wheel} -> {tg.name}",
+    "form_enter": lambda fid: f"form_enter {fid}",
+    "form_exit": lambda fid: f"form_exit {fid}",
+    "form_blocked": lambda fid: f"form_blocked {fid}",
 }
 
 
@@ -976,6 +979,17 @@ class EffectRuntime:
 
     def op_move(self, cx: OpCall, _tgt: Unit, o: dict) -> None:
         self.op_note(cx, "move", o)
+
+    # --- формы (ops.py stance/transform/timed_power_up): запись формы живёт в unit.external["forms"];
+    # тренировочная комната не применяет stats формы и не гасит форму по таймеру (это делает EffectManager)
+    def op_forms(self, tgt: Unit) -> dict:
+        return tgt.external.setdefault("forms", {})
+
+    def op_form_mods(self, cx: OpCall, _tgt: Unit, fid: str, mods: list, until: Optional[float]) -> None:
+        """Комната: моды формы не применяются (только запись формы)."""
+
+    def op_form_clear_mods(self, cx: OpCall, _tgt: Unit, fid: str) -> None:
+        """Комната: нечего снимать."""
 
     def op_note(self, cx: OpCall, what: str, *args) -> None:
         self.log.append(f"t={cx.t:.1f} {cx.src} " + _NOTES[what](*args))

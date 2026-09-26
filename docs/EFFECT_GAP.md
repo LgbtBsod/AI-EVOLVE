@@ -336,4 +336,6 @@ Line numbers are from grep/outline reads; nothing was run.
 - Numeric ids must be stable across saves and Lua edits: index by registration order breaks when a content row is added. Persist names in saves, ids only in memory.
 
 
+**Status 2026-09-27 (slice F1)**: with exact aliases 41.7% (25/60, was 28.3%). Newly expressible: #8 Rasengan, #9 Kurama mode, #17 Gear 5, #23 Bungee Gum, #24 Guanyin Zero, #27 Instant Transmission, #28 Super Saiyan, #36 Repulsor (movement aliases carry `params`; `stance`/`transform`/`timed_power_up` are handlers; content: `lua_content/corpus_abilities.lua`). Still blocked from the slice list: #12 (dodge), #16 (zone), #43 (time_scale), #59 (on_lethal).
+
 **Status 2026-09-26** (`qa.py coverage`, computed): hand tags 46.7% (28/60, matches the table); canon op names literally 13.3% (8/60); with exact aliases 28.3% (17/60); spec 80.0%. `dash/teleport/pull/push` are expressible as `move` + `mode` but are not pure renames, so they are not counted.

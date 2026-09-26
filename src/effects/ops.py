@@ -30,19 +30,37 @@ from src.core.adaptation import WHEEL_MAX_DEFAULT
 
 
 @lru_cache(maxsize=1)
-def _exact_aliases() -> dict:
-    """spec kind -> canon kind for the `exact = true` rows of lua_content/kind_aliases.lua (empty without a Lua backend)."""
+def _exact_rows() -> dict:
+    """spec kind -> row for the `exact = true` rows of lua_content/kind_aliases.lua (empty without a Lua backend)."""
     try:
         from ..content import lua_bridge
         rows = lua_bridge.load(lua_bridge.CONTENT / "kind_aliases.lua", cache=True).get("aliases") or {}
     except (ImportError, OSError, RuntimeError, ValueError):
         return {}
-    return {k: v["canon"] for k, v in rows.items() if v.get("exact")}
+    return {k: v for k, v in rows.items() if v.get("exact")}
+
+
+def _exact_aliases() -> dict:
+    """spec kind -> canon kind for the exact rows."""
+    return {k: v["canon"] for k, v in _exact_rows().items()}
 
 
 def canonical_kind(kind: Any) -> Any:
     """Spec name of an op kind -> canon name (exact aliases only); anything else comes back unchanged."""
     return _exact_aliases().get(kind, kind) if isinstance(kind, str) else kind
+
+
+def canonicalize_op(op: Any) -> Any:
+    """Op with a spec kind -> the canon op: kind renamed and the alias row's implied `params` filled in (op's own fields win).
+    An op that is not an exact alias comes back as the SAME object."""
+    row = _exact_rows().get(op.get("kind")) if isinstance(op, dict) and isinstance(op.get("kind"), str) else None
+    if row is None:
+        return op
+    out = dict(op)
+    out["kind"] = row["canon"]
+    for key, val in (row.get("params") or {}).items():
+        out.setdefault(key, val)
+    return out
 
 
 # ---------------------------------------------------------------- dirty tracking
@@ -297,6 +315,9 @@ class OpHost(Protocol):
     def op_kill(self, cx: OpCall, tgt: Any) -> None: ...
     def op_summon(self, cx: OpCall, o: dict) -> None: ...
     def op_move(self, cx: OpCall, tgt: Any, o: dict) -> None: ...
+    def op_forms(self, tgt: Any) -> dict: ...                             # exclusive_group -> запись активной формы (stance/transform)
+    def op_form_mods(self, cx: OpCall, tgt: Any, fid: str, mods: list, until: Optional[float]) -> None: ...
+    def op_form_clear_mods(self, cx: OpCall, tgt: Any, fid: str) -> None: ...
     def op_note(self, cx: OpCall, what: str, *args: Any) -> None: ...     # строка лога (рантайм) / ничего (менеджер)
 
     # --- примитивы новых kinds (resist/immune/mark/detonate/purge/nullify/...) ------
@@ -913,6 +934,85 @@ def op_halt_wheel(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> No
     h.op_note(cx, "halt_wheel", tgt, st["wheel"])
 
 
+# ---------------------------------------------------------------- формы: stance / transform / timed_power_up
+
+_FORM_GROUPS = {"stance": "stance", "transform": "transform"}
+
+
+def _form_group(o: dict, kind: str) -> str:
+    return o.get("exclusive_group") or _FORM_GROUPS.get(kind) or f"power_up:{o.get('id')}"
+
+
+def _form_blocked(forms: dict, fid: Any, o: dict) -> bool:
+    """conflict_with: новая форма отвергается, если активна конфликтующая (в обе стороны)."""
+    mine = set(o.get("conflict_with") or ())
+    return any(r["id"] in mine or fid in (r.get("conflict_with") or ()) for r in forms.values())
+
+
+def exit_form(h: OpHost, cx: OpCall, tgt: Any, group: str) -> None:
+    """Снять форму группы: моды формы уходят, её on_exit ops выполняются."""
+    rec = h.op_forms(tgt).pop(group, None)
+    if rec is None:
+        return
+    h.op_form_clear_mods(cx, tgt, rec["id"])
+    if rec.get("on_exit"):
+        h.op_nested_ops(cx, tgt, list(rec["on_exit"]))
+    h.op_note(cx, "form_exit", rec["id"])
+
+
+def _enter_form(h: OpHost, cx: OpCall, tgt: Any, o: dict, kind: str) -> None:
+    fid, group = o.get("id"), _form_group(o, kind)
+    forms = h.op_forms(tgt)
+    cur = forms.get(group)
+    if cur is not None and cur["id"] == fid:
+        return
+    if _form_blocked(forms, fid, o):
+        h.op_note(cx, "form_blocked", fid)
+        return
+    if cur is not None:
+        exit_form(h, cx, tgt, group)                 # сначала on_exit старой формы
+    rec = _form_record(h, cx, o, kind)
+    forms[group] = rec
+    _form_start(h, cx, tgt, o, rec)
+    h.op_note(cx, "form_enter", fid)
+
+
+def _form_record(h: OpHost, cx: OpCall, o: dict, kind: str) -> dict:
+    dur = o.get("duration")
+    return {"id": o.get("id"), "kind": kind, "until": cx.t + h.op_duration(dur, cx.ctx) if dur is not None else None,
+            "on_exit": list(o.get("on_exit") or []), "conflict_with": list(o.get("conflict_with") or []),
+            "abilities": dict(o.get("abilities") or {})}
+
+
+def _form_start(h: OpHost, cx: OpCall, tgt: Any, o: dict, rec: dict) -> None:
+    if o.get("stats"):
+        h.op_form_mods(cx, tgt, rec["id"], list(o["stats"]), rec["until"])
+    if o.get("on_enter"):
+        h.op_nested_ops(cx, tgt, list(o["on_enter"]))   # потом on_enter новой
+
+
+def form_abilities(forms: dict) -> dict:
+    """Набор способностей активных форм: {"add": [...], "remove": [...]} (данные; игра сама их не применяет)."""
+    out: dict = {"add": [], "remove": []}
+    for rec in forms.values():
+        for key in out:
+            out[key] += [a for a in (rec.get("abilities") or {}).get(key, ()) if a not in out[key]]
+    return out
+
+
+def op_stance(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    _enter_form(h, cx, tgt, o, "stance")
+
+
+def op_transform(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    _enter_form(h, cx, tgt, o, "transform")
+
+
+def op_timed_power_up(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """Временное усиление: форма со своей группой, duration обязателен; по истечении on_exit = расплата/последствия."""
+    _enter_form(h, cx, tgt, o, "timed_power_up")
+
+
 OP_HANDLERS: dict[str, Handler] = {
     "deal": op_deal, "heal": op_heal, "drain": op_drain, "set": op_set, "mod": op_mod,
     "buff": op_buff, "extend": op_extend, "remove_buff": op_remove_buff,
@@ -929,6 +1029,7 @@ OP_HANDLERS: dict[str, Handler] = {
     "retarget": op_retarget, "clear_aggro": op_clear_aggro,
     "escalate": op_escalate, "deescalate": op_deescalate, "trigger_true_form": op_trigger_true_form,
     "rotate_wheel": op_rotate_wheel, "display_wheel": op_display_wheel, "halt_wheel": op_halt_wheel,
+    "stance": op_stance, "transform": op_transform, "timed_power_up": op_timed_power_up,
 }
 
 
@@ -950,7 +1051,8 @@ def _note_unknown_kind(kind: Any) -> None:
 
 def apply_op(h: OpHost, cx: OpCall, tgt: Any, o: dict) -> None:
     """Одна операция на одной цели (условие `when` и выбор цели - забота хоста): значение -> DoT/HoT? -> обработчик."""
-    kind = canonical_kind(o.get("kind"))
+    o = canonicalize_op(o)
+    kind = o.get("kind")
     amount = compute_amount(o, cx.ctx, default_stat_of(o, h.op_stat_prefix(cx, tgt)))
     if kind in ("deal", "heal") and o.get("every") and h.op_periodic_ok(o):
         # DoT/HoT: тик каждые every с в течение duration

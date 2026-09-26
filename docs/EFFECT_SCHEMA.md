@@ -290,3 +290,10 @@ op kind before validation (`validate_op`), parsing (`Op.from_json`) and dispatch
   `nullify_technique`->`nullify`.
 - `exact = false` (listed, NOT resolved, NOT counted): `dash/teleport/pull/push` need `move` + `mode=...`, `swap`, `debuff`, `erase`, `copy_technique`.
 - Unknown kinds are still rejected. Yardstick: `qa.py coverage` (corpus tests/fixtures/ability_corpus.json).
+
+## Forms and movement (slice F1)
+
+- **Alias params.** A row of `lua_content/kind_aliases.lua` may carry `params`; `ops.canonicalize_op(op)` renames the kind and fills them (the op's own fields win; a non-alias op comes back as the same object). `dash|teleport|pull|push|swap` = `move` with `mode` = the same name. `canonical_kind` still returns just the canon name.
+- **`move` modes** (manager `MOVE_DEST`): `dash`=`charge` (self toward the other party, stops 1.5 short), `push`=`knockback`, `pull`, `teleport` (`to=[x,y]` or `{x,y}`, else behind the other party), `swap` (exchange positions of the target and the other party), `strafe` (the only RNG). Positions are clamped by `world.clamp_position` (arena bounds of `lua_content/world.lua`) when the world has it. The validator lists the five classic modes in its message (golden text) and additionally accepts `MOVE_MODES_SPEC`.
+- **`stance` / `transform` / `timed_power_up`** (fields: `id`, `exclusive_group`, `conflict_with`, `duration`, `on_enter`, `on_exit`; `transform` also `stats` = mod-ops active while the form lasts and `abilities = {add, remove}`). Default group: `stance` / `transform` / `power_up:<id>`. A form of the same group replaces the active one: the old `on_exit` runs first, then the new `on_enter`; an active form listed in `conflict_with` (either way) blocks the new one; with a `duration` the manager reverts the form in `update` (mods removed, `on_exit` run = the aftermath of `timed_power_up`). `timed_power_up` requires `duration`. State: `unit.external["forms"]`. The game has no ability-set concept: `EffectManager.form_abilities(entity)` exposes the add/remove lists as data. The training room (`EffectRuntime`) records forms but neither applies `stats` nor expires them.
+

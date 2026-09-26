@@ -68,16 +68,17 @@ return {
     "призвать (клавы, шары истины, куклы); в комнате — только строка лога"),
   k("possess", "planned", { "target" }, {},
     "вселиться: Entity->JSON (serialization), пересадка управления"),
-  k("transform", "planned", { "to" }, { "duration", "stats" },
+  k("transform", "op_transform", { "id" }, { "duration", "stats", "abilities", "on_enter", "on_exit", "exclusive_group", "conflict_with" },
     "трансформация (Gear, Jubi, Super Saiyan)"),
-  k("stance", "planned", { "id" }, { "exclusive_group" },
+  k("stance", "op_stance", { "id" }, { "exclusive_group", "conflict_with", "duration", "on_enter", "on_exit" },
     "стойка/режим: swap набора способностей"),
 
   -- движение / позиция ----------------------------------------------------------
   k("move", "op_move", { "target", "mode", "distance" }, { "toward" },
-    "mode: knockback | pull | dash; исполнитель — менеджер (координаты мира)"),
-  k("teleport", "planned", { "target", "to" }, {}, "мгновенная смена позиции"),
-  k("swap", "planned", { "a", "b" }, {}, "обмен позициями (перестановка Акасуны)"),
+    "mode: knockback | push | pull | dash | teleport | swap; исполнитель — менеджер (координаты мира)"),
+  k("teleport", "alias:move", { "target" }, { "to" }, "alias of move mode=teleport (kind_aliases.lua)"),
+  k("swap", "alias:move", { "target" }, {}, "alias of move mode=swap (kind_aliases.lua)"),
+  k("timed_power_up", "op_timed_power_up", { "id", "duration" }, { "stats", "on_enter", "on_exit" }, "temporary power-up; on_exit = the drawback at expiry"),
 
   -- управление / восприятие ------------------------------------------------------
   k("dodge", "planned", { "chance" }, {}, "гарантированное уклонение на окно"),

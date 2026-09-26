@@ -104,7 +104,6 @@
    "C901": 2,
    "PLR0911": 1,
    "PLR0913": 4,
-   "SIM114": 1,
    "dup_defs": 1
   },
   "src/effects/runtime.py": {
@@ -259,7 +258,6 @@
  },
  "functions": {
   "src/core/game_core.py::GameCore.start": 13,
-  "src/effects/manager.py::EffectManager._move": 13,
   "src/effects/manager.py::EffectManager.can_cast": 15,
   "src/effects/manager.py::EffectManager.cast": 12,
   "src/effects/manager.py::EffectManager.emit": 24,
@@ -324,16 +322,15 @@
   "RET505": 6,
   "RUF012": 2,
   "SIM102": 17,
-  "SIM105": 1,
-  "SIM114": 1
+  "SIM105": 1
  },
  "totals": {
   "blind_except": 81,
-  "cc11": 41,
+  "cc11": 40,
   "cc_max": 29,
   "dup_defs": 4,
   "layers_broken": 10,
-  "ruff": 269,
+  "ruff": 268,
   "vulture": 13
  },
  "version": 1

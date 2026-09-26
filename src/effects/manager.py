@@ -46,7 +46,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable, Optional, Protocol
 
 from . import damage
-from .ops import OpCall, Periodic, Tracked, apply_op, replace_contribution_game
+from .ops import OpCall, Periodic, Tracked, apply_op, form_abilities, replace_contribution_game
 from .runtime import EffectRuntime, Unit, buff_fields, resolve_value, rules
 
 logger = logging.getLogger(__name__)
@@ -411,6 +411,42 @@ class EntityState:
 
 # ================================================================ manager
 
+def _explicit_point(to: Any) -> Optional[tuple[float, float]]:
+    """`to` как [x, y] или {"x":, "y":} -> точка; иначе None."""
+    if isinstance(to, dict) and "x" in to and "y" in to:
+        return float(to["x"]), float(to["y"])
+    if isinstance(to, (list, tuple)) and len(to) == 2:
+        return float(to[0]), float(to[1])
+    return None
+
+
+def _dest_knockback(g: tuple, dist: float, _rng) -> tuple[float, float]:
+    mx, my, _ox, _oy, ux, uy, _d = g
+    return mx + ux * dist, my + uy * dist                       # цель - от источника
+
+
+def _dest_toward(g: tuple, dist: float, _rng) -> tuple[float, float]:
+    mx, my, _ox, _oy, ux, uy, d = g
+    step = max(0.0, min(dist, d - 1.5))                          # до 1.5 от второй стороны
+    return mx - ux * step, my - uy * step
+
+
+def _dest_strafe(g: tuple, dist: float, rng) -> tuple[float, float]:
+    mx, my, _ox, _oy, ux, uy, _d = g
+    side = 1.0 if rng.random() < 0.5 else -1.0                   # шаг в сторону, поперёк линии атаки
+    return mx - uy * dist * side, my + ux * dist * side
+
+
+def _dest_blink(g: tuple, _dist: float, _rng) -> tuple[float, float]:
+    _mx, _my, ox, oy, ux, uy, _d = g
+    return ox - ux * 1.5, oy - uy * 1.5                          # за спину цели
+
+
+# режим move -> точка назначения (dash = charge, push = knockback: имена спецификации)
+MOVE_DEST: dict = {"knockback": _dest_knockback, "push": _dest_knockback, "pull": _dest_toward,
+                   "charge": _dest_toward, "dash": _dest_toward, "strafe": _dest_strafe}
+
+
 class EffectManager:
     def __init__(self, world: Optional[World] = None, abilities: Optional[dict[str, dict]] = None,
                  rng: Optional[random.Random] = None):
@@ -486,6 +522,7 @@ class EffectManager:
         for st in list(self.states.values()):
             if not is_alive(st.entity) and not st.periodic:
                 continue
+            self._expire_forms(st, now)
             for k in [k for k, (until, _l) in st.external.items() if until <= now]:
                 del st.external[k]
             for k in [k for k, (until, _t, _v) in st.vision_vs.items() if until <= now]:
@@ -948,6 +985,35 @@ class EffectManager:
     def op_move(self, cx: OpCall, tgt: EntityState, o: dict) -> None:
         self._move(cx.source, tgt, o, cx.primary)
 
+    # --- формы (ops.py stance/transform/timed_power_up): запись в unit.external["forms"], моды формы в st.external ---
+    def op_forms(self, tgt: EntityState) -> dict:
+        return tgt.unit.external.setdefault("forms", {})
+
+    def op_form_mods(self, cx: OpCall, tgt: EntityState, fid: str, mods: list, until: Optional[float]) -> None:
+        for i, mo in enumerate(mods):                  # stat override: mod set/mul, пока форма активна
+            scratch: dict[str, float] = {}
+            tgt.runtime._apply_mod(mo, cx.ctx, tgt.unit, sink=scratch)
+            tgt.external[("form", fid, i)] = (1e18 if until is None else until, scratch)
+        tgt.refresh(self.now)
+
+    def op_form_clear_mods(self, _cx: OpCall, tgt: EntityState, fid: str) -> None:
+        for k in [k for k in tgt.external if isinstance(k, tuple) and k[:2] == ("form", fid)]:
+            del tgt.external[k]
+        tgt.refresh(self.now)
+
+    def form_abilities(self, entity) -> dict:
+        """Данные: способности, которые активные формы добавляют/убирают (в игре нет набора способностей формы - только запрос)."""
+        st = self.state(entity)
+        return form_abilities(st.unit.external.get("forms") or {}) if st else {"add": [], "remove": []}
+
+    def _expire_forms(self, st: EntityState, now: float) -> None:
+        forms = st.unit.external.get("forms") or {}
+        for group in [g for g, r in forms.items() if r.get("until") is not None and r["until"] <= now]:
+            rec = forms.pop(group)
+            self.op_form_clear_mods(None, st, rec["id"])
+            if rec.get("on_exit"):
+                self._run_ops(st, list(rec["on_exit"]), st.entity, f"form:{rec['id']}#exit", ())
+
     def op_note(self, cx: OpCall, what: str, *args) -> None:
         """В игре лога операций нет (его ведёт только тренировочная комната)."""
 
@@ -1025,32 +1091,28 @@ class EffectManager:
                                     st.faction, int(getattr(st.entity, "level", 1) or 1), st.entity)
 
     def _move(self, st, tgt_st, o, primary) -> None:
-        """Рывок к цели, отбрасывание, притягивание, переход за спину цели."""
-        mode, dist = o.get("mode"), float(o.get("distance", 5.0) or 5.0)
+        """Рывок, отбрасывание/толчок, притягивание, телепорт, обмен местами (режимы: MOVE_DEST). Границы: world.clamp_position
+        (границы арены из lua_content/world.lua); без мира - без ограничения. Детерминированно; ГСЧ только у strafe."""
+        mode = o.get("mode")
+        dist = float(o.get("distance", 5.0) or 5.0)
         other = primary if tgt_st is st else st.entity   # от кого/к кому двигаться
-        if other is None:
+        fixed = _explicit_point(o.get("to")) if mode == "teleport" else None
+        if other is None and fixed is None:
             return
-        mx, my = position(tgt_st.entity)
-        ox, oy = position(other)
-        dx, dy = mx - ox, my - oy
-        d = math.hypot(dx, dy) or 1.0
-        ux, uy = dx / d, dy / d
-        if mode == "knockback":          # цель - от источника
-            nx, ny = mx + ux * dist, my + uy * dist
-        elif mode == "pull":             # цель - к источнику, до 1.5 от него
-            step = max(0.0, min(dist, d - 1.5))
-            nx, ny = mx - ux * step, my - uy * step
-        elif mode == "charge":           # сам - к цели, до 1.5 от неё
-            step = max(0.0, min(dist, d - 1.5))
-            nx, ny = mx - ux * step, my - uy * step
-        elif mode == "strafe":           # шаг в сторону, поперёк линии атаки
-            side = 1.0 if self.rng.random() < 0.5 else -1.0
-            nx, ny = mx - uy * dist * side, my + ux * dist * side
-        else:                            # blink: за спину цели
-            nx, ny = ox - ux * 1.5, oy - uy * 1.5
+        me = position(tgt_st.entity)
+        ot = position(other) if other is not None else me
+        if mode == "swap":
+            self._place(other, *me)
+            self._place(tgt_st.entity, *ot)
+            return
+        d = math.hypot(me[0] - ot[0], me[1] - ot[1]) or 1.0
+        geo = (me[0], me[1], ot[0], ot[1], (me[0] - ot[0]) / d, (me[1] - ot[1]) / d, d)
+        dest = fixed or MOVE_DEST.get(mode, _dest_blink)(geo, dist, self.rng)
+        self._place(tgt_st.entity, *dest)
+
+    def _place(self, e, nx: float, ny: float) -> None:
         if self.world is not None and hasattr(self.world, "clamp_position"):
             nx, ny = self.world.clamp_position(nx, ny)
-        e = tgt_st.entity
         if hasattr(e, "move_to"):
             e.move_to(nx, ny)
         else:

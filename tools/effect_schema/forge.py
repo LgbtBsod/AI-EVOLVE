@@ -240,6 +240,15 @@ def primitive_effects() -> list[dict]:
             {"kind": "binding_vow", "target": "self", "vow_id": "forge_vow", "duration": dur(5),
              "cost": [{"kind": "drain", "target": "self", "stat": "hp", "op": "sub", "value": {"flat": 10}}],
              "gain": [{"kind": "mod", "target": "self", "stat": "strength", "op": "add", "value": {"flat": 5}}]}], "combat"),
+        # формы: стойка, превращение (моды на время формы), усиление с расплатой при истечении
+        ev("prim.forms", "combat_start", [
+            {"kind": "stance", "target": "self", "id": "forge_stance", "exclusive_group": "forge_stance", "duration": dur(6)},
+            {"kind": "transform", "target": "self", "id": "forge_form", "duration": dur(5),
+             "stats": [{"kind": "mod", "target": "self", "stat": "strength", "op": "mul", "value": {"flat": 1.5}}],
+             "on_exit": [{"kind": "mod", "target": "self", "stat": "strength", "op": "add", "value": {"flat": -1}, "duration": dur(2)}]},
+            {"kind": "timed_power_up", "target": "self", "id": "forge_power", "duration": dur(4),
+             "on_exit": [{"kind": "drain", "target": "self", "stat": "hp", "op": "sub", "value": {"flat": 1}}]},
+        ], "form"),
         # кража и применение техники
         ev("prim.learn", "use", [
             {"kind": "learn", "target": "self", "ability_id": "forge_technique"},

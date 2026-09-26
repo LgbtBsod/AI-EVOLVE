@@ -1,6 +1,6 @@
 -- lua_content/kind_aliases.lua
 -- spec kind names (docs/EFFECT_SYSTEM_DESIGN.md) -> canon op kinds of OP_HANDLERS; read by canonical_kind() and `qa.py coverage`
--- exact = true : pure rename, the canon handler does the same thing (content may use either name; traces are identical).
+-- exact = true : pure rename (optionally `params` = fields the alias implies), the canon handler does the same thing (content may use either name; traces are identical).
 -- exact = false: a variant the canon kind cannot say by name alone (needs an extra field or is weaker); listed for `qa.py coverage`, NOT resolved, NOT counted.
 return {
   aliases = {
@@ -12,11 +12,12 @@ return {
     use_learned     = { canon = "use_learned_technique", exact = true, note = "op_use_learned_technique" },
     create_minion   = { canon = "summon",               exact = true,  note = "op_summon: summon + count" },
     nullify_technique = { canon = "nullify",            exact = true,  note = "op_nullify: what=abilities" },
-    dash     = { canon = "move", exact = false, note = "move mode=charge: the alias cannot inject the mode" },
-    teleport = { canon = "move", exact = false, note = "move mode=blink" },
-    pull     = { canon = "move", exact = false, note = "move mode=pull" },
-    push     = { canon = "move", exact = false, note = "move mode=knockback" },
-    swap     = { canon = "move", exact = false, note = "no swap mode in MOVE_MODES" },
+    -- movement family: the alias row carries the implied `params` (canonicalize_op fills them; the op's own fields win)
+    dash     = { canon = "move", exact = true, params = { mode = "dash" },     note = "move mode=dash: self toward the target, stops 1.5 short" },
+    teleport = { canon = "move", exact = true, params = { mode = "teleport" }, note = "move mode=teleport: to=[x,y] or behind the target" },
+    pull     = { canon = "move", exact = true, params = { mode = "pull" },     note = "move mode=pull: target toward the source" },
+    push     = { canon = "move", exact = true, params = { mode = "push" },     note = "move mode=push: target away from the source" },
+    swap     = { canon = "move", exact = true, params = { mode = "swap" },     note = "move mode=swap: exchange positions with the other party" },
     debuff   = { canon = "buff", exact = false, note = "buff carries mods via a buff record; semantics differ" },
     erase    = { canon = "kill", exact = false, note = "kill is weaker: no removal from the world / memory" },
     copy_technique = { canon = "learn", exact = false, note = "learn needs observed_technique from perception" },

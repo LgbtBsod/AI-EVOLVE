@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from src.effects.ops import canonical_kind
+from src.effects.ops import canonical_kind, canonicalize_op
 
-from .schema import (OP_KINDS, TARGETS, OPS, TRIGGER_KINDS, EVENTS, FLAGS, MOVE_MODES, AREA_AFFECTS,
+from .schema import (OP_KINDS, TARGETS, OPS, TRIGGER_KINDS, EVENTS, FLAGS, MOVE_MODES, MOVE_MODES_SPEC, AREA_AFFECTS,
                      TOWARD, TOWARD_STATS, CONTEXT_ONLY_STATS, RESOURCE_STATS, is_derived_stat, is_stat)
 
 
@@ -133,13 +133,18 @@ def _c_flags_extend(o, kind, path, ie):
 _REQ_EARLY = {
     "apply_effect": ("buff_id", "kind=apply_effect requires buff_id (the id of the effect to apply)"),
     "summon": ("summon", "kind=summon requires summon (creature type)"),
+    "stance": ("id", "kind=stance requires id (the form id)"),
+    "transform": ("id", "kind=transform requires id (the form id)"),
+    "timed_power_up": ("id", "kind=timed_power_up requires id (the form id)"),
 }
 
 
 def _c_required_early(o, kind, path, ie):
     if kind in _REQ_EARLY and not o.get(_REQ_EARLY[kind][0]):
         return [_REQ_EARLY[kind][1]]
-    if kind == "move" and o.get("mode") not in MOVE_MODES:
+    if kind == "timed_power_up" and o.get("id") and o.get("duration") is None:
+        return ["kind=timed_power_up requires duration"]
+    if kind == "move" and o.get("mode") not in MOVE_MODES | MOVE_MODES_SPEC:
         return [f"kind=move requires mode in {sorted(MOVE_MODES)}"]
     return []
 
@@ -226,7 +231,8 @@ _PREFIXED = (_c_when, _c_fail)
 def validate_op(o: dict, path: str, item_effects=()) -> list[str]:
     if not isinstance(o, dict):
         return [f"{path}: not a dict"]
-    kind = canonical_kind(o.get("kind"))
+    o = canonicalize_op(o)          # spec alias -> canon op with the implied params (dash -> move mode=dash)
+    kind = o.get("kind")
     if kind not in OP_KINDS:
         return [f"{path}: unknown kind {kind!r}"]
     errs: list[str] = []

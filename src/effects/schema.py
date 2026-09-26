@@ -39,7 +39,10 @@ OP_KINDS = {
     "apply_effect",  # применить другой эффект по id
     "kill",         # убить цель
     "summon",       # призвать существ: summon = тип, count = сколько (менеджер эффектов)
-    "move",         # переместить: mode = charge | knockback | pull | blink | strafe, distance
+    "move",         # переместить: mode = charge | knockback | pull | blink | strafe | dash | push | teleport | swap, distance
+    "stance",       # форма-стойка: id, exclusive_group, conflict_with, duration, on_enter/on_exit ops (docs/EFFECT_SCHEMA.md "Forms")
+    "transform",    # stance + stats (mod-ops, пока форма активна) + abilities {add, remove}
+    "timed_power_up",  # временное усиление: transform со своей группой; duration обязателен, on_exit = расплата
 
     # --- примитивы боя (аудит Сукуна/Годжо/Тоджи): все через существующие поля Op ---
     "resist",       # временный резист типа урона: damage_type + value (+ duration) -> mod resist_<тип>
@@ -91,6 +94,7 @@ MAHORAGA_OP_FIELDS = {
 BUFF_BACKED_KINDS = {"block", "nullify", "cancel_technique", "untargetable", "sever", "binding_vow"}
 
 MOVE_MODES = {"charge", "knockback", "pull", "blink", "strafe"}
+MOVE_MODES_SPEC = {"dash", "push", "teleport", "swap"}   # names of the spec kinds (kind_aliases.lua params); accepted next to MOVE_MODES
 
 # area - ВСЕ живые в радиусе (radius; center = "target" | "self"): френдли фаер,
 # заклинатель тоже попадает под свой круг. affects сужает круг:
