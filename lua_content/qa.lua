@@ -219,6 +219,9 @@ return {
     { name = "coverage", cmd = "python tools/qa.py coverage --result", parse = "result_line", cost = "low", tags = { "effects" },
       watches = { "src/effects/ops.py", "lua_content/kind_aliases.lua", "tests/fixtures/ability_corpus.json", "lua_content/qa.lua" },
       detail = [[^(?!RESULT |repro:)\S]], what = "share of the 60-ability corpus the canon effect system expresses (FAIL under coverage.floor, warn under target)" },
+    { name = "coverage_holdout", cmd = "python tools/qa.py coverage --corpus holdout --result", parse = "result_line", cost = "low", tags = { "effects" },
+      watches = { "src/effects/**", "lua_content/kind_aliases.lua", "tests/fixtures/ability_corpus_holdout.json", "lua_content/qa.lua" },
+      detail = [[^(?!RESULT |repro:)\S]], what = "share of the independently tagged 60-ability HOLDOUT corpus the canon expresses (FAIL under coverage.holdout_floor, warn under holdout_target)" },
     { name = "hygiene", cmd = "python tools/qa.py hygiene --result", parse = "result_line", cost = "low", always = true,
       tags = { "hygiene" }, detail = [[^(?!RESULT |repro:)\S]],
       what = "git ls-files has no .venv*/ target/ *.so *.pyd *.pyc saves/*.db dev_probe_output/ or file > 1 MB; .gitignore covers the required patterns" },
@@ -409,7 +412,7 @@ return {
   new_tool = { similar_score = 6, show = 3 },
   -- qa.py coverage (tools/qa_plugins/coverage.py): share of the 60-ability corpus (tests/fixtures/ability_corpus.json) the canon ops + exact aliases express.
   -- floor = ratchet on with_aliases (FAIL under it; raise it whenever the number rises, never lower it); target = warn below; spec = doc's full-spec share.
-  coverage = { floor = 95.0, target = 95.0, spec = 80.0 },
+  coverage = { floor = 95.0, target = 95.0, spec = 80.0, holdout_floor = 15.0, holdout_target = 80.0 },
   hygiene = {
     max_file_kb = 1024,          -- a tracked file above this fails (assets that must be bigger: list them in `allow`)
     allow = {},
@@ -428,12 +431,12 @@ return {
   tools = {
     required = { "purpose" },
     dup_threshold = 0.5,          -- token-set (Jaccard) similarity of name + purpose from which two tools are near-duplicates (today's closest pair: 0.54)
-    dup_allow = { "bench_pathfinding~check:pathfinding", "check:quality~check:quality_tools", "check:quality_tools~quality_metrics" },   -- intended look-alikes: "a~b" (ids sorted): the benchmark script and the pytest twin check
+    dup_allow = { "bench_pathfinding~check:pathfinding", "check:coverage~check:coverage_holdout", "check:quality~check:quality_tools", "check:quality_tools~quality_metrics" },   -- intended look-alikes: "a~b" (ids sorted): the benchmark script and the pytest twin check
     stopwords = { "the", "and", "for", "with", "from", "into", "that", "this", "are", "one", "per", "not", "all", "any", "its", "can", "use", "via",
                   "has", "was", "of", "to", "in", "on", "by", "or", "is", "it", "as", "no", "qa", "py", "python", "tool", "tools", "file", "files" },
     skip_dirs = { "qa_plugins", "qa_checks" },   -- extension points: each file inside is harvested as its own tool
     drift_ignore = {},            -- `qa.py WORD` mentions of CLAUDE.md that are not subcommands on purpose
-    cell_width = 110, max_lines = 140, max_detail = 10, max_find = 8,
+    cell_width = 110, max_lines = 145, max_detail = 10, max_find = 8,
     groups = {
       { id = "verify",  title = "verify - is the change correct" },
       { id = "read",    title = "read / navigate - instead of reading raw files" },

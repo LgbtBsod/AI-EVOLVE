@@ -39,3 +39,19 @@ def test_floor_is_a_ratchet_and_alias_targets_are_canon():
     c = cov.compute(CORPUS, cov.canon_kinds(), cov.alias_rows())
     assert cov.verdict(c, cfg) in ("ok", "warn")
     assert all(v["canon"] in cov.canon_kinds() for v in cov.alias_rows().values())
+
+
+def test_holdout_corpus_shape_and_disjoint_ids():
+    main = json.loads(cov.CORPUS.read_text(encoding="utf-8"))
+    hold = json.loads(cov.corpus_path("holdout").read_text(encoding="utf-8"))
+    assert len(hold) == 60 and {a["id"] for a in hold}.isdisjoint({a["id"] for a in main})
+    assert all(a["hand_canon"] is None and isinstance(a["lacks"], list) for a in hold)
+
+
+def test_holdout_config_and_floor_ratchet():
+    from probe_settings import qa_settings
+    cfg = qa_settings()["coverage"]
+    assert cov.corpus_cfg(cfg, "holdout") == {"floor": cfg["holdout_floor"], "target": cfg["holdout_target"]}
+    hold = json.loads(cov.corpus_path("holdout").read_text(encoding="utf-8"))
+    c = cov.compute(hold, cov.canon_kinds(), cov.alias_rows())
+    assert c["with_aliases"] + 1e-9 >= cfg["holdout_floor"]

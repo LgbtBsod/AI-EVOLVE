@@ -13,6 +13,7 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `check:boot_smoke` | `python tools/qa.py check --name boot_smoke` | GameCore -> menu -> world -> plugins, offscreen buffer (skip without OpenGL/xvfb) | launching the game to see whether it starts | qa_report line | medium |
 | `check:combat_smoke` | `python tools/qa.py check --name combat_smoke` | combat/effects/leveling formulas (no window) | hand-testing combat formulas | qa_report line | low |
 | `check:coverage` | `python tools/qa.py check --name coverage` | share of the 60-ability corpus the canon effect system expresses (FAIL under coverage.floor, warn under... | - | qa_report line | low |
+| `check:coverage_holdout` | `python tools/qa.py check --name coverage_holdout` | share of the independently tagged 60-ability HOLDOUT corpus the canon expresses (FAIL under... | - | qa_report line | low |
 | `check:damage` | `python tools/qa.py check --name damage` | damage pipeline: Rust kernel vs the Python twin (bit for bit), stage cases, the neutral guard | hand-checking damage numbers | qa_report line | low |
 | `check:dead-code` | `python tools/qa.py check --name dead-code` | modules nobody imports (informational count) | grepping for unused modules | qa_report line | low |
 | `check:determinism-quick` | `python tools/qa.py check --name determinism-quick` | two same-seed pairs must produce identical trajectories | diffing two same-seed runs by eye | qa_report line | medium |

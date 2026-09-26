@@ -1,0 +1,837 @@
+[
+ {
+  "id": 101,
+  "character": "Edward Elric",
+  "source": "FMA",
+  "ability": "Equivalent exchange transmutation",
+  "spec_kinds": [
+   "consume",
+   "create_ex_nihilo",
+   "transform"
+  ],
+  "lacks": [
+   "exchange.equal_mass"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 102,
+  "character": "Edward Elric",
+  "source": "FMA",
+  "ability": "Clap-and-forge automail blade",
+  "spec_kinds": [
+   "consume",
+   "mod",
+   "transform"
+  ],
+  "lacks": [],
+  "hand_canon": null
+ },
+ {
+  "id": 103,
+  "character": "Izuku Midoriya",
+  "source": "MHA",
+  "ability": "One For All Full Cowl",
+  "spec_kinds": [
+   "buff",
+   "drain",
+   "timed_power_up"
+  ],
+  "lacks": [
+   "self_damage_scaling"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 104,
+  "character": "Eraser Head",
+  "source": "MHA",
+  "ability": "Erasure",
+  "spec_kinds": [
+   "cancel_technique",
+   "nullify"
+  ],
+  "lacks": [
+   "nullify.while_eye_contact"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 105,
+  "character": "Tanjiro",
+  "source": "Demon Slayer",
+  "ability": "Water Breathing Surface Slash",
+  "spec_kinds": [
+   "dash",
+   "deal"
+  ],
+  "lacks": [],
+  "hand_canon": null
+ },
+ {
+  "id": 106,
+  "character": "Eren Yeager",
+  "source": "AoT",
+  "ability": "Attack Titan transformation",
+  "spec_kinds": [
+   "heal",
+   "stance",
+   "transform"
+  ],
+  "lacks": [
+   "transform.requires_self_injury"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 107,
+  "character": "Eren Yeager",
+  "source": "AoT",
+  "ability": "Founding Titan rumbling",
+  "spec_kinds": [
+   "command",
+   "summon",
+   "zone"
+  ],
+  "lacks": [
+   "command.ancestry_gated"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 108,
+  "character": "Lelouch",
+  "source": "Code Geass",
+  "ability": "Zero's rebellion speech",
+  "spec_kinds": [
+   "dominance",
+   "reputation",
+   "set_faction"
+  ],
+  "lacks": [],
+  "hand_canon": null
+ },
+ {
+  "id": 109,
+  "character": "Vin",
+  "source": "Mistborn",
+  "ability": "Steel Push on coins",
+  "spec_kinds": [
+   "consume",
+   "push"
+  ],
+  "lacks": [
+   "consume.metal_reserve"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 110,
+  "character": "Vin",
+  "source": "Mistborn",
+  "ability": "Pewter burn",
+  "spec_kinds": [
+   "buff",
+   "fuel_consume",
+   "timed_power_up"
+  ],
+  "lacks": [
+   "burn.duration_debt_crash"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 111,
+  "character": "Kelsier",
+  "source": "Mistborn",
+  "ability": "Soothing emotions",
+  "spec_kinds": [
+   "dominance",
+   "status"
+  ],
+  "lacks": [
+   "emotion_control"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 112,
+  "character": "Kaladin",
+  "source": "Stormlight",
+  "ability": "Windrunner lashing",
+  "spec_kinds": [
+   "mod",
+   "pull",
+   "push"
+  ],
+  "lacks": [
+   "gravity_direction_change"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 113,
+  "character": "Shallan",
+  "source": "Stormlight",
+  "ability": "Lightweaving illusion",
+  "spec_kinds": [
+   "hypnosis",
+   "perceive",
+   "status"
+  ],
+  "lacks": [
+   "illusion.memory_based"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 114,
+  "character": "Rand al'Thor",
+  "source": "Wheel of Time",
+  "ability": "Balefire",
+  "spec_kinds": [
+   "kill",
+   "time_erase"
+  ],
+  "lacks": [
+   "erase.retroactive_window_by_power"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 115,
+  "character": "Moiraine",
+  "source": "Wheel of Time",
+  "ability": "Air weave shield",
+  "spec_kinds": [
+   "block",
+   "immune"
+  ],
+  "lacks": [],
+  "hand_canon": null
+ },
+ {
+  "id": 116,
+  "character": "Egwene",
+  "source": "Wheel of Time",
+  "ability": "Healing weave",
+  "spec_kinds": [
+   "heal",
+   "status_mod"
+  ],
+  "lacks": [
+   "heal.cost_to_resistance"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 117,
+  "character": "Harry Potter",
+  "source": "Harry Potter",
+  "ability": "Expecto Patronum",
+  "spec_kinds": [
+   "block",
+   "summon"
+  ],
+  "lacks": [
+   "summon.emotion_powered"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 118,
+  "character": "Hermione",
+  "source": "Harry Potter",
+  "ability": "Time-Turner replay",
+  "spec_kinds": [
+   "snapshot",
+   "time_loop"
+  ],
+  "lacks": [
+   "loop.bounded_hours"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 119,
+  "character": "Dumbledore",
+  "source": "Harry Potter",
+  "ability": "Priori Incantatem",
+  "spec_kinds": [
+   "copy_last_cast",
+   "reveal"
+  ],
+  "lacks": [
+   "read.wand_history"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 120,
+  "character": "Percy Jackson",
+  "source": "Percy Jackson",
+  "ability": "Water regeneration",
+  "spec_kinds": [
+   "aura",
+   "heal"
+  ],
+  "lacks": [
+   "heal.terrain_gated"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 121,
+  "character": "Annabeth",
+  "source": "Percy Jackson",
+  "ability": "Architect blueprint recall",
+  "spec_kinds": [
+   "learn",
+   "register_phenomenon"
+  ],
+  "lacks": [
+   "design.build_structure"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 122,
+  "character": "Wizard",
+  "source": "D&D 5e",
+  "ability": "Fireball",
+  "spec_kinds": [
+   "deal",
+   "zone"
+  ],
+  "lacks": [
+   "target.sphere_area"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 123,
+  "character": "Wizard",
+  "source": "D&D 5e",
+  "ability": "Counterspell",
+  "spec_kinds": [
+   "cancel_technique",
+   "nullify_technique"
+  ],
+  "lacks": [
+   "reaction.interrupt_cast"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 124,
+  "character": "Wizard",
+  "source": "D&D 5e",
+  "ability": "Wish",
+  "spec_kinds": [
+   "wish"
+  ],
+  "lacks": [],
+  "hand_canon": null
+ },
+ {
+  "id": 125,
+  "character": "Druid",
+  "source": "D&D 5e",
+  "ability": "Polymorph",
+  "spec_kinds": [
+   "set",
+   "transform"
+  ],
+  "lacks": [
+   "transform.replace_stats_wholly"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 126,
+  "character": "Cleric",
+  "source": "D&D 5e",
+  "ability": "Banishment",
+  "spec_kinds": [
+   "delay",
+   "status",
+   "untargetable"
+  ],
+  "lacks": [
+   "target.extraplanar_return"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 127,
+  "character": "Bard",
+  "source": "D&D 5e",
+  "ability": "Bardic Inspiration",
+  "spec_kinds": [
+   "buff",
+   "counter_delta"
+  ],
+  "lacks": [
+   "resource.granted_die_pool"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 128,
+  "character": "Yoda",
+  "source": "Star Wars",
+  "ability": "Force Lift",
+  "spec_kinds": [
+   "pull",
+   "telekinetic_weapon"
+  ],
+  "lacks": [
+   "lift.ship_scale_mass"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 129,
+  "character": "Obi-Wan",
+  "source": "Star Wars",
+  "ability": "Jedi Mind Trick",
+  "spec_kinds": [
+   "command",
+   "hypnosis"
+  ],
+  "lacks": [
+   "persuasion.will_check"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 130,
+  "character": "Neo",
+  "source": "The Matrix",
+  "ability": "Bullet time",
+  "spec_kinds": [
+   "dodge",
+   "global_time_scale"
+  ],
+  "lacks": [],
+  "hand_canon": null
+ },
+ {
+  "id": 131,
+  "character": "Neo",
+  "source": "The Matrix",
+  "ability": "Code sight",
+  "spec_kinds": [
+   "perceive",
+   "reveal",
+   "see_panels"
+  ],
+  "lacks": [],
+  "hand_canon": null
+ },
+ {
+  "id": 132,
+  "character": "Cobb",
+  "source": "Inception",
+  "ability": "Dream extraction",
+  "spec_kinds": [
+   "enter_dream",
+   "learn",
+   "read"
+  ],
+  "lacks": [
+   "dream.layers_time_dilation"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 133,
+  "character": "Arthur",
+  "source": "Inception",
+  "ability": "Zero-gravity kick",
+  "spec_kinds": [
+   "push",
+   "rule_override"
+  ],
+  "lacks": [],
+  "hand_canon": null
+ },
+ {
+  "id": 134,
+  "character": "Ariadne",
+  "source": "Inception",
+  "ability": "Dream architecture fold",
+  "spec_kinds": [
+   "create_ex_nihilo",
+   "space_manipulation"
+  ],
+  "lacks": [],
+  "hand_canon": null
+ },
+ {
+  "id": 135,
+  "character": "Mercy",
+  "source": "Overwatch",
+  "ability": "Resurrect",
+  "spec_kinds": [
+   "heal",
+   "mass_resurrect"
+  ],
+  "lacks": [
+   "resurrect.single_target_delay"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 136,
+  "character": "Tracer",
+  "source": "Overwatch",
+  "ability": "Recall",
+  "spec_kinds": [
+   "restore_state",
+   "teleport"
+  ],
+  "lacks": [
+   "state.rewind_hp_and_position_3s"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 137,
+  "character": "Gengar",
+  "source": "Pokemon",
+  "ability": "Perish Song",
+  "spec_kinds": [
+   "delay",
+   "kill",
+   "status"
+  ],
+  "lacks": [
+   "delay.countdown_visible"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 138,
+  "character": "Ditto",
+  "source": "Pokemon",
+  "ability": "Transform",
+  "spec_kinds": [
+   "copy",
+   "transform"
+  ],
+  "lacks": [],
+  "hand_canon": null
+ },
+ {
+  "id": 139,
+  "character": "Solaire",
+  "source": "Dark Souls",
+  "ability": "Sunbro summon sign",
+  "spec_kinds": [
+   "command",
+   "summon"
+  ],
+  "lacks": [
+   "coop.invite_other_player"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 140,
+  "character": "Malenia",
+  "source": "Elden Ring",
+  "ability": "Waterfowl Dance",
+  "spec_kinds": [
+   "dash",
+   "deal",
+   "heal"
+  ],
+  "lacks": [
+   "heal.lifesteal_on_hit_count"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 141,
+  "character": "Ranni",
+  "source": "Elden Ring",
+  "ability": "Age of Stars",
+  "spec_kinds": [
+   "change_tier",
+   "rule_override"
+  ],
+  "lacks": [
+   "world.shift_sky_rules"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 142,
+  "character": "Grey Knight Psyker",
+  "source": "Warhammer 40k",
+  "ability": "Smite",
+  "spec_kinds": [
+   "deal",
+   "status"
+  ],
+  "lacks": [
+   "cost.warp_perils_risk"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 143,
+  "character": "Eldar Farseer",
+  "source": "Warhammer 40k",
+  "ability": "Doom",
+  "spec_kinds": [
+   "debuff",
+   "mark",
+   "precognition"
+  ],
+  "lacks": [],
+  "hand_canon": null
+ },
+ {
+  "id": 144,
+  "character": "Liara T'Soni",
+  "source": "Mass Effect",
+  "ability": "Singularity",
+  "spec_kinds": [
+   "pull",
+   "status",
+   "zone"
+  ],
+  "lacks": [],
+  "hand_canon": null
+ },
+ {
+  "id": 145,
+  "character": "Shepard",
+  "source": "Mass Effect",
+  "ability": "Paragon persuasion",
+  "spec_kinds": [
+   "diplomacy",
+   "dominance",
+   "reputation"
+  ],
+  "lacks": [],
+  "hand_canon": null
+ },
+ {
+  "id": 146,
+  "character": "Aang",
+  "source": "Avatar TLA",
+  "ability": "Avatar State",
+  "spec_kinds": [
+   "stance",
+   "transform",
+   "unbounded"
+  ],
+  "lacks": [
+   "state.triggered_by_near_death"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 147,
+  "character": "Toph",
+  "source": "Avatar TLA",
+  "ability": "Metalbending",
+  "spec_kinds": [
+   "mod",
+   "telekinetic_weapon"
+  ],
+  "lacks": [
+   "material.metal_control"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 148,
+  "character": "Katara",
+  "source": "Avatar TLA",
+  "ability": "Bloodbending",
+  "spec_kinds": [
+   "blood_manipulation",
+   "command"
+  ],
+  "lacks": [
+   "condition.full_moon_only"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 149,
+  "character": "Merchant Guild",
+  "source": "Original",
+  "ability": "Bulk trading contract",
+  "spec_kinds": [
+   "contract",
+   "reputation"
+  ],
+  "lacks": [
+   "trade.price_discovery",
+   "inventory.stock_exchange"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 150,
+  "character": "Village Blacksmith",
+  "source": "Original",
+  "ability": "Forge a weapon from ore",
+  "spec_kinds": [
+   "consume",
+   "create_ex_nihilo"
+  ],
+  "lacks": [
+   "craft.recipe_quality"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 151,
+  "character": "Herbalist",
+  "source": "Original",
+  "ability": "Field dressing poultice",
+  "spec_kinds": [
+   "consume",
+   "heal"
+  ],
+  "lacks": [
+   "heal.needs_gathered_herb"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 152,
+  "character": "Terraformer",
+  "source": "Original",
+  "ability": "Raise a bridge over water",
+  "spec_kinds": [
+   "space_manipulation",
+   "zone"
+  ],
+  "lacks": [
+   "terrain.walkable_creation"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 153,
+  "character": "Scout",
+  "source": "Original",
+  "ability": "Reveal enemy ambush map",
+  "spec_kinds": [
+   "grant_vision",
+   "reveal"
+  ],
+  "lacks": [
+   "map.persistent_knowledge"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 154,
+  "character": "Diplomat",
+  "source": "Original",
+  "ability": "Broker a ceasefire",
+  "spec_kinds": [
+   "clear_aggro",
+   "diplomacy",
+   "set_aggro"
+  ],
+  "lacks": [
+   "faction.treaty_duration"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 155,
+  "character": "Banker",
+  "source": "Original",
+  "ability": "Loan with interest",
+  "spec_kinds": [
+   "contract",
+   "delay"
+  ],
+  "lacks": [
+   "economy.compound_interest",
+   "economy.debt_tracking"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 156,
+  "character": "Sung Jinwoo",
+  "source": "Solo Leveling",
+  "ability": "Shadow Extraction",
+  "spec_kinds": [
+   "create_minion",
+   "learn",
+   "summon"
+  ],
+  "lacks": [
+   "army.persistent_roster"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 157,
+  "character": "Sung Jinwoo",
+  "source": "Solo Leveling",
+  "ability": "Ruler's Authority",
+  "spec_kinds": [
+   "pull",
+   "push",
+   "telekinetic_weapon"
+  ],
+  "lacks": [],
+  "hand_canon": null
+ },
+ {
+  "id": 158,
+  "character": "Killua",
+  "source": "HxH",
+  "ability": "Godspeed lightning body",
+  "spec_kinds": [
+   "buff",
+   "dash",
+   "status"
+  ],
+  "lacks": [
+   "nen.transmuter_conversion"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 159,
+  "character": "Chrollo",
+  "source": "HxH",
+  "ability": "Skill Hunter book",
+  "spec_kinds": [
+   "learn_technique",
+   "steal",
+   "use_learned"
+  ],
+  "lacks": [
+   "steal.requires_ordered_conditions"
+  ],
+  "hand_canon": null
+ },
+ {
+  "id": 160,
+  "character": "Merlin",
+  "source": "Fate/GO",
+  "ability": "Garden of Avalon",
+  "spec_kinds": [
+   "heal",
+   "mass_resurrect",
+   "zone"
+  ],
+  "lacks": [],
+  "hand_canon": null
+ }
+]

@@ -17,7 +17,9 @@ from collections import Counter
 import qa_report as R
 from probe_settings import ROOT, qa_settings
 
-CORPUS = ROOT / "tests" / "fixtures" / "ability_corpus.json"
+FIXTURES = ROOT / "tests" / "fixtures"
+CORPUS = FIXTURES / "ability_corpus.json"
+CORPORA = {"ability_corpus": "", "holdout": "holdout_"}     # name -> key prefix of the floor/target in the `coverage` table
 FAMILIES = {"deal": "combat", "zone": "space", "aura": "space", "hypnosis": "control", "command": "control", "possess": "control",
             "dominance": "control", "perceive": "perception", "reveal": "perception", "precognition": "perception",
             "on_lethal": "trigger", "delay": "trigger", "transform": "form", "timed_power_up": "form", "stance": "form"}
@@ -91,9 +93,20 @@ def verdict(c: dict, cfg: dict) -> str:
     return "warn" if c["with_aliases"] < float(cfg.get("target", 90)) else "ok"
 
 
+def corpus_path(name: str):
+    return FIXTURES / ("ability_corpus_holdout.json" if name == "holdout" else f"{name}.json")
+
+
+def corpus_cfg(cfg: dict, name: str) -> dict:
+    """floor/target of the named corpus (`holdout_floor`/`holdout_target` for the holdout) as a plain floor/target dict."""
+    pre = CORPORA.get(name, "")
+    return {"floor": cfg.get(pre + "floor", 0), "target": cfg.get(pre + "target", 90 if not pre else 80)}
+
+
 def cmd_coverage(args) -> int:
-    cfg = qa_settings().get("coverage") or {}
-    c = compute(json.loads(CORPUS.read_text(encoding="utf-8")), canon_kinds(), alias_rows())
+    full = qa_settings().get("coverage") or {}
+    cfg = corpus_cfg(full, args.corpus)
+    c = compute(json.loads(corpus_path(args.corpus).read_text(encoding="utf-8")), canon_kinds(), alias_rows())
     text = line(c, cfg)
     if args.result:
         st = verdict(c, cfg)
@@ -111,6 +124,7 @@ def register(sub):
     p = sub.add_parser("coverage", help="share of the 60-ability corpus the canon effect system can express (floor ratchet)",
                        description=__doc__.strip().splitlines()[0], epilog=__doc__.split("\n\n", 1)[1],
                        formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--corpus", default="ability_corpus", help="ability_corpus (default) | holdout | another tests/fixtures/NAME.json")
     p.add_argument("--list", action="store_true", help="the blocked abilities grouped by blocking kind")
     p.add_argument("--result", action="store_true", help="machine form for `qa.py check` (RESULT line)")
     p.set_defaults(func=cmd_coverage)
