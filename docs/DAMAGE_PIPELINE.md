@@ -48,3 +48,7 @@ A hit's damage type = the first tag of its ability/effect that names a type in `
 
 `lua_content/damage.lua` (constants, types) -> `AI_EVOLVE_DAMAGE_LUA=path` swaps the file. `python tools/agent_play.py "spawn enemy golem_shard x3; until kills>=3 or dead max 60"` (scenario `golem_guard`),
 `python tools/bench_damage.py`, `python tools/qa.py check --name damage,play:golem_guard`.
+
+### Measured single-hit cost
+2026-09-26, Windows, i5-11600KF, `python tools/bench_damage.py --hits 200000 --repeat 5` (neutral mix): Python twin 2.81 us/hit, Rust single-call 1.47 us/hit (x1.9 faster), Rust batch 0.21 us/hit.
+Rich mix: twin 2.64 us, Rust single 1.49 us. So the Rust path is NOT slower per single hit (kernel call only; extra FFI calls around it in `damage.py:251-289` are not in this number).

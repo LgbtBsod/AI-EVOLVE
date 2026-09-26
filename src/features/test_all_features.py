@@ -361,10 +361,10 @@ class TestFeatureIntegration(unittest.TestCase):
         from src.features.terraforming import TerraformingSystem
         
         # Single Responsibility: Each system has one clear purpose
-        # Check that classes have focused method sets
-        neuro_methods = [m for m in dir(NeuroResonanceSystem) if not m.startswith('_')]
-        terraform_methods = [m for m in dir(TerraformingSystem) if not m.startswith('_')]
-        anticipation_methods = [m for m in dir(AdaptiveAnticipationSystem) if not m.startswith('_')]
+        # Check that classes have focused method sets (own members: inherited BaseComponent API is shared)
+        neuro_methods = [m for m in vars(NeuroResonanceSystem) if not m.startswith('_')]
+        terraform_methods = [m for m in vars(TerraformingSystem) if not m.startswith('_')]
+        anticipation_methods = [m for m in vars(AdaptiveAnticipationSystem) if not m.startswith('_')]
         
         # Each should have reasonable number of public methods (not too many = focused)
         self.assertLess(len(neuro_methods), 20)
@@ -380,14 +380,14 @@ class TestFeatureIntegration(unittest.TestCase):
         system = NeuroResonanceSystem()
         errors = []
         
-        def register_units():
+        def register_units(n):
             try:
                 for i in range(50):
-                    system.register_unit(f"thread_unit_{i}")
+                    system.register_unit(f"thread_unit_{n}_{i}")
             except Exception as e:
                 errors.append(e)
                 
-        threads = [threading.Thread(target=register_units) for _ in range(5)]
+        threads = [threading.Thread(target=register_units, args=(n,)) for n in range(5)]
         for t in threads:
             t.start()
         for t in threads:

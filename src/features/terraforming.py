@@ -10,7 +10,7 @@ from enum import Enum
 from typing import Any
 
 from src.core.architecture import BaseComponent, ComponentType, Priority
-from src.core.event_system import EventData as Event, EventSystem
+from src.core.event_system import EventSystem
 
 
 class TerrainModificationType(Enum):
@@ -47,6 +47,8 @@ class TerraformingSystem(BaseComponent):
     - Line of sight
     - Damage over time zones
     """
+
+    event_system: EventSystem | None = None    # шина событий; задаётся хозяином, иначе события не шлются
     
     def __init__(self, max_modifications: int = 100):
         super().__init__(ComponentType.SYSTEM, Priority.NORMAL)
@@ -89,16 +91,13 @@ class TerraformingSystem(BaseComponent):
             
         logging.debug(f"Terrain modification added: {mod_type.value} at {position}")
         
-        if EventSystem.instance:
-            EventSystem.instance.trigger_event(Event(
-                event_type="TERRAIN_MODIFIED",
-                data={
+        if self.event_system is not None:
+            self.event_system.emit("TERRAIN_MODIFIED", {
                     "type": mod_type.value,
                     "position": position,
                     "radius": radius,
                     "duration": duration
-                }
-            ))
+                }, source="terraforming")
             
     def _get_default_effects(self, mod_type: TerrainModificationType) -> dict[str, float]:
         """Get default effects for modification type."""

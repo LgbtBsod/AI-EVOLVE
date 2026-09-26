@@ -14,6 +14,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import threading
+import itertools
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -23,8 +24,7 @@ from blinker import Namespace, Signal
 
 logger = logging.getLogger(__name__)
 
-# Create a namespace for our signals
-event_namespace = Namespace()
+# Каждый EventSystem создаёт свой blinker Namespace (см. __init__): глобального нет.
 
 
 # ============================================================================
@@ -105,6 +105,8 @@ class EventSystem:
     
     def __init__(self, max_history_size: int = 1000) -> None:
         self._signals: dict[str, Signal] = {}
+        self._namespace = Namespace()          # свой на экземпляр: системы не делят обработчики
+        self._ids = itertools.count(1)
         self._subscriptions: dict[str, list[tuple[str, Callable]]] = {}
         self._event_history: list[EventData] = []
         self._max_history_size = max_history_size
@@ -172,7 +174,7 @@ class EventSystem:
         """Emit an event (O(1) dispatch via blinker)."""
         try:
             event = EventData(
-                event_id=f"{event_type}_{int(time.perf_counter() * 1000)}",
+                event_id=f"{event_type}_{next(self._ids)}",
                 event_type=event_type,
                 event_data=event_data,
                 source=source,
@@ -197,6 +199,9 @@ class EventSystem:
             try:
                 # Send with signal as sender to match the connection
                 signal.send(signal, event=event)
+                if event.state is EventState.FAILED:      # обработчик упал, остальные всё равно отработали
+                    self._stats.events_failed += 1
+                    return False
                 event.state = EventState.COMPLETED
                 self._stats.events_processed += 1
             except Exception as e:
@@ -233,8 +238,11 @@ class EventSystem:
                         # Users should define handlers as: handler(sender, event) or handler(sender, **kwargs)
                         handler(sender, event)
                 except Exception as e:
+                    # ошибка одного обработчика не должна останавливать остальных
                     logger.exception("Error in handler %s for %s: %s", subscriber_id, event_type, e)
-                    raise
+                    if event is not None:
+                        event.state = EventState.FAILED
+                        event.error_message = event.error_message or str(e)
             
             # Connect to signal
             signal.connect(wrapped_handler, sender=signal, weak=False)
@@ -300,7 +308,7 @@ class EventSystem:
     def _get_or_create_signal(self, event_type: str) -> Signal:
         """Get or create a signal for an event type."""
         if event_type not in self._signals:
-            self._signals[event_type] = event_namespace.signal(event_type)
+            self._signals[event_type] = self._namespace.signal(event_type)
         return self._signals[event_type]
     
     def process_events(self, max_events: int = 100) -> int:

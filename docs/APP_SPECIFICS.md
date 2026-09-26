@@ -149,14 +149,14 @@ Live vs dead: see section 2. `ai_evolve/`, `AI-EVOLVE/`, `game/` are imported on
 
 | # | Idea | Why | Size | Where |
 |---|---|---|---|---|
-| 1 | Make silent failures loud: log/raise on unknown op kind, emit or delete the 3 events, align FLAGS with CERTAIN_FLAGS, fix "~20" doc | Designer content silently does nothing | S | `ops.py:928`, `schema.py:113-117,145`, `docs/EFFECT_SCHEMA.md:164` |
+| 1 | DONE 2026-09-26: Make silent failures loud: log/raise on unknown op kind, emit or delete the 3 events, align FLAGS with CERTAIN_FLAGS, fix "~20" doc | Designer content silently does nothing | S | `ops.py:928`, `schema.py:113-117,145`, `docs/EFFECT_SCHEMA.md:164` |
 | 2 | Real `ally`/`allies` targeting (same faction, alive, radius) + tests | Schema promises it; companions exist | S | `manager.py:734-742`, `main_game_scene.py:471` |
 | 3 | Inject `random.Random(seed)` into EffectManager, re-record goldens; later named RNG streams (particles/ai/loot), lint global `random` in gameplay | Unrelated draws shift every hit | S then M | `main_game_scene.py:116`, `manager.py:419`, `rng_manager.py:144-149`, `particle_system.py` |
-| 4 | Harden BanditMemory: version + compare arm/context names, persist `baseline` | Adding a tactic wipes learning | S | `learning.py:78-141`, `hero_mind.py:58,156` |
+| 4 | DONE 2026-09-26: Harden BanditMemory: version + compare arm/context names, persist `baseline` | Adding a tactic wipes learning | S | `learning.py:78-141`, `hero_mind.py:58,156` |
 | 5 | Archive-by-tag then delete dead families: CAS, orphan core modules, `ai_evolve/`, `AI-EVOLVE/`, `game/`; port unique scenarios (Apocalypse Bringer, Mage Supremacy) to Lua specs first; add import-linter ban | Matches consolidation direction; removes name collisions | M | see section 2; `.importlinter`, `qa.lua:479` |
-| 6 | Fix EventSystem: per-instance Namespace, isolate handler errors, counter ids, drop `.instance` calls | Latent bugs once the bus is used | S | `event_system.py:27,175,228-240` |
+| 6 | DONE 2026-09-26: Fix EventSystem: per-instance Namespace, isolate handler errors, counter ids, drop `.instance` calls | Latent bugs once the bus is used | S | `event_system.py:27,175,228-240` |
 | 7 | Plugin/state lifecycle: disable plugin after N errors, surface `errors_count`, temp StateManager path in probes, lazy `src/features/__init__` | Probes report healthy runs that are not | S | `game_core.py:200-206`, `base_plugin.py:185-200`, `state_manager.py:114-136` |
-| 8 | Benchmark single-hit Rust vs twin (up to 3 FFI calls per hit); fuse or switch default | Rust may be slower per hit | S | `tools/bench_damage.py`, `damage.py:251-289` |
+| 8 | DONE 2026-09-26: Benchmark single-hit Rust vs twin (up to 3 FFI calls per hit); fuse or switch default | Rust may be slower per hit | S | `tools/bench_damage.py`, `damage.py:251-289` |
 | 9 | Registry/Timeline: Lua-vs-Python diff test (cheap) or attach Timeline to `register_event_handler`, else archive | Dead code with drifting tables | S / M | `registry.py:185-208`, `timeline.py:384-414`, `registry.lua` |
 | 10 | Run executable specs on EffectManager too; remove host divergences one by one | Spec green != in-game green | M | `test_lost_my_self_spec.py:23-25`, `EFFECT_SCHEMA.md:187-203` |
 | 11 | Decide `has_buff/has_debuff/has_item` predicates via `ops.derived_ctx` | Only CAS capability without a schema twin | M | `manager.py:723`, `ops.py:105` |

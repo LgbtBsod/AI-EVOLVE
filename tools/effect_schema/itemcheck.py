@@ -32,7 +32,7 @@ if __package__ in (None, ""):  # запуск файлом: python tools/effect_
 
 from .. import lua_bridge  # noqa: E402
 from .lua_gen import render_item  # noqa: E402
-from .schema import (CONTEXT_ONLY_STATS, EVENTS, FLAGS, KNOWN_STATS, OP_KINDS, OPS, RESOURCE_STATS,  # noqa: E402
+from .schema import (NEVER_EMITTED_EVENTS, CONTEXT_ONLY_STATS, EVENTS, FLAGS, KNOWN_STATS, OP_KINDS, OPS, RESOURCE_STATS,  # noqa: E402
                      TARGETS, TRIGGER_KINDS)
 from .sim import EffectRuntime, Unit, compile_pred, named_predicates, run_step, sample_context  # noqa: E402
 from .validate import validate_item  # noqa: E402
@@ -163,6 +163,24 @@ def _same(py, lua) -> bool:
 def check_validate(item: dict) -> Check:
     errs, ms = _timed(validate_item, item)
     return Check("validate", not errs, f"{len(errs)} error(s)", ms, errs)
+
+
+def _subscribed_events(item: dict) -> set:
+    subs = set()
+    for ef in item.get("effects", []):
+        tr = ef.get("trigger") or {}
+        if tr.get("kind") == "event":
+            subs.add(tr.get("event"))
+        subs |= {o["extend"]["on"] for o in ef.get("ops") or []
+                 if isinstance(o, dict) and isinstance(o.get("extend"), dict) and o["extend"].get("on")}
+    return subs
+
+
+def check_emitted(item: dict) -> Check:
+    """Предупреждение (не ошибка): предмет подписан на событие, которое никто не шлёт."""
+    dead = sorted(_subscribed_events(item) & NEVER_EMITTED_EVENTS)
+    return Check("emitted", True, f"warning: {len(dead)} event(s) nobody emits" if dead else "all events emitted",
+                 0.0, [f"WARNING event {e!r} is never emitted by any host" for e in dead])
 
 
 def check_lua(item: dict, backends: list[str]) -> tuple[Check, Optional[str]]:
@@ -364,6 +382,7 @@ def check_item(item: dict, pred_samples: int = 200, seed: int = 0,
     backends = lua_bridge.available_backends() if backends is None else backends
     report = Report(item.get("name", "?"), len(item.get("effects", [])))
     report.checks.append(check_validate(item))
+    report.checks.append(check_emitted(item))
     lua_check, lua = check_lua(item, backends)
     report.checks.append(lua_check)
     if lua is not None:

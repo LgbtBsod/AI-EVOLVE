@@ -15,7 +15,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from src.core.architecture import BaseComponent, ComponentType, Priority
-from src.core.event_system import EventData as Event, EventSystem
+from src.core.event_system import EventSystem
 from src.core.rng_manager import RNGManager
 
 if TYPE_CHECKING:
@@ -45,6 +45,8 @@ class DynamicWeatherSystem(BaseComponent):
     Manages dynamic weather conditions that affect gameplay.
     Forces AI to adapt strategies based on environmental changes.
     """
+
+    event_system: EventSystem | None = None    # шина событий; задаётся хозяином, иначе события не шлются
 
     __slots__ = (
         '_rng',
@@ -93,17 +95,14 @@ class DynamicWeatherSystem(BaseComponent):
         self.weather_history.append(effect)
 
         # Broadcast event
-        if EventSystem.instance:
-            EventSystem.instance.trigger_event(Event(
-                event_type="WEATHER_CHANGED",
-                data={
+        if self.event_system is not None:
+            self.event_system.emit("WEATHER_CHANGED", {
                     "weather": weather_type.value,
                     "visibility": effect.visibility_mod,
                     "speed": effect.speed_mod,
                     "accuracy": effect.accuracy_mod,
                     "effects": effect.special_effects
-                }
-            ))
+                }, source="dynamic_weather")
 
         logging.info("Weather changed to %s. Effects: %s", weather_type.value, effect.special_effects)
 

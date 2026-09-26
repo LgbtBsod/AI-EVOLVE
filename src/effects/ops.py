@@ -17,6 +17,7 @@ Value math (`resolve_value`, `compute_amount`, `apply_mod_math`, `extend_amount`
 """
 from __future__ import annotations
 
+import logging
 import math
 import re
 from dataclasses import dataclass
@@ -916,6 +917,17 @@ def _every(o: dict, ctx: dict) -> float:
     return max(0.1, float(resolve_value(every, ctx) if isinstance(every, dict) else every))
 
 
+UNKNOWN_KIND_COUNT: dict = {}    # kind -> сколько раз op с неизвестным kind был пропущен (для тестов)
+
+
+def _note_unknown_kind(kind: Any) -> None:
+    """Неизвестный kind = ошибка контента: одно предупреждение на kind за процесс + счётчик."""
+    first = kind not in UNKNOWN_KIND_COUNT
+    UNKNOWN_KIND_COUNT[kind] = UNKNOWN_KIND_COUNT.get(kind, 0) + 1
+    if first:
+        logging.getLogger(__name__).warning("effect op: unknown kind %r ignored (no handler)", kind)
+
+
 def apply_op(h: OpHost, cx: OpCall, tgt: Any, o: dict) -> None:
     """Одна операция на одной цели (условие `when` и выбор цели - забота хоста): значение -> DoT/HoT? -> обработчик."""
     kind = o.get("kind")
@@ -926,5 +938,7 @@ def apply_op(h: OpHost, cx: OpCall, tgt: Any, o: dict) -> None:
         h.op_add_periodic(cx, tgt, o, Periodic(kind, amount, every, cx.t + h.op_duration(o["duration"], cx.ctx)))
         return
     handler = OP_HANDLERS.get(kind)
-    if handler is not None:
-        handler(h, cx, tgt, o, amount)
+    if handler is None:
+        _note_unknown_kind(kind)
+        return
+    handler(h, cx, tgt, o, amount)

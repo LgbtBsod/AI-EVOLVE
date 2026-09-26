@@ -55,7 +55,8 @@ class HeroMind:
         self.hero = hero
         self.inventory_brain = inventory_brain
         self.memory = BanditMemory(SITUATIONS, STANCES, path, backend, c=0.5, decay=0.98, count_key="episodes")
-        self.baseline: Optional[float] = None
+        stored = self.memory.extra.get("baseline")
+        self.baseline: Optional[float] = float(stored) if isinstance(stored, (int, float)) else None
         self.episode: Optional[dict] = None
         self.stance: Optional[str] = None
         self.log: list[str] = []
@@ -154,4 +155,6 @@ class HeroMind:
         return self.memory.best(situation)
 
     def save(self) -> None:
+        if self.baseline is not None:
+            self.memory.extra["baseline"] = self.baseline
         self.memory.save()

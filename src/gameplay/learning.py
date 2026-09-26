@@ -88,6 +88,9 @@ def new_bandit(backend: Optional[str], contexts: int, arms: int, c: float = 0.6,
     return PyBandit(contexts, arms, c, decay)
 
 
+MEMORY_VERSION = 2      # 1 = файлы без поля version (counts/sums/arms/contexts)
+
+
 class BanditMemory:
     """Бандит с именами контекстов и рук, счётчиком опыта и файлом памяти."""
 
@@ -99,13 +102,42 @@ class BanditMemory:
         self.path = path
         self.count_key = count_key
         self.count = 0
+        self.extra: dict = {}          # доп. поля формата (например baseline героя), сохраняются в файл
         if path is not None and path.exists():
             try:
-                data = json.loads(path.read_text(encoding="utf-8"))
-                self.bandit.load_state(data["counts"], data["sums"])
-                self.count = int(data.get(count_key, 0))
-            except Exception as exc:  # старая/битая память - начать заново
+                self._load(json.loads(path.read_text(encoding="utf-8")), count_key)
+            except Exception as exc:  # битая память - начать заново
                 logger.warning("memory %s not loaded: %s", path, exc)
+
+    def _load(self, data: dict, count_key: str) -> None:
+        counts, sums = data["counts"], data["sums"]
+        old_ctx, old_arms = data.get("contexts"), data.get("arms")
+        same = (old_ctx is None or tuple(old_ctx) == self.contexts) and (old_arms is None or tuple(old_arms) == self.arms)
+        if same:
+            self.bandit.load_state(counts, sums)        # старый файл без имён: проверка формы, как раньше
+        else:
+            counts, sums = self._remap(counts, sums, list(old_ctx), list(old_arms))
+            self.bandit.load_state(counts, sums)
+        self.count = int(data.get(count_key, 0))
+        self.extra = dict(data.get("extra") or {})
+
+    def _remap(self, counts, sums, old_ctx, old_arms):
+        """Оставить записи, чьи имена контекста/руки ещё существуют, остальное отбросить (одно предупреждение)."""
+        na = len(old_arms)
+        if len(counts) != len(old_ctx) * na or len(sums) != len(counts):
+            raise ValueError("stored state does not match its own names")
+        new_c, new_s = [0.0] * (len(self.contexts) * len(self.arms)), [0.0] * (len(self.contexts) * len(self.arms))
+        kept = dropped = 0
+        for i, cn in enumerate(old_ctx):
+            for j, an in enumerate(old_arms):
+                if cn in self.contexts and an in self.arms:
+                    k = self.contexts.index(cn) * len(self.arms) + self.arms.index(an)
+                    new_c[k], new_s[k] = counts[i * na + j], sums[i * na + j]
+                    kept += 1
+                else:
+                    dropped += 1
+        logger.warning("memory %s: names changed, kept %d entries, dropped %d", self.path, kept, dropped)
+        return new_c, new_s
 
     def select(self, ctx: int, allowed=None) -> int:
         return self.bandit.select(ctx, allowed)
@@ -138,4 +170,5 @@ class BanditMemory:
         counts, sums = self.bandit.state()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(json.dumps({"counts": list(counts), "sums": list(sums), self.count_key: self.count,
-                                         "arms": self.arms, "contexts": self.contexts}), encoding="utf-8")
+                                         "arms": self.arms, "contexts": self.contexts,
+                                         "version": MEMORY_VERSION, "extra": self.extra}), encoding="utf-8")

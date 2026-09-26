@@ -10,7 +10,7 @@ from enum import Enum
 from typing import Any
 
 from src.core.architecture import BaseComponent, ComponentType, Priority
-from src.core.event_system import EventData as Event, EventSystem
+from src.core.event_system import EventSystem
 
 
 class ResonanceState(Enum):
@@ -48,6 +48,8 @@ class NeuroResonanceSystem(BaseComponent):
     - Tactical data (enemy positions, threats)
     - Combat bonuses (coordination, reaction time)
     """
+
+    event_system: EventSystem | None = None    # шина событий; задаётся хозяином, иначе события не шлются
     
     def __init__(self, max_links_per_unit: int = 5, sync_range: float = 50.0):
         super().__init__(ComponentType.SYSTEM, Priority.HIGH)
@@ -156,16 +158,13 @@ class NeuroResonanceSystem(BaseComponent):
         if old_state != stats.state:
             logging.info(f"Unit {unit_id} resonance changed to {stats.state.value}")
             
-            if EventSystem.instance:
-                EventSystem.instance.trigger_event(Event(
-                    event_type="RESONANCE_CHANGED",
-                    data={
+            if self.event_system is not None:
+                self.event_system.emit("RESONANCE_CHANGED", {
                         "unit_id": unit_id,
                         "state": stats.state.value,
                         "resonance": stats.current_resonance,
                         "bonus": stats.coordination_bonus
-                    }
-                ))
+                    }, source="neuro_resonance")
                 
     def get_shared_information(self, unit_id: str) -> dict[str, Any]:
         """Get information shared through resonance links."""

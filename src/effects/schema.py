@@ -115,6 +115,8 @@ EVENTS = {
     "kill", "take_damage", "die", "hp_cross", "on_shield_break",
     "combat_start", "combat_end", "tick",
 }
+# события из схемы, которые ни один хост пока не шлёт: подписка на них молча не сработает (itemcheck предупреждает)
+NEVER_EMITTED_EVENTS = frozenset({"on_shield_break", "combat_start", "combat_end"})
 
 # известные статы (не закрытый список; кастомные -- через "custom:<name>")
 KNOWN_STATS = {
@@ -142,7 +144,9 @@ CONTEXT_ONLY_STATS = {"hp_missing", "hp_missing_below_40", "kills", "last_damage
 # (lua_content/effect_rules.lua -> resources); mod по ресурсу ничего бы не сделал
 RESOURCE_STATS = {"hp", "mana", "stamina"}
 
-FLAGS = {"no_crit", "true_damage", "silent", "iframe"}
+from .damage import CERTAIN_FLAGS  # noqa: E402  (единый источник: true_damage/unavoidable/periodic)
+
+FLAGS = {"no_crit", "silent", "iframe"} | set(CERTAIN_FLAGS)
 
 # префиксы контекста цели/союзников (sim.target_ctx): enemy_hp_pct, ally_kills ...
 TARGET_PREFIXES = ("enemy_", "ally_", "allies_", "source_")
