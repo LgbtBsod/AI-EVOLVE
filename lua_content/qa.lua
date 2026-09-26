@@ -222,6 +222,11 @@ return {
       tags = { "hygiene", "docs" }, detail = [[^(?!RESULT |repro:)\S]],
       what = "every tool/plugin/check/script has a purpose line, docs/TOOLS.md equals the harvest, no near-duplicate tools, CLAUDE.md commands are real",
       watches = { "tools/**", "CLAUDE.md", "docs/TOOLS.md", "lua_content/**/*.lua", "rust_core/src/**/*.rs" } },
+    -- agent-kit: Lua data valid, role files (<= 35 lines, `TURN BUDGET: N` = max_calls, report lines) and generated .claude/agents/*.md consistent; catches a Markdown-only edit that no pytest selects.
+    { name = "agent_kit", cmd = "python tools/qa.py route --check --result", parse = "result_line", cost = "low", ci = true,
+      tags = { "hygiene", "docs" }, detail = [[^(?!RESULT |repro:)\S]],
+      what = "agent-kit data, docs/agent_context role files and generated .claude/agents/*.md agree (models valid, budgets > 0, no drift)",
+      watches = { "lua_content/agent_kit.lua", "docs/agent_context/**", ".claude/agents/**", "tools/agent_kit.py", "tools/qa_plugins/route.py", "tools/qa_plugins/prompt.py" } },
     -- Code-quality ratchet: the logic is tools/quality_metrics.py, the data is the `quality` table below. It prints detail lines, `repro:` and one
     -- RESULT line (`qa.py quality --result`); `ci = false`: CI runs it once on Linux (`check --name quality --no-cache`), not on every OS.
     { name = "quality", cmd = "python tools/qa.py quality --result", parse = "result_line", cost = "low", ci = false,
@@ -373,7 +378,12 @@ return {
       { id = "quality", command = "python tools/qa.py quality [--worst N|--explain RULE]", replaces = "running ruff, radon, vulture, import-linter separately", output = "qa_report line + worst-N table", group = "verify", cost = "low" },
       { id = "guard", command = "python tools/qa.py guard [--stats|--explain|--simulate FILE.json|--compile|--install|--uninstall]", purpose = "read guard (Claude Code hooks): outline instead of a big unranged Read, one-line stub for an unchanged re-read, digest command for raw logs, batch nudge",
         when = "an agent burns context on big or repeated reads; --stats shows the blocks and the tokens kept out of the context", replaces = "hoping agents read with offset/limit and batch their calls", output = "qa_report line (+ per-rule lines for --stats)", group = "read", cost = "low" },
+      { id = "prompt", command = "python tools/qa.py prompt ROLE --task \"...\" [--files a,b] [--done \"...\"] [--pack] | --workflow ROLE", purpose = "a SHORT agent prompt (<= 400 tokens): the shared context is a repo file (docs/agent_context/), the prompt only points at it and states TASK / SCOPE / DONE WHEN",
+        when = "before every Agent call or Workflow script (agent, prompt, subagent, context)", replaces = "hand-typing a 1.5-6k-char agent prompt or an inlined CONTEXT block of a Workflow script", output = "the prompt on stdout, one size line on stderr", group = "build", cost = "low" },
+      { id = "route", command = "python tools/qa.py route [STAGE|--list|--check|--write-agents]", purpose = "model / effort / tool-call budget per stage of a Workflow or Agent call (cheap for tests and logs, strong for design and review); generates .claude/agents/*.md",
+        when = "choosing the model tier of an agent or a Workflow stage", replaces = "guessing the model and effort of each stage", output = "qa_report line + table", group = "build", cost = "low" },
       -- checks (`check:NAME`; purpose = the `what` of the check)
+      { id = "check:agent_kit", replaces = "noticing by hand that a role file, a budget or .claude/agents/*.md drifted from agent_kit.lua" },
       { id = "check:boot_smoke", replaces = "launching the game to see whether it starts" },
       { id = "check:combat_smoke", replaces = "hand-testing combat formulas" },
       { id = "check:damage", replaces = "hand-checking damage numbers" },
@@ -409,6 +419,7 @@ return {
       { id = "training_room", purpose = "training room with mannequins to try equipment and effects (v2.0)", replaces = "-", output = "prose", group = "analyse" },
       { id = "training_room_demo", purpose = "demo run of the training room: equipment on mannequins", replaces = "-", output = "prose", group = "analyse", status = "demo" },
       -- libraries of tools/ (import them: do not write a second pool / report format / graph)
+      { id = "agent_kit", purpose = "roles, short prompts, stage routing and generated .claude/agents/*.md for sub-agents and Workflow stages (logic of qa.py prompt / route; data in lua_content/agent_kit.lua)", replaces = "re-typed CONTEXT blocks in agent prompts and Workflow scripts", output = "prompt text / problem list", group = "libs" },
       { id = "file_toc", purpose = "table of contents helper (stdlib only): Python via ast with line ranges, other languages via the regexes of guards.lua; behind qa.py ctx and the read guard", replaces = "reading a big file to see what is in it", output = "list of `Lnn name` lines", group = "libs" },
       { id = "lua_bridge", purpose = "alias of src/content/lua_bridge.py: load(path) runs a Lua file in the sandbox and returns its data (rust_core.LuaContent, lupa fallback)", replaces = "reading Lua files or embedding a Lua runtime", output = "dict from one JSON string", group = "libs" },
       { id = "probe_analysis", purpose = "run analysis shared by dev_probe, agent_play and probe_db: hypotheses and one summary; the loops live in probe_kernels", replaces = "reading raw samples", output = "summary text", group = "libs" },
@@ -443,6 +454,7 @@ return {
       { id = "rust:resolve_hit", replaces = "the Python damage pipeline (twin)", cost = "low" },
       { id = "rust:resolve_hits", replaces = "a Python loop of damage.resolve", cost = "low" },
       -- Lua files that declare `-- tool:`
+      { id = "lua:agent_kit.lua", replaces = "roles, call budgets, model choices and report contract typed into every agent prompt", cost = "low" },
       { id = "lua:guards.lua", replaces = "hard-coded thresholds, path patterns and messages in the hook", cost = "low" },
       { id = "lua:qa.lua", replaces = "hard-coded QA thresholds and check lists in Python", cost = "low" },
     },

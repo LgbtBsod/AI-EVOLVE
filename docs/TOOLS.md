@@ -9,6 +9,7 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `agent_play` | `python tools/agent_play.py "SCRIPT" [--seed N]` | play like the player (spawn / attack / interact levers, the hero AI decides) without a window; --serve for... | launching the game window | RESULT line + observations | low |
 | `boot_smoke_test` | `python tools/boot_smoke_test.py` | Headless boot test: the real main.Game in an offscreen buffer, no window. | starting the game by hand | RESULT line | medium |
 | `check` | `python tools/qa.py check [--all\|--fast\|--name a,b]` | every verification, one command, one output format | running pytest/ruff/smoke scripts one by one | qa_report lines, worst first, <= 30 | medium |
+| `check:agent_kit` | `python tools/qa.py check --name agent_kit` | agent-kit data, docs/agent_context role files and generated .claude/agents/*.md agree (models valid,... | noticing by hand that a role file, a budget or .claude/agents/*.md drifted from agent_kit.lua | qa_report line | low |
 | `check:boot_smoke` | `python tools/qa.py check --name boot_smoke` | GameCore -> menu -> world -> plugins, offscreen buffer (skip without OpenGL/xvfb) | launching the game to see whether it starts | qa_report line | medium |
 | `check:combat_smoke` | `python tools/qa.py check --name combat_smoke` | combat/effects/leveling formulas (no window) | hand-testing combat formulas | qa_report line | low |
 | `check:damage` | `python tools/qa.py check --name damage` | damage pipeline: Rust kernel vs the Python twin (bit for bit), stage cases, the neutral guard | hand-checking damage numbers | qa_report line | low |
@@ -67,12 +68,15 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 |---|---|---|---|---|---|
 | `ci` | `python tools/qa.py ci [--wait]` | GitHub Actions run via gh: verdict + only the essentials of the failed step | gh run view --log | verdict + failing step | low |
 | `doctor` | `python tools/qa.py doctor` | missing dependencies and the exact command that fixes each | trial-and-error pip installs after an ImportError | prose | low |
+| `prompt` | `python tools/qa.py prompt ROLE --task "..." [--files a,b] [--done "..."] [--pack] \| --workflow ROLE` | a SHORT agent prompt (<= 400 tokens): the shared context is a repo file (docs/agent_context/), the prompt... | hand-typing a 1.5-6k-char agent prompt or an inlined CONTEXT block of a Workflow script | the prompt on stdout, one size line on stderr | low |
+| `route` | `python tools/qa.py route [STAGE\|--list\|--check\|--write-agents]` | model / effort / tool-call budget per stage of a Workflow or Agent call (cheap for tests and logs, strong... | guessing the model and effort of each stage | qa_report line + table | low |
 ### content - Lua data and items
 | tool | command | purpose | replaces | output | cost |
 |---|---|---|---|---|---|
 | `effect_schema` | `python -m tools.effect_schema.itemcheck lua_content/items/x.lua` | Effect Schema v1 (Effect -> Ops[]): model, Lua generator and parser, validator, catalog, itemcheck | hand-writing item Lua | one line per finding | low |
 | `item` | `python tools/qa.py item check\|digest\|diff\|all` | Effect Schema items: itemcheck, one line per effect (digest), diff vs a git ref | reading generated item Lua | one line per effect | low |
 | `lua` | `python tools/qa.py lua check\|show FILE\|bench` | Lua content: every file loads with every backend (check), a file's data as compact JSON (show), load time... | reading Lua files | summary or JSON | low |
+| `lua:agent_kit.lua` | `python tools/qa.py lua show lua_content/agent_kit.lua` | agent-kit data of `qa.py prompt` / `qa.py route`: roles (context file, model, effort, turn budget, tools),... | roles, call budgets, model choices and report contract typed into every agent prompt | - | low |
 | `lua:guards.lua` | `python tools/qa.py lua show lua_content/guards.lua` | settings of the tool-call guards of Claude Code hooks (tools/guard_hook.py, `qa.py guard`): thresholds,... | hard-coded thresholds, path patterns and messages in the hook | - | low |
 | `lua:qa.lua` | `python tools/qa.py lua show lua_content/qa.lua` | settings of the QA layer: checks, scenarios, budgets, thresholds and the tools-registry rows (read through... | hard-coded QA thresholds and check lists in Python | - | low |
 | `web_builder` | `python tools/web_builder/app.py --web` | Flet UI that builds items visually (Effect -> Ops[]); headless.py drives it without a window | hand-writing item Lua | UI / Lua file | - |
@@ -97,6 +101,7 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 ### shared libraries - import them, do not rewrite them
 | tool | command | purpose | replaces | output | cost |
 |---|---|---|---|---|---|
+| `agent_kit` | `import agent_kit` | roles, short prompts, stage routing and generated .claude/agents/*.md for sub-agents and Workflow stages... | re-typed CONTEXT blocks in agent prompts and Workflow scripts | prompt text / problem list | - |
 | `file_toc` | `import file_toc` | table of contents helper (stdlib only): Python via ast with line ranges, other languages via the regexes... | reading a big file to see what is in it | list of `Lnn name` lines | - |
 | `lua_bridge` | `import lua_bridge` | alias of src/content/lua_bridge.py: load(path) runs a Lua file in the sandbox and returns its data... | reading Lua files or embedding a Lua runtime | dict from one JSON string | - |
 | `probe_analysis` | `import probe_analysis` | run analysis shared by dev_probe, agent_play and probe_db: hypotheses and one summary; the loops live in... | reading raw samples | summary text | - |
