@@ -216,6 +216,9 @@ return {
     -- Repo hygiene (tools/repo_hygiene.py, data = the `hygiene` table below): no tracked virtualenv / build output / saves / big file, and .gitignore keeps
     -- its patterns. Guards against a session that overwrites .gitignore and commits junk. No `watches` = the whole repo: a newly tracked file changes the
     -- cache key, so a stale OK cannot hide it; `always`: it also runs when nothing changed.
+    { name = "coverage", cmd = "python tools/qa.py coverage --result", parse = "result_line", cost = "low", tags = { "effects" },
+      watches = { "src/effects/ops.py", "lua_content/kind_aliases.lua", "tests/fixtures/ability_corpus.json", "lua_content/qa.lua" },
+      detail = [[^(?!RESULT |repro:)\S]], what = "share of the 60-ability corpus the canon effect system expresses (FAIL under coverage.floor, warn under target)" },
     { name = "hygiene", cmd = "python tools/qa.py hygiene --result", parse = "result_line", cost = "low", always = true,
       tags = { "hygiene" }, detail = [[^(?!RESULT |repro:)\S]],
       what = "git ls-files has no .venv*/ target/ *.so *.pyd *.pyc saves/*.db dev_probe_output/ or file > 1 MB; .gitignore covers the required patterns" },
@@ -404,6 +407,9 @@ return {
   },
   -- qa.py new tool: a purpose that scores >= similar_score against an existing tool (qa.py tools --find scoring) needs --force
   new_tool = { similar_score = 6, show = 3 },
+  -- qa.py coverage (tools/qa_plugins/coverage.py): share of the 60-ability corpus (tests/fixtures/ability_corpus.json) the canon ops + exact aliases express.
+  -- floor = ratchet on with_aliases (FAIL under it; raise it whenever the number rises, never lower it); target = warn below; spec = doc's full-spec share.
+  coverage = { floor = 28.3, target = 90.0, spec = 80.0 },
   hygiene = {
     max_file_kb = 1024,          -- a tracked file above this fails (assets that must be bigger: list them in `allow`)
     allow = {},

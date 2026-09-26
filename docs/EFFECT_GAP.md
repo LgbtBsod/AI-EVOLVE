@@ -335,3 +335,5 @@ Line numbers are from grep/outline reads; nothing was run.
 - Registry `update/on_change/unfreeze` conflict with principle 6 and determinism in a live run; keep them for tools only.
 - Numeric ids must be stable across saves and Lua edits: index by registration order breaks when a content row is added. Persist names in saves, ids only in memory.
 
+
+**Status 2026-09-26** (`qa.py coverage`, computed): hand tags 46.7% (28/60, matches the table); canon op names literally 13.3% (8/60); with exact aliases 28.3% (17/60); spec 80.0%. `dash/teleport/pull/push` are expressible as `move` + `mode` but are not pure renames, so they are not counted.

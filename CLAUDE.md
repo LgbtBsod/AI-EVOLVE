@@ -10,7 +10,7 @@ every tool has a Python fallback); settings/content in `lua_content/` (Lua 5.5).
 - Optional: `uv pip install -r tools/requirements-dev.txt` (image extras), `uv pip install ./rust_core` (Rust kernels, needs cargo).
 - What is specific about this app (effects, CAS, core, live vs dead code, ranked next steps): `docs/APP_SPECIFICS.md` (read by section, ~9k tokens whole).
 - Task start: `python tools/qa.py pack "TASK" [--files a,b]` (ranked files + line ranges, importers/tests, tools, verify, do-not-read; ~1.5k tok).
-- Start: `python tools/qa.py brief` (10 lines) · `qa.py resume` (unfinished work after a crash; `qa.py ckpt` = checkpoint) · `qa.py doctor` (missing deps + fix) · `qa.py ctx FILE` (outline, importers, tests — instead of reading
+- Start: `python tools/qa.py brief` (10 lines) · `qa.py resume` (unfinished work after a crash; `qa.py ckpt` = checkpoint) · `qa.py coverage` (effect-system share of the 60-ability corpus, floor ratchet) · `qa.py doctor` (missing deps + fix) · `qa.py ctx FILE` (outline, importers, tests — instead of reading
   a big file) · `qa.py dead` / `qa.py docs` (unimported modules / stale .md: don't read those).
 - Read less: `qa.py sym FILE:NAME` (one function, also .rs/.lua) and `qa.py q "grep:PAT@glob+ctx" "sym:F:N" "read:F:A-B"` (N read-only queries, 1 call).
 - A failing/warn check line carries `| fix: CMD` (hint only, never auto-run; rules `lua_content/fixes.lua`); `qa.py trend` / `warn trend` lines flag slow or flipping checks.

@@ -21,9 +21,29 @@ import logging
 import math
 import re
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Any, Callable, NamedTuple, Optional, Protocol
 
 from src.core.adaptation import WHEEL_MAX_DEFAULT
+
+# ---------------------------------------------------------------- spec kind names -> canon (lua_content/kind_aliases.lua)
+
+
+@lru_cache(maxsize=1)
+def _exact_aliases() -> dict:
+    """spec kind -> canon kind for the `exact = true` rows of lua_content/kind_aliases.lua (empty without a Lua backend)."""
+    try:
+        from ..content import lua_bridge
+        rows = lua_bridge.load(lua_bridge.CONTENT / "kind_aliases.lua", cache=True).get("aliases") or {}
+    except (ImportError, OSError, RuntimeError, ValueError):
+        return {}
+    return {k: v["canon"] for k, v in rows.items() if v.get("exact")}
+
+
+def canonical_kind(kind: Any) -> Any:
+    """Spec name of an op kind -> canon name (exact aliases only); anything else comes back unchanged."""
+    return _exact_aliases().get(kind, kind) if isinstance(kind, str) else kind
+
 
 # ---------------------------------------------------------------- dirty tracking
 
@@ -930,7 +950,7 @@ def _note_unknown_kind(kind: Any) -> None:
 
 def apply_op(h: OpHost, cx: OpCall, tgt: Any, o: dict) -> None:
     """Одна операция на одной цели (условие `when` и выбор цели - забота хоста): значение -> DoT/HoT? -> обработчик."""
-    kind = o.get("kind")
+    kind = canonical_kind(o.get("kind"))
     amount = compute_amount(o, cx.ctx, default_stat_of(o, h.op_stat_prefix(cx, tgt)))
     if kind in ("deal", "heal") and o.get("every") and h.op_periodic_ok(o):
         # DoT/HoT: тик каждые every с в течение duration

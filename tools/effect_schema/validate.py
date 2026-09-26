@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from src.effects.ops import canonical_kind
+
 from .schema import (OP_KINDS, TARGETS, OPS, TRIGGER_KINDS, EVENTS, FLAGS, MOVE_MODES, AREA_AFFECTS,
                      TOWARD, TOWARD_STATS, CONTEXT_ONLY_STATS, RESOURCE_STATS, is_derived_stat, is_stat)
 
@@ -224,7 +226,7 @@ _PREFIXED = (_c_when, _c_fail)
 def validate_op(o: dict, path: str, item_effects=()) -> list[str]:
     if not isinstance(o, dict):
         return [f"{path}: not a dict"]
-    kind = o.get("kind")
+    kind = canonical_kind(o.get("kind"))
     if kind not in OP_KINDS:
         return [f"{path}: unknown kind {kind!r}"]
     errs: list[str] = []
@@ -239,7 +241,7 @@ def _applied(ops: list) -> list[str]:
     out = []
     for o in ops or []:
         if isinstance(o, dict):
-            if o.get("kind") == "apply_effect" and o.get("buff_id"):
+            if canonical_kind(o.get("kind")) == "apply_effect" and o.get("buff_id"):
                 out.append(o["buff_id"])
             out += _applied(o.get("fail"))
     return out

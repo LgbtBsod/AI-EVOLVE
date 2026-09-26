@@ -12,6 +12,7 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `check:agent_kit` | `python tools/qa.py check --name agent_kit` | agent-kit data, docs/agent_context role files and generated .claude/agents/*.md agree (models valid,... | noticing by hand that a role file, a budget or .claude/agents/*.md drifted from agent_kit.lua | qa_report line | low |
 | `check:boot_smoke` | `python tools/qa.py check --name boot_smoke` | GameCore -> menu -> world -> plugins, offscreen buffer (skip without OpenGL/xvfb) | launching the game to see whether it starts | qa_report line | medium |
 | `check:combat_smoke` | `python tools/qa.py check --name combat_smoke` | combat/effects/leveling formulas (no window) | hand-testing combat formulas | qa_report line | low |
+| `check:coverage` | `python tools/qa.py check --name coverage` | share of the 60-ability corpus the canon effect system expresses (FAIL under coverage.floor, warn under... | - | qa_report line | low |
 | `check:damage` | `python tools/qa.py check --name damage` | damage pipeline: Rust kernel vs the Python twin (bit for bit), stage cases, the neutral guard | hand-checking damage numbers | qa_report line | low |
 | `check:dead-code` | `python tools/qa.py check --name dead-code` | modules nobody imports (informational count) | grepping for unused modules | qa_report line | low |
 | `check:determinism-quick` | `python tools/qa.py check --name determinism-quick` | two same-seed pairs must produce identical trajectories | diffing two same-seed runs by eye | qa_report line | medium |
@@ -56,6 +57,7 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `bench_pathfinding` | `python tools/bench_pathfinding.py` | A*/JPS/flow-field benchmark: rust_core vs the Python twin | timing pathfinding ad hoc | time per backend | medium |
 | `boss_gauntlet` | `python tools/boss_gauntlet.py` | boss test bench: the real hero against world bosses without a window (engine of qa.py gauntlet) | playing bosses by hand | one line per boss | high |
 | `cas_training_demo` | `python tools/cas_training_demo.py` | demo run of the CAS engine 2.0 (conditional effect system) [demo] | - | prose | - |
+| `coverage` | `python tools/qa.py coverage` | share of the 60-ability corpus the canon effect system can express (floor ratchet) | - | - | - |
 | `dead` | `python tools/qa.py dead` | modules nobody imports (dead code) with LOC; --list names them | reading modules to see if they are still used | summary line + list | low |
 | `determinism` | `python tools/qa.py determinism "SCRIPT" --pairs 6` | why two same-seed runs differ: paired traced runs, first divergent frame, hypotheses | bisecting a desync by hand | verdict + first divergent frame | high |
 | `dev_probe` | `python tools/dev_probe.py` | long headless run with anomaly hunt: samples, combat stats, contact sheet, findings in probe_db | reading raw state.jsonl and screenshots | RESULT line + summary.md | high |

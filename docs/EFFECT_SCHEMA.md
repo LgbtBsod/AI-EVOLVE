@@ -279,3 +279,14 @@ python -m tools.effect_schema.itemcheck --forge 300 --seed 5 --hostile   # ис�
 - `cc_duration_mult` (target, default 1.0, mods add to it): x duration of CC statuses (`cc = true` rows); <= 0 = immune. Chance to resist: carrier stat `status_resist_<id>` (0..100, >= 100 immune).
 - `cc_damage_mult` (attacker, default 1.0), `cc_damage_flat`, `cc_damage_reduction` (target): see docs/DAMAGE_PIPELINE.md.
 - Conditions on the target (EffectManager): `has_cc` (1/0) and `cc_is_<status id>` = the winning CC by `cc_priority` (`active_cc`).
+
+## Kind aliases (spec names)
+
+Content may write the spec's kind names of `docs/EFFECT_SYSTEM_DESIGN.md`; `canonical_kind()` (src/effects/schema.py) maps them to the canon
+op kind before validation (`validate_op`), parsing (`Op.from_json`) and dispatch (`apply_op`). Table: `lua_content/kind_aliases.lua`.
+
+- `exact = true` (pure renames, same handler, same traces): `status`->`apply_effect`, `consume`->`drain`, `restore`->`heal`,
+  `remove_effect`->`remove_buff`, `oath_binding`->`binding_vow`, `use_learned`->`use_learned_technique`, `create_minion`->`summon`,
+  `nullify_technique`->`nullify`.
+- `exact = false` (listed, NOT resolved, NOT counted): `dash/teleport/pull/push` need `move` + `mode=...`, `swap`, `debuff`, `erase`, `copy_technique`.
+- Unknown kinds are still rejected. Yardstick: `qa.py coverage` (corpus tests/fixtures/ability_corpus.json).

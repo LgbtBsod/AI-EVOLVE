@@ -1,0 +1,784 @@
+[
+ {
+  "id": 1,
+  "character": "Gojo",
+  "source": "JJK",
+  "ability": "Infinity",
+  "spec_kinds": [
+   "aura",
+   "block",
+   "immune",
+   "untargetable"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 2,
+  "character": "Gojo",
+  "source": "JJK",
+  "ability": "Hollow Purple",
+  "spec_kinds": [
+   "fusion_strike",
+   "deal"
+  ],
+  "lacks": [],
+  "hand_canon": false
+ },
+ {
+  "id": 3,
+  "character": "Gojo",
+  "source": "JJK",
+  "ability": "Domain Unlimited Void",
+  "spec_kinds": [
+   "reality_marble",
+   "zone",
+   "status",
+   "rule_override"
+  ],
+  "lacks": [
+   "zone.sure_hit"
+  ],
+  "hand_canon": false
+ },
+ {
+  "id": 4,
+  "character": "Sukuna",
+  "source": "JJK",
+  "ability": "Malevolent Shrine",
+  "spec_kinds": [
+   "zone",
+   "deal",
+   "aura"
+  ],
+  "lacks": [],
+  "hand_canon": false
+ },
+ {
+  "id": 5,
+  "character": "Mahoraga",
+  "source": "JJK",
+  "ability": "Adaptation wheel",
+  "spec_kinds": [
+   "adapt",
+   "rotate_wheel",
+   "display_wheel"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 6,
+  "character": "Toji",
+  "source": "JJK",
+  "ability": "Heavenly Restriction",
+  "spec_kinds": [
+   "binding_vow",
+   "mod",
+   "remove_restriction"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 7,
+  "character": "Naruto",
+  "source": "Naruto",
+  "ability": "Shadow Clone",
+  "spec_kinds": [
+   "summon",
+   "create_minion"
+  ],
+  "lacks": [
+   "on_dispel"
+  ],
+  "hand_canon": false
+ },
+ {
+  "id": 8,
+  "character": "Naruto",
+  "source": "Naruto",
+  "ability": "Rasengan",
+  "spec_kinds": [
+   "deal",
+   "dash"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 9,
+  "character": "Naruto",
+  "source": "Naruto",
+  "ability": "Kurama mode",
+  "spec_kinds": [
+   "transform",
+   "timed_power_up",
+   "mod"
+  ],
+  "lacks": [],
+  "hand_canon": false
+ },
+ {
+  "id": 10,
+  "character": "Sasuke",
+  "source": "Naruto",
+  "ability": "Sharingan copy",
+  "spec_kinds": [
+   "copy_technique",
+   "perceive"
+  ],
+  "lacks": [],
+  "hand_canon": false
+ },
+ {
+  "id": 11,
+  "character": "Itachi",
+  "source": "Naruto",
+  "ability": "Tsukuyomi",
+  "spec_kinds": [
+   "enter_dream",
+   "hypnosis",
+   "time_as_space"
+  ],
+  "lacks": [
+   "subjective_time"
+  ],
+  "hand_canon": false
+ },
+ {
+  "id": 12,
+  "character": "Kakashi",
+  "source": "Naruto",
+  "ability": "Kamui phase",
+  "spec_kinds": [
+   "teleport",
+   "untargetable",
+   "dodge"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 13,
+  "character": "Madara",
+  "source": "Naruto",
+  "ability": "Infinite Tsukuyomi",
+  "spec_kinds": [
+   "apply_status_to_world",
+   "hypnosis",
+   "enter_dream"
+  ],
+  "lacks": [],
+  "hand_canon": false
+ },
+ {
+  "id": 14,
+  "character": "Ichigo",
+  "source": "Bleach",
+  "ability": "Getsuga Tenshou",
+  "spec_kinds": [
+   "deal"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 15,
+  "character": "Aizen",
+  "source": "Bleach",
+  "ability": "Kyoka Suigetsu",
+  "spec_kinds": [
+   "hypnosis",
+   "perceive",
+   "reveal"
+  ],
+  "lacks": [
+   "false_percept"
+  ],
+  "hand_canon": false
+ },
+ {
+  "id": 16,
+  "character": "Law",
+  "source": "One Piece",
+  "ability": "Room / Shambles",
+  "spec_kinds": [
+   "zone",
+   "swap",
+   "teleport",
+   "space_manipulation"
+  ],
+  "lacks": [
+   "zone.on_inside"
+  ],
+  "hand_canon": false
+ },
+ {
+  "id": 17,
+  "character": "Luffy",
+  "source": "One Piece",
+  "ability": "Gear 5",
+  "spec_kinds": [
+   "transform",
+   "stance",
+   "mod",
+   "timed_power_up"
+  ],
+  "lacks": [],
+  "hand_canon": false
+ },
+ {
+  "id": 18,
+  "character": "Luffy",
+  "source": "One Piece",
+  "ability": "Rubber body",
+  "spec_kinds": [
+   "resist",
+   "immune"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 19,
+  "character": "Akainu",
+  "source": "One Piece",
+  "ability": "Magma fist",
+  "spec_kinds": [
+   "deal",
+   "status"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 20,
+  "character": "Doflamingo",
+  "source": "One Piece",
+  "ability": "Parasite strings",
+  "spec_kinds": [
+   "command",
+   "possess",
+   "dominance"
+  ],
+  "lacks": [
+   "control_link"
+  ],
+  "hand_canon": false
+ },
+ {
+  "id": 21,
+  "character": "Gon",
+  "source": "HxH",
+  "ability": "Jajanken + vow",
+  "spec_kinds": [
+   "binding_vow",
+   "deal",
+   "mod",
+   "consume"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 22,
+  "character": "Kurapika",
+  "source": "HxH",
+  "ability": "Chain Jail",
+  "spec_kinds": [
+   "binding_vow",
+   "nullify",
+   "status"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 23,
+  "character": "Hisoka",
+  "source": "HxH",
+  "ability": "Bungee Gum",
+  "spec_kinds": [
+   "pull",
+   "status",
+   "mark"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 24,
+  "character": "Netero",
+  "source": "HxH",
+  "ability": "Guanyin Zero",
+  "spec_kinds": [
+   "deal",
+   "dash",
+   "summon"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 25,
+  "character": "Dio",
+  "source": "JoJo",
+  "ability": "The World time stop",
+  "spec_kinds": [
+   "global_time_scale",
+   "status",
+   "delay"
+  ],
+  "lacks": [
+   "time_scale.exempt"
+  ],
+  "hand_canon": false
+ },
+ {
+  "id": 26,
+  "character": "Goku",
+  "source": "Dragon Ball",
+  "ability": "Kamehameha",
+  "spec_kinds": [
+   "deal",
+   "consume"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 27,
+  "character": "Goku",
+  "source": "Dragon Ball",
+  "ability": "Instant Transmission",
+  "spec_kinds": [
+   "teleport",
+   "mark"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 28,
+  "character": "Goku",
+  "source": "Dragon Ball",
+  "ability": "Super Saiyan",
+  "spec_kinds": [
+   "transform",
+   "mod"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 29,
+  "character": "Beerus",
+  "source": "Dragon Ball",
+  "ability": "Hakai",
+  "spec_kinds": [
+   "erase"
+  ],
+  "lacks": [],
+  "hand_canon": false
+ },
+ {
+  "id": 30,
+  "character": "Saber",
+  "source": "Fate",
+  "ability": "Excalibur",
+  "spec_kinds": [
+   "deal",
+   "consume"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 31,
+  "character": "Gilgamesh",
+  "source": "Fate",
+  "ability": "Gate of Babylon",
+  "spec_kinds": [
+   "create_minion",
+   "summon",
+   "deal"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 32,
+  "character": "Archer",
+  "source": "Fate",
+  "ability": "Unlimited Blade Works",
+  "spec_kinds": [
+   "reality_marble",
+   "copy",
+   "zone"
+  ],
+  "lacks": [],
+  "hand_canon": false
+ },
+ {
+  "id": 33,
+  "character": "Medea",
+  "source": "Fate",
+  "ability": "Rule Breaker",
+  "spec_kinds": [
+   "cancel_technique",
+   "sever"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 34,
+  "character": "Lancer",
+  "source": "Fate",
+  "ability": "Gae Bolg",
+  "spec_kinds": [
+   "reverse_causality",
+   "precognition"
+  ],
+  "lacks": [
+   "fate_lock"
+  ],
+  "hand_canon": false
+ },
+ {
+  "id": 35,
+  "character": "Heracles",
+  "source": "Fate",
+  "ability": "God Hand",
+  "spec_kinds": [
+   "on_lethal",
+   "status",
+   "counter_delta"
+  ],
+  "lacks": [],
+  "hand_canon": false
+ },
+ {
+  "id": 36,
+  "character": "Iron Man",
+  "source": "Marvel",
+  "ability": "Repulsor + arc reactor",
+  "spec_kinds": [
+   "deal",
+   "consume",
+   "dash"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 37,
+  "character": "Dr Strange",
+  "source": "Marvel",
+  "ability": "Dormammu time loop",
+  "spec_kinds": [
+   "time_loop",
+   "snapshot",
+   "state_rewind"
+  ],
+  "lacks": [],
+  "hand_canon": false
+ },
+ {
+  "id": 38,
+  "character": "Thanos",
+  "source": "Marvel",
+  "ability": "Snap",
+  "spec_kinds": [
+   "erase",
+   "rule"
+  ],
+  "lacks": [
+   "filter.sample"
+  ],
+  "hand_canon": false
+ },
+ {
+  "id": 39,
+  "character": "Spider-Man",
+  "source": "Marvel",
+  "ability": "Spider sense",
+  "spec_kinds": [
+   "precognition",
+   "dodge",
+   "reveal"
+  ],
+  "lacks": [],
+  "hand_canon": false
+ },
+ {
+  "id": 40,
+  "character": "Scarlet Witch",
+  "source": "Marvel",
+  "ability": "Reality warp",
+  "spec_kinds": [
+   "rule_override",
+   "create_ex_nihilo",
+   "transform"
+  ],
+  "lacks": [],
+  "hand_canon": false
+ },
+ {
+  "id": 41,
+  "character": "Magneto",
+  "source": "Marvel",
+  "ability": "Magnetism",
+  "spec_kinds": [
+   "pull",
+   "push",
+   "polarity_control",
+   "telekinetic_weapon"
+  ],
+  "lacks": [],
+  "hand_canon": false
+ },
+ {
+  "id": 42,
+  "character": "Wolverine",
+  "source": "Marvel",
+  "ability": "Regeneration",
+  "spec_kinds": [
+   "heal"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 43,
+  "character": "Flash",
+  "source": "DC",
+  "ability": "Speed Force",
+  "spec_kinds": [
+   "mod",
+   "dash"
+  ],
+  "lacks": [
+   "time_scale"
+  ],
+  "hand_canon": false
+ },
+ {
+  "id": 44,
+  "character": "Harry Potter",
+  "source": "HP",
+  "ability": "Expelliarmus",
+  "spec_kinds": [
+   "cancel_technique",
+   "confiscate",
+   "push"
+  ],
+  "lacks": [],
+  "hand_canon": false
+ },
+ {
+  "id": 45,
+  "character": "Harry Potter",
+  "source": "HP",
+  "ability": "Patronus",
+  "spec_kinds": [
+   "summon",
+   "immune"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 46,
+  "character": "Voldemort",
+  "source": "HP",
+  "ability": "Horcruxes",
+  "spec_kinds": [
+   "on_lethal",
+   "snapshot",
+   "restore_state"
+  ],
+  "lacks": [
+   "respawn_at"
+  ],
+  "hand_canon": false
+ },
+ {
+  "id": 47,
+  "character": "Snape",
+  "source": "HP",
+  "ability": "Sectumsempra",
+  "spec_kinds": [
+   "deal",
+   "status"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 48,
+  "character": "Gandalf",
+  "source": "LOTR",
+  "ability": "You shall not pass",
+  "spec_kinds": [
+   "block",
+   "zone",
+   "push"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 49,
+  "character": "Sauron",
+  "source": "LOTR",
+  "ability": "One Ring dominion",
+  "spec_kinds": [
+   "dominance",
+   "command",
+   "possess"
+  ],
+  "lacks": [],
+  "hand_canon": false
+ },
+ {
+  "id": 50,
+  "character": "Paul Atreides",
+  "source": "Dune",
+  "ability": "Prescience",
+  "spec_kinds": [
+   "precognition",
+   "perceive"
+  ],
+  "lacks": [],
+  "hand_canon": false
+ },
+ {
+  "id": 51,
+  "character": "Bene Gesserit",
+  "source": "Dune",
+  "ability": "The Voice",
+  "spec_kinds": [
+   "command",
+   "hypnosis"
+  ],
+  "lacks": [],
+  "hand_canon": false
+ },
+ {
+  "id": 52,
+  "character": "Shai-Hulud",
+  "source": "Dune",
+  "ability": "Worm summon",
+  "spec_kinds": [
+   "summon"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 53,
+  "character": "Chosen Undead",
+  "source": "Dark Souls",
+  "ability": "Estus flask",
+  "spec_kinds": [
+   "heal",
+   "consume"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 54,
+  "character": "Light Yagami",
+  "source": "Death Note",
+  "ability": "Write a name",
+  "spec_kinds": [
+   "write",
+   "kill",
+   "delay",
+   "wish"
+  ],
+  "lacks": [
+   "kill.cause"
+  ],
+  "hand_canon": false
+ },
+ {
+  "id": 55,
+  "character": "Ryuk",
+  "source": "Death Note",
+  "ability": "Shinigami eyes",
+  "spec_kinds": [
+   "reveal",
+   "perceive"
+  ],
+  "lacks": [],
+  "hand_canon": false
+ },
+ {
+  "id": 56,
+  "character": "Geralt",
+  "source": "Witcher",
+  "ability": "Igni",
+  "spec_kinds": [
+   "deal",
+   "status"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 57,
+  "character": "Geralt",
+  "source": "Witcher",
+  "ability": "Quen",
+  "spec_kinds": [
+   "absorb_damage",
+   "block"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 58,
+  "character": "Geralt",
+  "source": "Witcher",
+  "ability": "Axii",
+  "spec_kinds": [
+   "hypnosis",
+   "command",
+   "set_faction"
+  ],
+  "lacks": [],
+  "hand_canon": true
+ },
+ {
+  "id": 59,
+  "character": "Aang",
+  "source": "Avatar",
+  "ability": "Avatar State",
+  "spec_kinds": [
+   "transform",
+   "mod",
+   "on_lethal",
+   "timed_power_up"
+  ],
+  "lacks": [],
+  "hand_canon": false
+ },
+ {
+  "id": 60,
+  "character": "Katara",
+  "source": "Avatar",
+  "ability": "Bloodbending",
+  "spec_kinds": [
+   "blood_manipulation",
+   "possess",
+   "command"
+  ],
+  "lacks": [],
+  "hand_canon": false
+ }
+]
