@@ -50,6 +50,7 @@ fn rust_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     Ok(())
 }
 
+/// Seeded grid simulation environment (`SimulationEnv(seed)`); `step`/`step_batch` are stubs that do not call into it yet.
 #[pyclass]
 struct PySimulationEnv {
     // Not wired yet: step()/step_batch() below are stubs that do not call into it.
@@ -80,6 +81,7 @@ impl PySimulationEnv {
     }
 }
 
+/// World generator: `WorldGenerator(seed, version).generate(bricks_json)` -> dict summary (seed, map_id, entity_count, grid size).
 #[pyclass]
 struct PyWorldGenerator {
     inner: WorldGenerator,
@@ -111,7 +113,7 @@ impl PyWorldGenerator {
     }
 }
 
-/// Python wrapper for probe analytics
+/// Screenshot analysis for dev probes: `analyze_frame(png)` (hash, brightness, motion vs the previous frame, blank/edge/complexity), `compare_frames(a, b)`.
 #[pyclass]
 struct PyProbeAnalyzer {
     config: ProbeConfig,
@@ -261,6 +263,7 @@ impl PyProbeAnalyzer {
 // Semantic Core FFI Wrappers
 // ============================================================================
 
+/// Log compressor: `ingest(line)` per log line, `summarize()` -> one compact text, `reset()`.
 #[pyclass]
 struct PyLogCompressor {
     inner: RustLogCompressor,
@@ -288,6 +291,7 @@ impl PyLogCompressor {
     }
 }
 
+/// State diff: `StateDiffCalculator.calculate_diff(old, new)` -> dict of what changed between two state dicts.
 #[pyclass]
 struct PyStateDiffCalculator;
 
@@ -299,6 +303,7 @@ impl PyStateDiffCalculator {
     }
 }
 
+/// Event correlator: `add_event(ts, type, payload)`, then `find_correlations()` of events inside a time window (ms).
 #[pyclass]
 struct PyEventCorrelator {
     inner: RustEventCorrelator,
@@ -667,6 +672,7 @@ fn py_flow_field(py: Python<'_>, width: usize, height: usize, costs: &[u8], targ
     Ok(PyFlowField { inner })
 }
 
+/// The object `flow_field(...)` returns: per-cell `distance`/`direction` toward the target, or the whole grids at once.
 #[pyclass]
 struct PyFlowField {
     inner: pathing::FlowField,

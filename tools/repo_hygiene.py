@@ -161,14 +161,7 @@ def check(root: Path = ROOT, cfg: dict | None = None) -> R.Result:
     return evaluate(scan(files, read_gitignore(root), cfg), len(files))
 
 
-def result_lines(res: R.Result) -> list[str]:
-    """Machine form for the Lua-declared check (`parse = "result_line"`): detail lines, `repro:`, one RESULT line."""
-    lines = list(res.detail)
-    if res.repro:
-        lines.append(f"repro: {res.repro}")
-    if res.status != "error":
-        lines.append(f"RESULT status={res.status.upper()} " + " ".join(f"{k}={R.fmt_num(v)}" for k, v in res.metrics.items()))
-    return lines
+result_lines = R.result_lines     # the machine form of a Result lives in qa_report (shared by every Lua-declared check)
 
 
 def main(argv: list[str] | None = None) -> int:

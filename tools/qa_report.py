@@ -222,6 +222,17 @@ def to_json(results, meta: dict) -> str:
                        "checks": [r.to_dict() for r in results]}, separators=(",", ":"), default=str)
 
 
+def result_lines(res: Result) -> list:
+    """Machine form of a Result for a Lua-declared check (`parse = "result_line"`): detail lines, `repro:`, one RESULT line.
+    An error prints no RESULT line, so the runner reports ERROR (the check itself broke) instead of FAIL (the code got worse)."""
+    lines = list(res.detail)
+    if res.repro:
+        lines.append(f"repro: {res.repro}")
+    if res.status != "error":
+        lines.append(f"RESULT status={res.status.upper()} " + " ".join(f"{k}={fmt_num(v)}" for k, v in res.metrics.items()))
+    return lines
+
+
 def write_full(lines: list, run_id: str | None = None) -> str:
     run_id = run_id or time.strftime("%Y%m%d_%H%M%S")
     d = QA_OUT / f"check_{run_id}"

@@ -1,4 +1,6 @@
 -- lua_content/qa.lua
+-- tool: settings of the QA layer: checks, scenarios, budgets, thresholds and the tools-registry rows (read through probe_settings.qa_settings)
+-- tool.group: content
 -- Настройки QA-слоя (tools/qa.py): golden-сценарии, фаззинг действиями игрока,
 -- инварианты мира, Monte Carlo, выбор тестов. Python читает через lupa.lua55
 -- (tools/probe_settings.py: qa_settings); без lupa - те же значения из Python.
@@ -214,6 +216,12 @@ return {
     { name = "hygiene", cmd = "python tools/qa.py hygiene --result", parse = "result_line", cost = "low", always = true,
       tags = { "hygiene" }, detail = [[^(?!RESULT |repro:)\S]],
       what = "git ls-files has no .venv*/ target/ *.so *.pyd *.pyc saves/*.db dev_probe_output/ or file > 1 MB; .gitignore covers the required patterns" },
+    -- Tools registry (tools/tool_registry.py, data = the `tools` table below): every tool has a purpose, docs/TOOLS.md equals the harvest, no two tools alike,
+    -- CLAUDE.md names only real qa.py commands. Same as `hygiene`: no `watches` needed beyond what the harvest reads; `always`: runs even when nothing changed.
+    { name = "tools", cmd = "python tools/qa.py tools --result", parse = "result_line", cost = "low", always = true, ci = true,
+      tags = { "hygiene", "docs" }, detail = [[^(?!RESULT |repro:)\S]],
+      what = "every tool/plugin/check/script has a purpose line, docs/TOOLS.md equals the harvest, no near-duplicate tools, CLAUDE.md commands are real",
+      watches = { "tools/**", "CLAUDE.md", "docs/TOOLS.md", "lua_content/**/*.lua", "rust_core/src/**/*.rs" } },
     -- Code-quality ratchet: the logic is tools/quality_metrics.py, the data is the `quality` table below. It prints detail lines, `repro:` and one
     -- RESULT line (`qa.py quality --result`); `ci = false`: CI runs it once on Linux (`check --name quality --no-cache`), not on every OS.
     { name = "quality", cmd = "python tools/qa.py quality --result", parse = "result_line", cost = "low", ci = false,
@@ -315,6 +323,123 @@ return {
     forbidden = { ".venv*/", "target/", "*.so", "*.pyd", "*.pyc", "saves/*.db", "dev_probe_output/" },
     -- .gitignore must ignore each of these (semantic: `*.py[cod]` covers `*.pyc`); a bot that rewrites it to two lines fails here
     required_ignore = { ".venv-*/", ".venv/", "target/", "dev_probe_output/", "saves/*.db", "__pycache__/", "*.pyc", "*.so", "*.pyd", "build/", "dist/" },
+  },
+
+  -- ===== tools registry (tools/tool_registry.py; `qa.py tools --find|--write|--check`) =====
+  -- docs/TOOLS.md is GENERATED (`qa.py tools --write`) from what the code says about itself (help=, docstrings, `what`, Rust `///`, `-- tool:` Lua
+  -- headers, `TOOL = {}` in a plugin) plus the rows below. A row overrides the harvested fields of the tool with that `id`; `manual = true` adds a
+  -- tool nothing can harvest. Row keys: id, purpose, command, when, replaces, output, cost, status, group, wraps, owner.
+  -- `check --name tools` FAILS: a tool without a `required` key | docs/TOOLS.md stale | two tools alike (>= dup_threshold, unless wrapper or in dup_allow) |
+  -- a `qa.py X` in CLAUDE.md that is not a subcommand | a row whose id matches nothing.
+  tools = {
+    required = { "purpose" },
+    dup_threshold = 0.5,          -- token-set (Jaccard) similarity of name + purpose from which two tools are near-duplicates (today's closest pair: 0.54)
+    dup_allow = { "bench_pathfinding~check:pathfinding" },   -- intended look-alikes: "a~b" (ids sorted): the benchmark script and the pytest twin check
+    stopwords = { "the", "and", "for", "with", "from", "into", "that", "this", "are", "one", "per", "not", "all", "any", "its", "can", "use", "via",
+                  "has", "was", "of", "to", "in", "on", "by", "or", "is", "it", "as", "no", "qa", "py", "python", "tool", "tools", "file", "files" },
+    skip_dirs = { "qa_plugins", "qa_checks" },   -- extension points: each file inside is harvested as its own tool
+    drift_ignore = {},            -- `qa.py WORD` mentions of CLAUDE.md that are not subcommands on purpose
+    cell_width = 110, max_lines = 140, max_detail = 10, max_find = 8,
+    groups = {
+      { id = "verify",  title = "verify - is the change correct" },
+      { id = "read",    title = "read / navigate - instead of reading raw files" },
+      { id = "analyse", title = "analyse - runs, balance, performance" },
+      { id = "build",   title = "build / release - environment, CI" },
+      { id = "content", title = "content - Lua data and items" },
+      { id = "kernels", title = "kernels - Rust exports (import rust_core)" },
+      { id = "libs",    title = "shared libraries - import them, do not rewrite them" },
+    },
+    rows = {
+      -- qa.py subcommands
+      { id = "doctor", purpose = "missing dependencies and the exact command that fixes each", replaces = "trial-and-error pip installs after an ImportError", output = "prose", group = "build", cost = "low" },
+      { id = "brief", purpose = "10 lines: environment, changes vs origin/main, known failures, recent runs, what to run next", when = "first command of a session", replaces = "git status + ls + reading old reports", output = "10 lines of prose", group = "read", cost = "low" },
+      { id = "affected", command = "python tools/qa.py affected [FILES]", purpose = "which tests and scripts a change touches (import graph)", replaces = "grepping for importers by hand", output = "prose", group = "read", cost = "low" },
+      { id = "dead", purpose = "modules nobody imports (dead code) with LOC; --list names them", replaces = "reading modules to see if they are still used", output = "summary line + list", group = "analyse", cost = "low" },
+      { id = "ctx", command = "python tools/qa.py ctx FILE", purpose = "outline of a Python file: classes, functions, importers, tests", when = "before opening any big file", replaces = "reading a big file whole", output = "outline (about 40 lines)", group = "read", cost = "low" },
+      { id = "docs", purpose = "which .md files are stale (they name code that is missing or dead)", when = "before trusting an old report", replaces = "opening old .md reports", output = "counts + top stale files", group = "read", cost = "low" },
+      { id = "test", command = "python tools/qa.py test [--changed]", purpose = "pytest in parallel shards; prints only NEW failures (--changed = tests your diff affects)", replaces = "raw pytest and its full output", output = "counts + new failures", group = "verify", cost = "medium" },
+      { id = "golden", purpose = "deterministic agent_play scenarios vs tests/golden (--record after an intended change)", when = "did gameplay behaviour change", replaces = "comparing gameplay runs by eye", output = "one line per scenario", group = "verify", cost = "medium" },
+      { id = "sweep", command = "python tools/qa.py sweep \"SCRIPT\"", purpose = "one agent_play script over many seeds: metric distributions + bootstrap CI (Rust)", when = "did my balance fix help", replaces = "eyeballing a few seeds", output = "table per metric", group = "analyse", cost = "high" },
+      { id = "fuzz", purpose = "random player actions + world invariants every frame; a failure is shrunk to a minimal repro script", replaces = "manual exploratory play", output = "minimal repro line", group = "verify", cost = "high" },
+      { id = "perf", command = "python tools/qa.py perf \"SCRIPT\"", purpose = "hot functions of a game run (cProfile, fast mode)", replaces = "ad-hoc cProfile runs", output = "top-N table", group = "analyse", cost = "medium" },
+      { id = "check", command = "python tools/qa.py check [--all|--fast|--name a,b]", when = "the one command to verify a change", replaces = "running pytest/ruff/smoke scripts one by one", output = "qa_report lines, worst first, <= 30", group = "verify", cost = "medium" },
+      { id = "ci", command = "python tools/qa.py ci [--wait]", purpose = "GitHub Actions run via gh: verdict + only the essentials of the failed step", when = "why did CI fail", replaces = "gh run view --log", output = "verdict + failing step", group = "build", cost = "low" },
+      { id = "changed", command = "python tools/qa.py changed [REV]", purpose = "semantic diff: +added -removed ~changed symbols per file, churn, RISK flags, checks to run", replaces = "git diff", output = "<= 30 lines", group = "read", cost = "low" },
+      { id = "determinism", command = "python tools/qa.py determinism \"SCRIPT\" --pairs 6", purpose = "why two same-seed runs differ: paired traced runs, first divergent frame, hypotheses", replaces = "bisecting a desync by hand", output = "verdict + first divergent frame", group = "analyse", cost = "high" },
+      { id = "gauntlet", command = "python tools/qa.py gauntlet [--campaign --lives 5]", replaces = "playing bosses by hand", output = "one line per boss", group = "analyse", cost = "high" },
+      { id = "hygiene", replaces = "eyeballing git ls-files and .gitignore", output = "qa_report line", group = "verify", cost = "low" },
+      { id = "item", command = "python tools/qa.py item check|digest|diff|all", purpose = "Effect Schema items: itemcheck, one line per effect (digest), diff vs a git ref", replaces = "reading generated item Lua", output = "one line per effect", group = "content", cost = "low" },
+      { id = "lua", command = "python tools/qa.py lua check|show FILE|bench", purpose = "Lua content: every file loads with every backend (check), a file's data as compact JSON (show), load time (bench)", when = "any question about lua_content", replaces = "reading Lua files", output = "summary or JSON", group = "content", cost = "low" },
+      { id = "quality", command = "python tools/qa.py quality [--worst N|--explain RULE]", replaces = "running ruff, radon, vulture, import-linter separately", output = "qa_report line + worst-N table", group = "verify", cost = "low" },
+      -- checks (`check:NAME`; purpose = the `what` of the check)
+      { id = "check:boot_smoke", replaces = "launching the game to see whether it starts" },
+      { id = "check:combat_smoke", replaces = "hand-testing combat formulas" },
+      { id = "check:damage", replaces = "hand-checking damage numbers" },
+      { id = "check:dead-code", replaces = "grepping for unused modules" },
+      { id = "check:determinism-quick", replaces = "diffing two same-seed runs by eye" },
+      { id = "check:docs-stale", replaces = "opening old .md reports to see if they still hold" },
+      { id = "check:golden", replaces = "re-running scenarios and comparing by eye" },
+      { id = "check:hygiene", replaces = "eyeballing git ls-files and .gitignore" },
+      { id = "check:items", replaces = "loading items in the game to see if they work" },
+      { id = "check:lua", replaces = "loading each Lua file by hand" },
+      { id = "check:pathfinding", replaces = "comparing the Rust and Python pathfinders by hand" },
+      { id = "check:play:*", replaces = "playing the game to test behaviour" },
+      { id = "check:quality", replaces = "running ruff, radon, vulture, import-linter separately" },
+      { id = "check:tests", replaces = "raw pytest and its full output" },
+      { id = "check:tools", replaces = "grepping tools/ before writing a new tool; a hand-kept tool table in CLAUDE.md" },
+      -- tools/*.py scripts
+      { id = "agent_play", command = "python tools/agent_play.py \"SCRIPT\" [--seed N]", purpose = "play like the player (spawn / attack / interact levers, the hero AI decides) without a window; --serve for turn by turn",
+        when = "any gameplay question", replaces = "launching the game window", output = "RESULT line + observations", group = "verify", cost = "low" },
+      { id = "bench_damage", replaces = "timing the damage pipeline ad hoc", output = "hits per second per backend", group = "analyse", cost = "medium" },
+      { id = "bench_pathfinding", purpose = "A*/JPS/flow-field benchmark: rust_core vs the Python twin", replaces = "timing pathfinding ad hoc", output = "time per backend", group = "analyse", cost = "medium" },
+      { id = "boot_smoke_test", replaces = "starting the game by hand", output = "RESULT line", group = "verify", cost = "medium" },
+      { id = "boss_gauntlet", purpose = "boss test bench: the real hero against world bosses without a window (engine of qa.py gauntlet)", replaces = "playing bosses by hand", output = "one line per boss", group = "analyse", cost = "high", wraps = "python tools/qa.py gauntlet" },
+      { id = "cas_training_demo", purpose = "demo run of the CAS engine 2.0 (conditional effect system)", replaces = "-", output = "prose", group = "analyse", status = "demo" },
+      { id = "combat_smoke_test", purpose = "windowless smoke test of combat, effects, leveling and AI targeting (no Panda3D)", replaces = "hand-testing combat formulas", output = "passed/failed counts", group = "verify", cost = "low" },
+      { id = "dev_probe", purpose = "long headless run with anomaly hunt: samples, combat stats, contact sheet, findings in probe_db", when = "unattended run or anything visual", replaces = "reading raw state.jsonl and screenshots", output = "RESULT line + summary.md", group = "analyse", cost = "high" },
+      { id = "dev_probe_async", purpose = "async multi-threaded probe framework that runs the tools/plugins/*.py analyzers", replaces = "-", output = "prose", group = "analyse" },
+      { id = "dev_probe_diff", purpose = "delta-only comparison of two dev_probe runs (--frames adds a visual diff)", replaces = "diffing two summary.json by eye", output = "changed metrics only", group = "analyse", cost = "low" },
+      { id = "probe_db", command = "python tools/probe_db.py stats|why|predict|compare|trend|sql", purpose = "SQLite analytics over every recorded probe run: stats, why, predict, compare, trend, free SQL", when = "numbers across runs, did my fix help", replaces = "reading state.jsonl / game.log", output = "short tables", group = "analyse", cost = "low" },
+      { id = "repo_hygiene", purpose = "logic of the hygiene check: what git must never track (virtualenv, build output, saves, big files) and the .gitignore that keeps it out", replaces = "-", output = "RESULT line", group = "verify", cost = "low", wraps = "python tools/qa.py hygiene" },
+      { id = "trace_compare", purpose = "did a refactor change behaviour: per-frame trace hashes of every play scenario, before vs after", replaces = "eyeballing runs after a refactor", output = "first divergent frame per scenario", group = "verify", cost = "medium" },
+      { id = "training_room", purpose = "training room with mannequins to try equipment and effects (v2.0)", replaces = "-", output = "prose", group = "analyse" },
+      { id = "training_room_demo", purpose = "demo run of the training room: equipment on mannequins", replaces = "-", output = "prose", group = "analyse", status = "demo" },
+      -- libraries of tools/ (import them: do not write a second pool / report format / graph)
+      { id = "lua_bridge", purpose = "alias of src/content/lua_bridge.py: load(path) runs a Lua file in the sandbox and returns its data (rust_core.LuaContent, lupa fallback)", replaces = "reading Lua files or embedding a Lua runtime", output = "dict from one JSON string", group = "libs" },
+      { id = "probe_analysis", purpose = "run analysis shared by dev_probe, agent_play and probe_db: hypotheses and one summary; the loops live in probe_kernels", replaces = "reading raw samples", output = "summary text", group = "libs" },
+      { id = "probe_invariants", purpose = "world invariants checked on every frame of agent_play (HP over max, NaN, unit outside the map)", replaces = "noticing broken state by eye", output = "violation list", group = "libs" },
+      { id = "probe_kernels", purpose = "number-crunching of run analysis: rust_core.RunAnalytics with an equivalent Python fallback", replaces = "Python loops over samples", output = "numbers", group = "libs" },
+      { id = "probe_runtime", purpose = "shared runtime of dev_probe and agent_play: quiet engine, render modes, virtual clock, scene reads", replaces = "booting Panda3D by hand", output = "-", group = "libs" },
+      { id = "probe_settings", purpose = "loads lua_content/dev_tools.lua and qa.lua as settings (qa_settings(), Python defaults as fallback)", replaces = "hard-coded thresholds in Python", output = "dict", group = "libs" },
+      { id = "qa_graph", purpose = "static import graph: what is live or dead, which tests a change touches (behind affected, dead, ctx, check)", replaces = "grepping for importers", output = "graph object", group = "libs" },
+      { id = "qa_pool", purpose = "async subprocess pool: many game runs or tests in parallel with timeouts", replaces = "hand-written subprocess loops", output = "results per job", group = "libs" },
+      { id = "qa_pytest_plugin", purpose = "pytest plugin (-p qa_pytest_plugin): every test outcome as one JSONL row for qa.py test", replaces = "parsing pytest console output", output = "JSONL", group = "libs" },
+      { id = "qa_report", purpose = "THE output format of every check: Result, format_line, worst-first budgeted report, history, deltas", replaces = "ad-hoc print formats", output = "one line per check", group = "libs" },
+      { id = "quality_metrics", purpose = "the code-quality ratchet behind qa.py quality: ruff, radon CC, vulture, import-linter, duplicate definitions vs a baseline", replaces = "running the linters separately", output = "Result", group = "libs" },
+      { id = "tool_registry", purpose = "harvest, render and gap detection of the tools registry (logic of qa.py tools)", replaces = "a hand-written tool table", output = "Result / markdown", group = "libs" },
+      -- subdirectories of tools/
+      { id = "effect_schema", command = "python -m tools.effect_schema.itemcheck lua_content/items/x.lua", purpose = "Effect Schema v1 (Effect -> Ops[]): model, Lua generator and parser, validator, catalog, itemcheck", when = "build or verify an item", replaces = "hand-writing item Lua", output = "one line per finding", group = "content", cost = "low" },
+      { id = "web_builder", command = "python tools/web_builder/app.py --web", purpose = "Flet UI that builds items visually (Effect -> Ops[]); headless.py drives it without a window", replaces = "hand-writing item Lua", output = "UI / Lua file", group = "content" },
+      { id = "plugins", purpose = "analyzer plugins of dev_probe_async: balance, AI behaviour, CAS inspector, hot reload, stress test, profilers", replaces = "-", output = "prose", group = "analyse" },
+      -- Rust exports (rust_core; purpose = the first sentence of the Rust `///` docs)
+      { id = "rust:EventCorrelator", replaces = "-", cost = "low" },
+      { id = "rust:FlowField", replaces = "-", cost = "low" },
+      { id = "rust:LogCompressor", replaces = "-", cost = "low" },
+      { id = "rust:LuaContent", replaces = "lupa (the Python Lua backend)", cost = "low" },
+      { id = "rust:ProbeAnalyzer", replaces = "-", cost = "low" },
+      { id = "rust:QaKernels", replaces = "Python graph walks and bootstrap loops", cost = "low" },
+      { id = "rust:RunAnalytics", replaces = "Python loops of probe_kernels", cost = "low" },
+      { id = "rust:SimulationEnv", replaces = "-", cost = "low", status = "stub" },
+      { id = "rust:StateDiffCalculator", replaces = "-", cost = "low" },
+      { id = "rust:TacticsBandit", replaces = "the Python bandit of enemy_ai", cost = "low" },
+      { id = "rust:WorldGenerator", replaces = "-", cost = "low" },
+      { id = "rust:find_path", replaces = "the Python pathfinder (twin)", cost = "low" },
+      { id = "rust:flow_field", replaces = "the Python flow field (twin)", cost = "low" },
+      { id = "rust:resolve_hit", replaces = "the Python damage pipeline (twin)", cost = "low" },
+      { id = "rust:resolve_hits", replaces = "a Python loop of damage.resolve", cost = "low" },
+      -- Lua files that declare `-- tool:`
+      { id = "lua:qa.lua", replaces = "hard-coded QA thresholds and check lists in Python", cost = "low" },
+    },
   },
 
   -- Выбор тестов по графу импортов (qa.py affected / test --changed)

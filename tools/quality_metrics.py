@@ -476,15 +476,7 @@ def baseline_path(cfg: dict, root: Path = ROOT) -> Path:
     return root / (cfg.get("baseline") or "tests/quality_baseline.json")
 
 
-def result_lines(res: R.Result) -> list:
-    """Machine form of a Result for the Lua-declared check (`parse = "result_line"`): detail lines, `repro:`, one RESULT line.
-    An error prints no RESULT line, so the runner reports ERROR (the check itself broke) instead of FAIL (the code got worse)."""
-    lines = list(res.detail)
-    if res.repro:
-        lines.append(f"repro: {res.repro}")
-    if res.status != "error":
-        lines.append(f"RESULT status={res.status.upper()} " + " ".join(f"{k}={R.fmt_num(v)}" for k, v in res.metrics.items()))
-    return lines
+result_lines = R.result_lines     # the machine form of a Result lives in qa_report (shared by every Lua-declared check)
 
 
 def check(runner=None, root: Path = ROOT, settings: dict | None = None) -> R.Result:
