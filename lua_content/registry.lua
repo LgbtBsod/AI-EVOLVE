@@ -97,6 +97,7 @@ return {
     { id = "self",  spec = "target='self'" },
     { id = "enemy", spec = "target='enemy' — одна цель" },
     { id = "ally" }, { id = "allies" }, { id = "source" },
+    { id = "world", spec = "target='world': the manager-owned world entity (F7 timeworld: global_time_scale, apply_status_to_world)" },
     { id = "area",  spec = "target='area' + radius(число|стат) + center + arc + affects" },
     { id = "line",  spec = "planned: cone/line" },
     { id = "cone",  spec = "через area+arc (mvp)" },

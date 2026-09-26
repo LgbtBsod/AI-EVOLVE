@@ -70,3 +70,9 @@ def test_canonicalize_op_injects_implied_params_and_keeps_own_fields():
     assert canonicalize_op({"kind": "push", "mode": "knockback"})["mode"] == "knockback"      # op's own field wins
     plain = {"kind": "deal"}
     assert canonicalize_op(plain) is plain
+
+
+def test_f7_aliases_rule_and_telekinetic_weapon_are_exact():
+    rows = lua_bridge.load(lua_bridge.CONTENT / "kind_aliases.lua")["aliases"]
+    assert rows["rule"]["canon"] == "rule_override" and rows["rule"]["exact"]
+    assert rows["telekinetic_weapon"]["canon"] == "polarity_control" and rows["telekinetic_weapon"]["exact"]

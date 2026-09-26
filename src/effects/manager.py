@@ -51,6 +51,7 @@ from . import triggers
 from . import zones
 from .control import release_control
 from . import mimic
+from . import timeworld
 from .ops import OpCall, Periodic, Tracked, apply_op, form_abilities, replace_contribution_game
 from .runtime import EffectRuntime, Unit, buff_fields, resolve_value, rules
 
@@ -467,6 +468,7 @@ class EffectManager:
         self._delay_seq = 0
         self._zones: list[dict] = []     # F5 zones (src/effects/zones.py), creation order
         self._rules: list[dict] = []     # F5 timed rule_override layers {id, until, consts, flags}
+        self._tw = timeworld.TimeState()  # F7 time / world (src/effects/timeworld.py)
         self._status_book: dict = {}     # (id сущности, status id) -> (стаки, до какого времени)
 
     # ---------------------------------------------------------------- registry
@@ -528,6 +530,7 @@ class EffectManager:
     def update(self, dt: float) -> None:
         self.now += dt
         now = self.now
+        timeworld.pre_update(self, dt)                 # F7: returns at once while no time record exists
         for st in list(self.states.values()):
             if not is_alive(st.entity) and not st.periodic:
                 continue
@@ -848,12 +851,14 @@ class EffectManager:
 
     def _targets(self, st: EntityState, o: dict, primary, center, radius: float) -> list:
         tgt = o.get("target", "self")
-        if tgt in ("self", "ally", "allies"):
+        if tgt in ("self", "ally", "allies", "world"):     # "world": the ops read no target (F7 timeworld.py), the caster stands in
             return [st.entity]
         if tgt in ("enemy", "source"):
             return [primary] if primary is not None else []
         if tgt == "area":
-            return self._area_targets(st, o, primary, center, radius)
+            found = self._area_targets(st, o, primary, center, radius)
+            spec = timeworld.sample_spec(o) if ("sample" in o or "filter" in o) else None
+            return timeworld.sample(self, found, spec) if spec else found
         return []
 
     def _area_targets(self, st: EntityState, o: dict, primary, center, radius: float) -> list:
@@ -1128,6 +1133,32 @@ class EffectManager:
         return mimic.restriction_lifted(self, entity, rid)
 
     # F4 triggers (src/effects/triggers.py) -------------------------------------------------------------
+    # F7 time / world (src/effects/timeworld.py) -------------------------------------------------------
+    def tw_state(self):
+        return self._tw
+
+    def tw_states(self) -> list:
+        return list(self.states.values())
+
+    def op_apply_ops(self, cx: OpCall, ops: list) -> None:
+        self._run_ops(cx.source, ops, cx.source.entity, f"{cx.src}#world", ())
+
+    def time_scale(self, entity) -> float:
+        """Data for the scene / AI: this entity's time scale now (own x world, exemptions honoured); 1.0 = normal."""
+        st = self.state(entity)
+        return timeworld.scale_of(self, st) if st is not None and self._tw.active() else 1.0
+
+    def world_time_scale(self) -> float:
+        w = self._tw.world
+        return w["scale"] if w is not None else 1.0
+
+    def dt_for(self, entity, dt: float) -> float:
+        return dt * self.time_scale(entity) if self._tw.active() else dt
+
+    def world_statuses(self) -> dict:
+        return {sid: {"until": r["until"], "applied": len(r["applied"]), "persistent": r["persistent"]}
+                for sid, r in self._tw.entity.statuses.items()}
+
     # F5 zones (src/effects/zones.py) -------------------------------------------------------------------
     def op_zones(self) -> list:
         return self._zones

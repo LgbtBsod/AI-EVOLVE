@@ -45,6 +45,7 @@ OP_KINDS = {
     "timed_power_up",  # временное усиление: transform со своей группой; duration обязателен, on_exit = расплата
     "on_lethal", "counter_delta", "delay",   # F4: перехват летального удара, отложенные ops (src/effects/triggers.py, docs/EFFECT_SCHEMA.md "Triggers")
     "fusion_strike", "remove_restriction", "dispel", "copy_technique", "copy", "false_percept", "control_link", "break_link", "erase",   # F6a (src/effects/mimic.py, docs/EFFECT_SCHEMA.md "Mimic")
+    "global_time_scale", "time_scale", "time_as_space", "apply_status_to_world", "polarity_control",   # F7 (src/effects/timeworld.py, docs/EFFECT_SCHEMA.md "Time and world")
     "zone", "zone_mod", "rule_override",   # F5: зоны, ауры, реальности (src/effects/zones.py, docs/EFFECT_SCHEMA.md "Zones")
     "perceive", "reveal", "precognition",   # восприятие: данные на unit.external["perception"] (src/effects/perception.py, docs/EFFECT_SCHEMA.md "Perception")
     "hypnosis", "command", "possess", "dominance", "temptation", "tame",   # контроль цели (src/effects/control.py, docs/EFFECT_SCHEMA.md "Control")
@@ -104,7 +105,7 @@ MOVE_MODES_SPEC = {"dash", "push", "teleport", "swap"}   # names of the spec kin
 # area - ВСЕ живые в радиусе (radius; center = "target" | "self"): френдли фаер,
 # заклинатель тоже попадает под свой круг. affects сужает круг:
 #   all (по умолчанию) | others (все, кроме заклинателя) | enemies | allies
-TARGETS = {"self", "enemy", "ally", "allies", "source", "area"}
+TARGETS = {"self", "enemy", "ally", "allies", "source", "area", "world"}
 AREA_AFFECTS = {"all", "others", "enemies", "allies"}
 # arc (градусы, 0 < arc <= 360) - конус от заклинателя к цели: взмах меча/топора.
 # radius - число или имя стата ("attack_range": дуга на длину клинка)

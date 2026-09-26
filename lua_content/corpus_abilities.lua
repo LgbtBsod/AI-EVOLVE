@@ -197,5 +197,34 @@ return {
               { kind = "copy", target = "enemy", observed = true, duration = { flat = 30 } } } },
     { id = "corpus_dispel_clone", family = "mimic", tags = { "spell" }, trigger = "cast", range = 999, needs_target = true,
       ops = { { kind = "dispel", target = "enemy" } } },
+
+    -- ---- slice F7: TIME and WORLD family (family = "time"; src/effects/timeworld.py, docs/EFFECT_SCHEMA.md "Time and world") ----
+    -- #11 / #13 reuse the F2 hypnosis rows and add the time / world part; `rule` (#38) is the F5 rule_override (alias, kind_aliases.lua).
+    { id = "corpus_the_world", corpus = 25, family = "time", tags = { "spell" }, trigger = "cast", range = 30, cooldown = 60, needs_target = true,
+      ops = { { kind = "global_time_scale", target = "world", rate = 0, duration = { flat = 5 }, exempt = { "caster" } },
+              { kind = "delay", target = "enemy", after = { flat = 5 }, ops = { hit(20) } } } },
+
+    { id = "corpus_speed_force", corpus = 43, family = "time", tags = { "spell" }, trigger = "cast", cooldown = 20,
+      ops = { { kind = "time_scale", target = "self", rate = 3, duration = { flat = 6 } },
+              { kind = "mod", target = "self", stat = "move_speed", op = "add", value = { flat = 5 }, duration = { flat = 6 } },
+              { kind = "move", target = "self", mode = "dash", distance = 8 } } },
+
+    { id = "corpus_tsukuyomi_time", corpus = 11, family = "time", tags = { "spell" }, trigger = "cast", range = 15, cooldown = 30, needs_target = true,
+      ops = { { kind = "hypnosis", target = "enemy", id = "tsukuyomi", duration = { flat = 6 }, target_ref = "caster", perception = "dream" },
+              { kind = "time_as_space", target = "enemy", mult = 20, duration = { flat = 3 }, settle = { hit(10) } } } },
+
+    { id = "corpus_infinite_tsukuyomi_world", corpus = 13, family = "time", tags = { "spell" }, trigger = "cast", cooldown = 90,
+      ops = { { kind = "apply_status_to_world", target = "world", status = "slow", duration = { flat = 12 }, persistent = true,
+                filter = { not_faction = "hero" } },
+              { kind = "hypnosis", target = "enemy", id = "infinite_tsukuyomi", duration = { flat = 12 }, perception = "dream" } } },
+
+    { id = "corpus_snap", corpus = 38, family = "time", tags = { "spell" }, trigger = "cast", cooldown = 120,
+      ops = { { kind = "erase", target = "area", radius = 999, affects = "enemies", filter = { sample = { fraction = 0.5 } } },
+              { kind = "rule", target = "self", id = "snap_rules", duration = { flat = 5 }, rules = { flags = { "true_damage" } } } } },
+
+    { id = "corpus_magnetism", corpus = 41, family = "time", tags = { "spell" }, trigger = "cast", cooldown = 8,
+      ops = { { kind = "polarity_control", target = "self", sign = "attract", select = { tag = "metal" }, strength = 4, radius = 25 } } },
+    { id = "corpus_magnetism_repel", family = "time", tags = { "spell" }, trigger = "cast", cooldown = 8,
+      ops = { { kind = "polarity_control", target = "self", sign = "repel", select = { stat = "polarity" }, strength = 4, radius = 25 } } },
   },
 }

@@ -1,5 +1,5 @@
 {
-"n_lua": 536,
+"n_lua": 550,
 "cases": [
 [
 "\"x\"",
@@ -43,6 +43,10 @@
 ],
 [
 "{\"affects\": \"enemies\", \"duration\": {\"flat\": 15}, \"id\": \"shrine_slashes\", \"kind\": \"aura\", \"radius\": 4, \"target\": \"self\", \"tick\": {\"every\": {\"flat\": 0.5}, \"ops\": [{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 2}}]}}",
+[]
+],
+[
+"{\"affects\": \"enemies\", \"filter\": {\"sample\": {\"fraction\": 0.5}}, \"kind\": \"erase\", \"radius\": 999, \"target\": \"area\"}",
 []
 ],
 [
@@ -191,6 +195,10 @@
 ],
 [
 "{\"after\": {\"flat\": 3}, \"kind\": \"delay\", \"ops\": [{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 40}}], \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"after\": {\"flat\": 5}, \"kind\": \"delay\", \"ops\": [{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 20}}], \"target\": \"enemy\"}",
 []
 ],
 [
@@ -636,6 +644,10 @@
 []
 ],
 [
+"{\"distance\": 8, \"kind\": \"move\", \"mode\": \"dash\", \"target\": \"self\"}",
+[]
+],
+[
 "{\"distance\": 8, \"kind\": \"move\", \"mode\": \"knockback\", \"target\": \"enemy\"}",
 []
 ],
@@ -800,6 +812,14 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 12}, \"filter\": {\"not_faction\": \"hero\"}, \"kind\": \"apply_status_to_world\", \"persistent\": true, \"status\": \"slow\", \"target\": \"world\"}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 12}, \"id\": \"infinite_tsukuyomi\", \"kind\": \"hypnosis\", \"perception\": \"dream\", \"target\": \"enemy\"}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 12}, \"id\": \"infinite_tsukuyomi\", \"kind\": \"hypnosis\", \"perception\": \"dream\", \"target\": \"enemy\"}",
 []
 ],
@@ -940,6 +960,10 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 3}, \"kind\": \"time_as_space\", \"mult\": 20, \"settle\": [{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 10}}], \"target\": \"enemy\"}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 40}, \"id\": \"super_saiyan\", \"kind\": \"transform\", \"stats\": [{\"kind\": \"mod\", \"op\": \"mul\", \"stat\": \"defense\", \"target\": \"self\", \"value\": {\"flat\": 1.5}}, {\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"move_speed\", \"target\": \"self\", \"value\": {\"flat\": 2}}], \"target\": \"self\"}",
 []
 ],
@@ -1064,7 +1088,15 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 5}, \"exempt\": [\"caster\"], \"kind\": \"global_time_scale\", \"rate\": 0, \"target\": \"world\"}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 5}, \"id\": \"p\", \"kind\": \"timed_power_up\"}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 5}, \"id\": \"snap_rules\", \"kind\": \"rule\", \"rules\": {\"flags\": [\"true_damage\"]}, \"target\": \"self\"}",
 []
 ],
 [
@@ -1176,6 +1208,10 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 6}, \"id\": \"tsukuyomi\", \"kind\": \"hypnosis\", \"perception\": \"dream\", \"target\": \"enemy\", \"target_ref\": \"caster\"}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 6}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"aspd\", \"target\": \"enemy\", \"value\": {\"pct\": -40}}",
 []
 ],
@@ -1233,6 +1269,14 @@
 ],
 [
 "{\"duration\": {\"flat\": 6}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"enemy\", \"value\": {\"pct\": -60}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"move_speed\", \"target\": \"self\", \"value\": {\"flat\": 5}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 6}, \"kind\": \"time_scale\", \"rate\": 3, \"target\": \"self\"}",
 []
 ],
 [
@@ -1557,6 +1601,10 @@
 ],
 [
 "{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 18}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 20}}",
 []
 ],
 [
@@ -2408,6 +2456,14 @@
 [
 "op: unknown kind 'nope'"
 ]
+],
+[
+"{\"kind\": \"polarity_control\", \"radius\": 25, \"select\": {\"stat\": \"polarity\"}, \"sign\": \"repel\", \"strength\": 4, \"target\": \"self\"}",
+[]
+],
+[
+"{\"kind\": \"polarity_control\", \"radius\": 25, \"select\": {\"tag\": \"metal\"}, \"sign\": \"attract\", \"strength\": 4, \"target\": \"self\"}",
+[]
 ],
 [
 "{\"kind\": \"pull\"}",

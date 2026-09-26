@@ -497,6 +497,8 @@ _NOTES: dict[str, Callable[..., str]] = {
     "rule_override": lambda tg, what: f"rule_override {what} -> {tg.name}",
     **{k: (lambda tg, *a, _k=k: f"{_k} {' '.join(map(str, a))} -> {tg.name}") for k in (      # F6a mimic (src/effects/mimic.py): room = log line only
         "fusion_strike", "remove_restriction", "dispel", "copy_technique", "copy", "false_percept", "control_link", "break_link", "erase")},
+    **{k: (lambda tg, *a, _k=k: f"{_k} {' '.join(map(str, a))} -> {tg.name}") for k in (      # F7 time / world (src/effects/timeworld.py): room = log line only
+        "global_time_scale", "time_scale", "time_as_space", "apply_status_to_world", "polarity_control")},
     "set_aggro": lambda tg, mode: f"set_aggro {mode} -> {tg.name}",
     "set_targeting": lambda tg: f"set_targeting -> {tg.name}",
     "retarget": lambda tg, ref: f"retarget {ref} -> {tg.name}",

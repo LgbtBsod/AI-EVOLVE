@@ -292,6 +292,14 @@ def primitive_effects() -> list[dict]:
             {"kind": "break_link", "target": "self"},
             {"kind": "erase", "target": "self", "when": "ctx.hp_pct < 0"},          # never fires on the hero itself
         ], "mimic"),
+        # время и мир (src/effects/timeworld.py): скорость мира / сущности, субъективное время, статус на мир, полярность
+        ev("prim.time_world", "combat_start", [
+            {"kind": "global_time_scale", "target": "world", "rate": 0.0, "duration": dur(1), "exempt": ["caster"]},
+            {"kind": "time_scale", "target": "self", "rate": 2.0, "duration": dur(2)},
+            {"kind": "time_as_space", "target": "self", "mult": 3, "duration": dur(1), "settle": [{"kind": "heal", "target": "self", "stat": "hp", "value": {"flat": 1}}]},
+            {"kind": "apply_status_to_world", "target": "world", "status": "slow", "duration": dur(1), "filter": {"faction": "nobody"}},
+            {"kind": "polarity_control", "target": "self", "sign": "attract", "select": {"tag": "metal"}, "strength": 1, "radius": 5},
+        ], "time"),
         # кража и применение техники
         ev("prim.learn", "use", [
             {"kind": "learn", "target": "self", "ability_id": "forge_technique"},
