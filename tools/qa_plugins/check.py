@@ -18,16 +18,17 @@ import hashlib
 import importlib.util
 import json
 import os
-import re
 import shlex
 import shutil
 import sys
 import time
 from pathlib import Path
 
+import glob_match
 import qa_graph
 import qa_pool
 import qa_report as R
+from glob_match import gmatch  # noqa: F401  (re-export: tests and plugins import it from here)
 from probe_settings import ROOT, qa_settings
 
 CACHE_DIR = ROOT / "dev_probe_output" / ".qa_cache"
@@ -96,30 +97,12 @@ def load_registry(cfg: dict | None = None, python_dir: Path | None = None) -> di
 
 # ---------------------------------------------------------------- files, selection
 
-def _glob_re(glob: str) -> str:
-    """Translate a watch glob to a regex with `PurePosixPath.full_match` semantics (works on any Python): a `**`
-    segment matches zero or more directories (as the LAST segment: everything below), `*` / `?` never cross a `/`."""
-    parts, out = glob.split("/"), []
-    for n, seg in enumerate(parts):
-        last = n == len(parts) - 1
-        if seg == "**":
-            out.append(".+" if last else "(?:[^/]+/)*")          # the optional directories carry their own "/"
-            continue
-        out.append("".join("[^/]*" if c == "*" else "[^/]" if c == "?" else re.escape(c) for c in seg))
-        out.append("" if last else "/")
-    return "".join(out)
-
-
-def gmatch(path: str, glob: str) -> bool:
-    return re.fullmatch(_glob_re(glob), path) is not None
-
-
 def watches_of(chk: R.Check) -> tuple:
     return chk.watches or ("**",)        # no declared inputs = the whole repo
 
 
 def matches(chk: R.Check, files) -> bool:
-    return any(gmatch(f, g) for f in files for g in watches_of(chk))
+    return any(glob_match.matches(f, watches_of(chk)) for f in files)
 
 
 def repo_files() -> list:
@@ -188,7 +171,7 @@ class Hasher:
 
 def cache_key(chk: R.Check, argv, files, graph, hasher: Hasher) -> str:
     """sha256(check name + definition + used command + contents of watched files and their import closure + AI_EVOLVE_* env)."""
-    watched = {f for f in files if any(gmatch(f, g) for g in watches_of(chk))}
+    watched = {f for f in files if glob_match.matches(f, watches_of(chk))}
     py = [f for f in watched if f.endswith(".py") and f in graph]
     inputs = sorted(watched | (qa_graph.reachable(graph, py) if py else set()))
     h = hashlib.sha256()

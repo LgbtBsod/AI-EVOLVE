@@ -21,7 +21,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import catalog, lua_gen, lua_parse, validate
+from . import catalog, lua_gen, validate
 
 
 def _load_json(path: str | None) -> dict:

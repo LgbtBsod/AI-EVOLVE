@@ -111,6 +111,7 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 |---|---|---|---|---|---|
 | `agent_kit` | `import agent_kit` | roles, short prompts, stage routing and generated .claude/agents/*.md for sub-agents and Workflow stages... | re-typed CONTEXT blocks in agent prompts and Workflow scripts | prompt text / problem list | - |
 | `file_toc` | `import file_toc` | table of contents helper (stdlib only): Python via ast with line ranges, other languages via the regexes... | reading a big file to see what is in it | list of `Lnn name` lines | - |
+| `glob_match` | `import glob_match` | the one path-glob matcher (PurePosixPath.full_match; ** = any dirs) for watches and selection | regex glob translator in check.py | bool | - |
 | `lua_bridge` | `import lua_bridge` | alias of src/content/lua_bridge.py: load(path) runs a Lua file in the sandbox and returns its data... | reading Lua files or embedding a Lua runtime | dict from one JSON string | - |
 | `pack_builder` | `import pack_builder` | pack_builder - the logic behind `qa.py pack`: rank files for a task, pick symbol pointers, collect... | - | - | - |
 | `probe_analysis` | `import probe_analysis` | run analysis shared by dev_probe, agent_play and probe_db: hypotheses and one summary; the loops live in... | reading raw samples | summary text | - |

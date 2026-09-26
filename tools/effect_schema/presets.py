@@ -13,7 +13,7 @@
 
 from __future__ import annotations
 
-from .schema import Effect, Op, Value, Scale, Trigger
+from .schema import Op, Value, Scale, Trigger
 
 
 # ------------------------------------------------------- values

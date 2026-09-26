@@ -104,10 +104,6 @@
    "C901": 1,
    "PLR0912": 1
   },
-  "tools/effect_schema/cli.py": {
-   "F401": 1,
-   "vulture": 1
-  },
   "tools/effect_schema/digest.py": {
    "PERF401": 1
   },
@@ -119,7 +115,6 @@
    "B905": 4,
    "BLE001": 2,
    "C901": 2,
-   "F401": 1,
    "PLR0911": 1,
    "dup_defs": 1
   },
@@ -278,7 +273,6 @@
   },
   "tools/web_builder/headless.py": {
    "ARG002": 1,
-   "F401": 1,
    "dup_defs": 1
   },
   "tools/web_builder/screenshot.py": {
@@ -359,7 +353,7 @@
   "tools/qa_plugins/changed.py::merge_plain": 13,
   "tools/qa_plugins/changed.py::risk_flags": 12,
   "tools/qa_plugins/changed.py::summarize": 19,
-  "tools/qa_plugins/check.py::cache_key": 12,
+  "tools/qa_plugins/check.py::cache_key": 11,
   "tools/qa_plugins/check.py::cmd_check": 24,
   "tools/qa_plugins/check.py::execute": 11,
   "tools/qa_plugins/check.py::run_checks": 20,
@@ -409,7 +403,6 @@
   "B905": 17,
   "BLE001": 25,
   "C901": 30,
-  "F401": 3,
   "PERF401": 16,
   "PLR0911": 6,
   "PLR0912": 17,
@@ -429,8 +422,8 @@
   "cc_max": 70,
   "dup_defs": 8,
   "layers_broken": 0,
-  "ruff": 211,
-  "vulture": 4
+  "ruff": 208,
+  "vulture": 3
  },
  "version": 1
 }

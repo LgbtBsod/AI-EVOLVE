@@ -24,7 +24,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 if __package__ in (None, ""):  # запуск файлом: python tools/effect_schema/itemcheck.py
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
