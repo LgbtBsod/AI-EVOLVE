@@ -12,4 +12,5 @@ Every turn re-reads the whole context, so only two things are cheap: fewer turns
 6. **Small verified steps:** one change, run the check, next change. Do not re-read a file you just edited (a failed Edit says so). `qa.py changed` instead of `git diff`.
 7. **Environment:** project python is `.venv/Scripts/python.exe` (never `python3`: the Store stub hangs), relative paths from the repo root, LF files, no windowed game.
 8. **Report:** the contract of your role file (<= 250 words; lines `files:` / `results:` / `unfinished:`); only what you ran; name what is uncertain. At the turn budget: hand off and stop. Off switch of the guard: `AI_EVOLVE_GUARD=off`.
+   Symbols/chains: `qa.py sym FILE:NAME [--callers]` (one function, numbered) and `qa.py q "grep:PAT@glob+ctx" "sym:F:N" "read:F:A-B"` (a grep -> outline -> range chain in ONE call).
 9. **Relay:** long agents cost more per turn, so work in short relays: `qa.py ckpt "done" --next "..."` about every 10 calls; at your call cap write the handoff the same way, end with the LAST line `RELAY: continue with qa.py resume` and stop. Start of a continuation: `qa.py resume` (silent when nothing is unfinished).

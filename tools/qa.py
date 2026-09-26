@@ -181,9 +181,41 @@ def cmd_dead(args):
     return 0
 
 
+def _py_twins(outline_lines):
+    """{rust name: python file} for the #[pyfunction]/#[pyclass] items of an outline that have a `def`/`class` of the same name."""
+    import re as _re
+    names = {m.group(1) for ln in outline_lines for m in [_re.search(r"(?:fn|struct) (\w+).*\[[^\]]*py(?:function|class)", ln)] if m}
+    twins = {}
+    for py in (qa_graph.build() if names else {}):
+        body = (ROOT / py).read_text(encoding="utf-8", errors="replace")
+        twins.update({n: py for n in names if n not in twins and _re.search(rf"^\s*(?:def|class) {n}", body, _re.M)})
+    return twins
+
+
+def _ctx_other(path, rel, limit):
+    """ctx of a .rs/.lua file: size, Python twins of #[pyfunction]s, the (regex, labelled) outline."""
+    import file_toc
+    text = path.read_text(encoding="utf-8", errors="replace")
+    ext = path.suffix.lower().lstrip(".")
+    lines = file_toc.fit((file_toc.rust_outline if ext == "rs" else file_toc.lua_outline)(text), limit)
+    twins = _py_twins(lines)
+    print(f"{rel}: {len(text.splitlines())} lines ({ext}); outline = regex (tree-sitter not used)")
+    if twins:
+        print("python twins: " + ", ".join(f"{n} -> {p}" for n, p in sorted(twins.items())))
+    print("outline:")
+    for line in lines:
+        print(f"  {line}")
+    return 0
+
+
 def cmd_ctx(args):
     path = (ROOT / args.file).resolve()
-    rel = relpath(path)
+    if path.suffix.lower() in (".rs", ".lua") and path.is_file():
+        return _ctx_other(path, relpath(path), args.limit)
+    return _ctx_python(path, relpath(path), args)
+
+
+def _ctx_python(path, rel, args):
     graph = qa_graph.build()
     node = graph.get(rel)
     if node is None:

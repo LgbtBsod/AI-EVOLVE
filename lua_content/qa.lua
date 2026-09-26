@@ -330,6 +330,8 @@ return {
   -- ===== repo hygiene (tools/repo_hygiene.py; `qa.py hygiene`) =====
   -- Every list is in .gitignore syntax (trailing `/` = directories, `*` `?` `[..]` per name, `**` = any depth, `!` re-includes).
   -- `qa.py ckpt` / `qa.py resume` (relay of short agents): journal dev_probe_output/qa/journal.jsonl, snapshots refs/qa/ckpt/N
+  -- `qa.py sym` / `qa.py q`: read-only query caps (lines)
+  q = { sym_lines = 60, callers = 8, max_line_chars = 160, total_lines = 120, per_query_lines = 30, grep_files = 12, grep_per_file = 3 },
   ckpt = { keep = 20, history_tail_bytes = 30000, hook_timeout_s = 8 },
   hygiene = {
     max_file_kb = 1024,          -- a tracked file above this fails (assets that must be bigger: list them in `allow`)
@@ -390,6 +392,10 @@ return {
         when = "an agent burns context on big or repeated reads; --stats shows the blocks and the tokens kept out of the context", replaces = "hoping agents read with offset/limit and batch their calls", output = "qa_report line (+ per-rule lines for --stats)", group = "read", cost = "low" },
       { id = "ckpt", command = "python tools/qa.py ckpt \"done\" --next \"next action\" [--files a,b] [--agent NAME] [--auto]", purpose = "checkpoint of unfinished work: one journal line + a safety snapshot (refs/qa/ckpt/N, working tree untouched), the last 20 kept",
         when = "about every 10 tool calls and at the call cap of an agent (relay), before a risky step", replaces = "a hand-written handoff brief", output = "one line: ckpt #N saved", group = "build", cost = "low" },
+      { id = "sym", command = "python tools/qa.py sym FILE:NAME [--callers] [--context N]", purpose = "one function/class/struct/impl/Lua function with line numbers (+ static callers), capped",
+        when = "instead of reading a big file for one symbol", replaces = "Read of a whole file", output = "<= 60 numbered lines", group = "build", cost = "low" },
+      { id = "q", command = "python tools/qa.py q \"grep:PAT@glob+ctx\" \"sym:FILE:NAME\" \"ctx:FILE\" \"read:FILE:A-B\" \"find:GLOB\" \"changed\"", purpose = "N read-only queries in parallel in one call, one grouped capped output",
+        when = "a dependent read chain (grep, outline, read range) that would cost 3 turns", replaces = "3 sequential grep/ctx/Read turns", output = "<= 120 lines, overflow in q_last.txt", group = "build", cost = "low" },
       { id = "resume", command = "python tools/qa.py resume [--brief|--check|--diff N|--restore N [--apply]]", purpose = "where the last session stopped (<= 6 lines, silent when clean): dirty, orphan modules, broken files, last ckpt, SAFE/RISKY/BROKEN",
         when = "start of a session or of a relay agent (continue: $(qa.py resume --brief)), after a limit crash", replaces = "re-exploring the repo to find out what was half done", output = "<= 6 lines", group = "build", cost = "low" },
       { id = "prompt", command = "python tools/qa.py prompt ROLE --task \"...\" [--files a,b] [--done \"...\"] [--pack] | --workflow ROLE", purpose = "a SHORT agent prompt (<= 400 tokens): the shared context is a repo file (docs/agent_context/), the prompt only points at it and states TASK / SCOPE / DONE WHEN",
