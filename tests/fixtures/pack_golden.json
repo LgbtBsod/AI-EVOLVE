@@ -1,0 +1,15 @@
+[
+  {"task": "add a check for repo hygiene: tracked venv, saves and big files", "expect": ["tools/repo_hygiene.py", "tools/qa_plugins/hygiene.py", "lua_content/qa.lua"]},
+  {"task": "guard hook that answers a big unranged read with an outline", "expect": ["tools/guard_hook.py", "lua_content/guards.lua"]},
+  {"task": "token ledger: transcript waste per agent", "expect": ["tools/token_ledger.py", "tools/qa_plugins/tokens.py"]},
+  {"task": "agent prompt templates and model routing per role", "expect": ["tools/agent_kit.py", "lua_content/agent_kit.lua", "tools/qa_plugins/prompt.py"]},
+  {"task": "tools registry: find an existing tool and regenerate the tools doc", "expect": ["tools/tool_registry.py", "tools/qa_plugins/tools.py"]},
+  {"task": "quality ratchet baseline for the tools scope", "expect": ["tools/quality_metrics.py", "tools/qa_plugins/quality.py"]},
+  {"task": "pathfinding A* jump point search and flow field", "expect": ["src/gameplay/pathfinding.py"]},
+  {"task": "damage pipeline: armor penetration, resist and block", "expect": ["src/effects/damage.py", "lua_content/damage.lua"]},
+  {"task": "item effect ops interpreter", "expect": ["src/effects/ops.py", "src/effects/runtime.py"]},
+  {"task": "same-seed runs differ: find the first divergent frame", "expect": ["tools/qa_plugins/determinism.py"]},
+  {"task": "resume after a killed session from the checkpoint journal", "expect": ["tools/qa_plugins/resume.py", "tools/qa_plugins/ckpt.py"]},
+  {"task": "add a static check for undefined names and syntax errors in tools and src", "expect": ["tools/quality_metrics.py", "tools/qa_plugins/check.py", "lua_content/qa.lua"]},
+  {"task": "enemy learns a tactic against the hero", "expect": ["src/gameplay/enemy_ai.py", "src/gameplay/tactics.py", "rust_core/src/tactics/mod.rs"]}
+]

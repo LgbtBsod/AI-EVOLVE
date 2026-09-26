@@ -335,12 +335,12 @@ return {
   -- `qa.py ckpt` / `qa.py resume` (relay of short agents): journal dev_probe_output/qa/journal.jsonl, snapshots refs/qa/ckpt/N
   -- `qa.py sym` / `qa.py q`: read-only query caps (lines)
   q = { sym_lines = 60, callers = 8, max_line_chars = 160, total_lines = 120, per_query_lines = 30, grep_files = 12, grep_per_file = 3 },
-  -- qa.py pack: ranked context pack. weights = points per task word matched in path / symbol names / docstring; neighbor = imports or is imported by --files.
+  -- qa.py pack: ranked context pack. weights = points x IDF of each task word matched in path / docstring / registry rows (tools.rows owners) / symbol names; neighbor and churn are tie-breakers. Tests are ranked only when the task says test/pytest.
   pack = {
     max_tok = 1500, chars_per_token = 4, top = 5, pointers = 3, links = 6, tools = 4, churn_commits = 150, history_rows = 300,
-    weights = { path = 3, symbol = 2, doc = 1, neighbor = 2, churn = 1 },
-    stopwords = { "add", "fix", "the", "for", "and", "check", "test", "flaky", "make", "with", "that", "this", "from", "into", "new", "use", "why", "does", "not", "all" },
-    do_not_read = { "dev_probe_output/*", "*.log", "*.jsonl", "tests/fixtures/*", "*_COMPLETE.md", "rust_core/target/*", ".venv*", "*/__pycache__/*", "*.sqlite" },
+    weights = { path = 3, doc = 2.5, tool = 2.5, symbol = 1, body = 0.7, neighbor = 0.5, churn = 0.3 },
+    stopwords = { "add", "fix", "the", "for", "and", "check", "test", "flaky", "make", "with", "that", "this", "from", "into", "new", "use", "why", "does", "not", "all", "error", "file", "code", "static", "tool", "src", "name" },
+    do_not_read = { "dev_probe_output/*", "*.log", "*.jsonl", "tests/fixtures/*", "*_COMPLETE.md", "rust_core/target/*", ".venv*", "*/__pycache__/*", "*.sqlite", "AI-EVOLVE/*", "ai_evolve/*" },
     answers = {
       { words = { "ci ", "actions", "workflow run", "github" }, use = "qa.py ci [--wait]", why = "CI verdict + failing step only; never gh run view --log" },
       { words = { "flaky", "same-seed", "same seed", "determinism", "nondetermin" }, use = "qa.py determinism \"SCRIPT\" --pairs 6", why = "first divergent frame + hypotheses" },

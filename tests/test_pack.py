@@ -39,11 +39,29 @@ def test_state_lines_report_non_ok_rows(tmp_path):
     assert "fail golden" in PB.state_lines(tmp_path, CFG, hist)[0]
 
 
-def test_ranking_finds_hygiene_files():
-    graph = PB.qa_graph.build(True)
-    ranked = PB.rank_files("repo hygiene", [], CFG, graph)
-    assert any("hygiene" in rel for _, rel, _ in ranked)
-    assert not any(rel.startswith("dev_probe_output/") for _, rel, _ in ranked)
+GOLDEN = json.loads((ROOT / "tests" / "fixtures" / "pack_golden.json").read_text(encoding="utf-8"))
+
+
+def _top3(task: str) -> list:
+    return [rel for _, rel, _ in PB.rank_files(task, [], CFG, PB.qa_graph.build(True))][:3]
+
+
+def test_golden_top3_hit_rate():
+    """Real past tasks -> expected files. Hit = one expected file in the top 3 (before the IDF ranking: 0.77; now >= 0.7 is the floor)."""
+    tops = {g["task"]: _top3(g["task"]) for g in GOLDEN}
+    hits = sum(any(f in tops[g["task"]] for f in g["expect"]) for g in GOLDEN)
+    misses = [g["task"] for g in GOLDEN if not any(f in tops[g["task"]] for f in g["expect"])]
+    assert hits / len(GOLDEN) >= 0.7, f"hit rate {hits}/{len(GOLDEN)}; missed: {misses}"
+
+
+def test_tests_are_ranked_only_when_the_task_asks_for_them():
+    assert not any(rel.startswith("tests/") for rel in _top3("repo hygiene"))
+    assert any(rel.startswith("tests/") for _, rel, _ in PB.rank_files("pytest for repo hygiene", [], CFG, PB.qa_graph.build(True)))
+    assert not any(rel.startswith("dev_probe_output/") for rel in _top3("repo hygiene"))
+
+
+def test_words_are_stemmed_before_the_stop_list():
+    assert PB.words_of("tools names", {"tool", "name"}) == set()
 
 
 def test_build_pack_shape():
