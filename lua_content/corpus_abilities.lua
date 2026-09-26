@@ -109,5 +109,28 @@ return {
       ops = { { kind = "grant_vision", target = "self", value = { flat = 15 }, duration = { flat = 10 } } } },
     { id = "corpus_evade", family = "perception", tags = { "spell" }, trigger = "cast",       -- dodge = precognition without a warning
       ops = { { kind = "dodge", target = "self", duration = { flat = 10 }, cooldown = { flat = 3 } } } },
+
+    -- ---- slice F4: TRIGGER family (family = "trigger"; src/effects/triggers.py, docs/EFFECT_SCHEMA.md "Triggers") ----
+    { id = "corpus_god_hand", corpus = 35, family = "trigger", tags = { "spell" }, trigger = "cast", cooldown = 120,   -- 12 lives, resist the killer's damage type
+      ops = { { kind = "on_lethal", target = "self", id = "god_hand", charges = 12, restore = 100, duration = { flat = 600 },
+                ops = { { kind = "counter_delta", target = "self", value = { flat = 60 }, duration = { flat = 60 } },
+                        { kind = "status", target = "self", buff_id = "corpus_god_hand_ward", duration = { flat = 30 } } } } } },
+    { id = "corpus_god_hand_ward", tags = { "buff" }, ops = { { kind = "mod", target = "self", stat = "defense", op = "add", value = { flat = 5 } } } },
+
+    { id = "corpus_avatar_state", corpus = 59, family = "trigger", tags = { "spell", "form" }, trigger = "cast", cooldown = 90,
+      ops = { { kind = "timed_power_up", target = "self", id = "avatar_state", duration = { flat = 20 } },
+              { kind = "on_lethal", target = "self", id = "avatar_guard", charges = 1, keep = 1, duration = { flat = 20 },
+                ops = { { kind = "transform", target = "self", id = "avatar", duration = { flat = 10 },
+                          stats = { { kind = "mod", target = "self", stat = "defense", op = "mul", value = { flat = 2 } } } } } } } },
+
+    { id = "corpus_last_stand_a", family = "trigger", tags = { "spell" }, trigger = "cast",     -- interceptor order: priority, then id
+      ops = { { kind = "on_lethal", target = "self", id = "ls_b", priority = 1, keep = 5, charges = 1 } } },
+    { id = "corpus_last_stand_b", family = "trigger", tags = { "spell" }, trigger = "cast",
+      ops = { { kind = "on_lethal", target = "self", id = "ls_a", priority = 0, keep = 1, charges = 1 } } },
+
+    { id = "corpus_delayed_blast", family = "trigger", tags = { "spell" }, trigger = "cast", range = 30, needs_target = true,
+      ops = { { kind = "delay", target = "enemy", after = { flat = 3 }, ops = { hit(40) } } } },
+    { id = "corpus_delayed_blast_persist", family = "trigger", tags = { "spell" }, trigger = "cast", range = 30, needs_target = true,
+      ops = { { kind = "delay", target = "enemy", after = { flat = 3 }, persist = true, ops = { hit(40) } } } },
   },
 }

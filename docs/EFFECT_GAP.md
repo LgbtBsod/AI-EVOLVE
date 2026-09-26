@@ -336,6 +336,8 @@ Line numbers are from grep/outline reads; nothing was run.
 - Numeric ids must be stable across saves and Lua edits: index by registration order breaks when a content row is added. Persist names in saves, ids only in memory.
 
 
+**Status 2026-09-27 (slice F4)**: with exact aliases 58.3% (35/60, was 55.0%): #35 God Hand and #59 Avatar State via `on_lethal` + `counter_delta` (`delay` is implemented, but #25 needs global_time_scale and #54 write/wish/kill.cause; `counter`/`reflect`/`redirect_harm` not done).
+
 **Status 2026-09-27 (slice F1)**: with exact aliases 41.7% (25/60, was 28.3%). Newly expressible: #8 Rasengan, #9 Kurama mode, #17 Gear 5, #23 Bungee Gum, #24 Guanyin Zero, #27 Instant Transmission, #28 Super Saiyan, #36 Repulsor (movement aliases carry `params`; `stance`/`transform`/`timed_power_up` are handlers; content: `lua_content/corpus_abilities.lua`). Still blocked from the slice list: #12 (dodge), #16 (zone), #43 (time_scale), #59 (on_lethal).
 **Status 2026-09-27 (slice F2)**: with exact aliases 48.3% (29/60, was 41.7%). Newly expressible: #49 One Ring dominion, #51 The Voice, #58 Axii, #60 Bloodbending (kinds hypnosis/command/possess/dominance/temptation/tame in `src/effects/control.py`; aliases blood_manipulation, enter_dream). Control rows are in `lua_content/corpus_abilities.lua` (`family = "control"`). Still blocked: #11 (time_as_space), #13 (apply_status_to_world), #15 (perceive/reveal), #20 (control_link).
 

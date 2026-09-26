@@ -124,10 +124,12 @@ return {
     "прогрессия состояний (Gears, Tusk acts)"),
 
   -- отложенные / условные ------------------------------------------------------------
-  k("delay", "planned", { "ops", "after" }, {},
-    "отложенное исполнение ops (tick-based поверх Timeline)"),
-  k("on_lethal", "planned", { "ops" }, {},
-    "сработает при летальном уроне (обобщение Last Will)"),
+  k("delay", "op_delay", { "ops", "after" }, { "persist" },
+    "ops через `after` игровых секунд (очередь EffectManager, часы менеджера); отменяется смертью кастера, если не persist"),
+  k("on_lethal", "op_on_lethal", { "ops" }, { "id", "charges", "priority", "cooldown", "duration", "keep", "restore" },
+    "перехватчик летального удара ДО применения: выжить на keep hp / restore % max hp, ops на защищаемом; charges (0 = без предела), порядок (priority, id)"),
+  k("counter_delta", "op_counter_delta", {}, { "value", "duration" },
+    "внутри on_lethal.ops: резист к типу урона, который был бы смертельным (value = %, по умолчанию 50)"),
   k("conditional", "planned", { "when", "ops", "else_ops" }, {},
     "if/else над поддеревом ops"),
 

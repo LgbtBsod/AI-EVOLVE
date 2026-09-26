@@ -1,5 +1,5 @@
 {
-"n_lua": 499,
+"n_lua": 512,
 "cases": [
 [
 "\"x\"",
@@ -166,6 +166,14 @@
 ]
 ],
 [
+"{\"after\": {\"flat\": 3}, \"kind\": \"delay\", \"ops\": [{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 40}}], \"persist\": true, \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"after\": {\"flat\": 3}, \"kind\": \"delay\", \"ops\": [{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 40}}], \"target\": \"enemy\"}",
+[]
+],
+[
 "{\"arc\": 0, \"kind\": \"deal\", \"stat\": \"hp\", \"target\": \"area\", \"value\": 1}",
 [
 "op: arc (degrees, 0 < arc <= 360) is for target=area"
@@ -191,6 +199,10 @@
 ],
 [
 "{\"buff_id\": \"cerberus.hide\", \"duration\": {\"flat\": 3}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"corpus_god_hand_ward\", \"duration\": {\"flat\": 30}, \"kind\": \"status\", \"target\": \"self\"}",
 []
 ],
 [
@@ -289,6 +301,22 @@
 ],
 [
 "{\"chance\": 60, \"cooldown\": {\"flat\": 10}, \"duration\": {\"flat\": 10}, \"id\": \"gae_bolg\", \"kind\": \"precognition\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"charges\": 1, \"duration\": {\"flat\": 20}, \"id\": \"avatar_guard\", \"keep\": 1, \"kind\": \"on_lethal\", \"ops\": [{\"duration\": {\"flat\": 10}, \"id\": \"avatar\", \"kind\": \"transform\", \"stats\": [{\"kind\": \"mod\", \"op\": \"mul\", \"stat\": \"defense\", \"target\": \"self\", \"value\": {\"flat\": 2}}], \"target\": \"self\"}], \"target\": \"self\"}",
+[]
+],
+[
+"{\"charges\": 1, \"id\": \"ls_a\", \"keep\": 1, \"kind\": \"on_lethal\", \"priority\": 0, \"target\": \"self\"}",
+[]
+],
+[
+"{\"charges\": 1, \"id\": \"ls_b\", \"keep\": 5, \"kind\": \"on_lethal\", \"priority\": 1, \"target\": \"self\"}",
+[]
+],
+[
+"{\"charges\": 12, \"duration\": {\"flat\": 600}, \"id\": \"god_hand\", \"kind\": \"on_lethal\", \"ops\": [{\"duration\": {\"flat\": 60}, \"kind\": \"counter_delta\", \"target\": \"self\", \"value\": {\"flat\": 60}}, {\"buff_id\": \"corpus_god_hand_ward\", \"duration\": {\"flat\": 30}, \"kind\": \"status\", \"target\": \"self\"}], \"restore\": 100, \"target\": \"self\"}",
 []
 ],
 [
@@ -628,6 +656,10 @@
 []
 ],
 [
+"{\"duration\": {\"flat\": 10}, \"id\": \"avatar\", \"kind\": \"transform\", \"stats\": [{\"kind\": \"mod\", \"op\": \"mul\", \"stat\": \"defense\", \"target\": \"self\", \"value\": {\"flat\": 2}}], \"target\": \"self\"}",
+[]
+],
+[
 "{\"duration\": {\"flat\": 10}, \"id\": \"parasite\", \"kind\": \"possess\", \"on_exit\": [{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"flat\": 5}}], \"requires\": {\"cmp\": \"lt\", \"stat\": \"max_hp\", \"vs\": \"source\"}, \"target\": \"enemy\"}",
 []
 ],
@@ -789,6 +821,10 @@
 ],
 [
 "{\"duration\": {\"flat\": 2.5}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"move_speed\", \"target\": \"enemy\", \"value\": {\"pct\": -85}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 20}, \"id\": \"avatar_state\", \"kind\": \"timed_power_up\", \"target\": \"self\"}",
 []
 ],
 [
@@ -1021,6 +1057,10 @@
 ],
 [
 "{\"duration\": {\"flat\": 5}, \"kind\": \"mod\", \"op\": \"mul\", \"stat\": \"vision_range\", \"target\": \"enemy\", \"value\": {\"pct\": 0}}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 60}, \"kind\": \"counter_delta\", \"target\": \"self\", \"value\": {\"flat\": 60}}",
 []
 ],
 [
@@ -1453,6 +1493,14 @@
 ],
 [
 "{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 25}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 40}}",
+[]
+],
+[
+"{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 40}}",
 []
 ],
 [
@@ -2130,6 +2178,10 @@
 ],
 [
 "{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"damage_taken\", \"target\": \"self\", \"value\": {\"pct\": -20}}",
+[]
+],
+[
+"{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"self\", \"value\": {\"flat\": 5}}",
 []
 ],
 [

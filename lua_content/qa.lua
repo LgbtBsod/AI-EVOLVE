@@ -409,7 +409,7 @@ return {
   new_tool = { similar_score = 6, show = 3 },
   -- qa.py coverage (tools/qa_plugins/coverage.py): share of the 60-ability corpus (tests/fixtures/ability_corpus.json) the canon ops + exact aliases express.
   -- floor = ratchet on with_aliases (FAIL under it; raise it whenever the number rises, never lower it); target = warn below; spec = doc's full-spec share.
-  coverage = { floor = 55.0, target = 90.0, spec = 80.0 },
+  coverage = { floor = 58.3, target = 90.0, spec = 80.0 },
   hygiene = {
     max_file_kb = 1024,          -- a tracked file above this fails (assets that must be bigger: list them in `allow`)
     allow = {},

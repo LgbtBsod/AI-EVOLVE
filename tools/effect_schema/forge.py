@@ -265,6 +265,13 @@ def primitive_effects() -> list[dict]:
             {"kind": "reveal", "target": "self", "duration": dur(3), "to": "caster"},
             {"kind": "precognition", "target": "self", "id": "forge_pre", "duration": dur(3), "cooldown": dur(1), "chance": 70},
         ], "perception"),
+        # триггеры (src/effects/triggers.py): перехват летального удара, резист к его типу, отложенные ops
+        ev("prim.triggers", "combat_start", [
+            {"kind": "on_lethal", "target": "self", "id": "forge_lethal", "charges": 1, "keep": 1, "duration": dur(3),
+             "ops": [{"kind": "counter_delta", "target": "self", "value": {"flat": 50}}]},
+            {"kind": "counter_delta", "target": "self", "value": {"flat": 50}},
+            {"kind": "delay", "target": "self", "after": dur(1), "ops": [{"kind": "heal", "target": "self", "stat": "hp", "value": {"flat": 1}}]},
+        ], "trigger"),
         # кража и применение техники
         ev("prim.learn", "use", [
             {"kind": "learn", "target": "self", "ability_id": "forge_technique"},

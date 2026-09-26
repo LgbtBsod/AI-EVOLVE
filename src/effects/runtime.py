@@ -489,6 +489,9 @@ _NOTES: dict[str, Callable[..., str]] = {
     "perceive": lambda tg, what: f"perceive {what} -> {tg.name}",
     "reveal": lambda tg, to: f"reveal (to {to}) -> {tg.name}",
     "precognition": lambda tg, pid: f"precognition {pid} -> {tg.name}",
+    "on_lethal": lambda tg, rid: f"on_lethal {rid} -> {tg.name}",
+    "counter_delta": lambda tg, kind, pct: f"counter_delta {kind} {pct} -> {tg.name}",
+    "delay": lambda tg, n: f"delay {n} ops -> {tg.name}",
     "set_aggro": lambda tg, mode: f"set_aggro {mode} -> {tg.name}",
     "set_targeting": lambda tg: f"set_targeting -> {tg.name}",
     "retarget": lambda tg, ref: f"retarget {ref} -> {tg.name}",
@@ -1051,6 +1054,15 @@ class EffectRuntime:
 
     def op_controller(self, cx: OpCall) -> Any:
         return getattr(cx.source, "name", None)
+
+    def op_triggers(self, tgt: Unit) -> dict:         # комната записывает перехватчики, но урон не перехватывает (F4)
+        return tgt.external.setdefault("triggers", {})
+
+    def op_schedule(self, _rec: dict) -> None:        # очереди delay в комнате нет
+        return None
+
+    def op_apply_op(self, cx: OpCall, tgt: Unit, o: dict) -> None:
+        apply_op(self, cx, tgt, o)
 
     def op_perception(self, tgt: Unit) -> dict:       # комната записывает восприятие, но не читает (запросы - у EffectManager)
         return tgt.external.setdefault("perception", {})

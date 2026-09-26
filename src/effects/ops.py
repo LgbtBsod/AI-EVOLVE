@@ -27,6 +27,7 @@ from typing import Any, Callable, NamedTuple, Optional, Protocol
 from src.core.adaptation import WHEEL_MAX_DEFAULT
 from src.effects.control import CONTROL_HANDLERS
 from src.effects.perception import PERCEPTION_HANDLERS
+from src.effects.triggers import TRIGGER_HANDLERS
 
 # ---------------------------------------------------------------- spec kind names -> canon (lua_content/kind_aliases.lua)
 
@@ -345,6 +346,9 @@ class OpHost(Protocol):
     def op_roll(self, cx: OpCall) -> float: ...                          # [0,1) из seeded RNG хоста
     def op_stat_of(self, cx: OpCall, who: str, tgt: Any, stat: str) -> float: ...  # стат источника ("source") / цели ("target")
     # --- perception (src/effects/perception.py) ---
+    def op_triggers(self, tgt: Any) -> dict: ...                         # unit.external["triggers"]: lethal interceptors / last_lethal
+    def op_schedule(self, rec: dict) -> None: ...                        # delay queue (manager only)
+    def op_apply_op(self, cx: OpCall, tgt: Any, o: dict) -> None: ...
     def op_perception(self, tgt: Any) -> dict: ...                       # unit.external["perception"]: perceived / revealed / precog
     def op_ident(self, tgt: Any) -> Any: ...                             # id цели (ключ perceived)
 
@@ -1042,7 +1046,7 @@ OP_HANDLERS: dict[str, Handler] = {
     "escalate": op_escalate, "deescalate": op_deescalate, "trigger_true_form": op_trigger_true_form,
     "rotate_wheel": op_rotate_wheel, "display_wheel": op_display_wheel, "halt_wheel": op_halt_wheel,
     "stance": op_stance, "transform": op_transform, "timed_power_up": op_timed_power_up,
-    **CONTROL_HANDLERS, **PERCEPTION_HANDLERS,
+    **CONTROL_HANDLERS, **PERCEPTION_HANDLERS, **TRIGGER_HANDLERS,
 }
 
 

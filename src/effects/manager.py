@@ -47,6 +47,7 @@ from typing import Any, Callable, Iterable, Optional, Protocol
 
 from . import damage
 from . import perception
+from . import triggers
 from .control import release_control
 from .ops import OpCall, Periodic, Tracked, apply_op, form_abilities, replace_contribution_game
 from .runtime import EffectRuntime, Unit, buff_fields, resolve_value, rules
@@ -460,6 +461,8 @@ class EffectManager:
         self.telegraphs: list[Telegraph] = []
         self._handlers: list[Callable[[HitInfo], None]] = []
         self._depth = 0
+        self._delayed: list[dict] = []   # F4 `delay`: {at, seq, caster, target, ops, persist, src, tags}
+        self._delay_seq = 0
         self._status_book: dict = {}     # (id сущности, status id) -> (стаки, до какого времени)
 
     # ---------------------------------------------------------------- registry
@@ -543,6 +546,16 @@ class EffectManager:
             self.telegraphs.remove(tg)
             if is_alive(tg.caster) and self.state(tg.caster):
                 self._execute(self.state(tg.caster), tg.ability, tg.target, center=(tg.x, tg.y))
+        self._run_delayed()
+
+    def _run_delayed(self) -> None:
+        """F4 `delay`: due records in (at, seq) order; a dead caster cancels its record unless `persist`."""
+        for r in triggers.drain_delayed(self, self._delayed):
+            cst = self.state(r["caster"].entity)
+            if cst is None or (not r["persist"] and not is_alive(cst.entity)):
+                continue
+            tgt = r["target"].entity if r["target"] is not None else None
+            self._run_ops(cst, r["ops"], tgt, f"{r['src']}#delay", r["tags"])
 
     def apply_status(self, target, status_id: str, source=None, stacks: int = 1) -> int:
         """Повесить статус из lua_content/statuses (данные) на цель: стаки += stacks до cap, таймер заново.
@@ -1095,6 +1108,35 @@ class EffectManager:
         tgt.absorbed_kinetic += amount
         tgt.absorbed_until = max(tgt.absorbed_until, self.now) + window
 
+    # F4 triggers (src/effects/triggers.py) -------------------------------------------------------------
+    def op_triggers(self, tgt: EntityState) -> dict:
+        return tgt.unit.external.setdefault("triggers", {})
+
+    def op_schedule(self, rec: dict) -> None:
+        self._delay_seq += 1
+        self._delayed.append({**rec, "seq": self._delay_seq})
+
+    def op_apply_op(self, cx: OpCall, tgt: EntityState, o: dict) -> None:
+        apply_op(self, cx, tgt, o)
+
+    def op_restore_hp(self, tgt: EntityState, pct: float) -> None:
+        self._set_health(tgt, max(1.0, float(tgt.unit._eff("max_hp")) * pct / 100.0), revive=True)
+
+    def op_run_nested(self, st: EntityState, ops: list, primary, src: str) -> None:
+        self._run_ops(st, ops, primary, src, ())
+
+    def op_depth(self) -> int:
+        return self._depth
+
+    def max_depth(self) -> int:
+        return MAX_EVENT_DEPTH
+
+    def op_enter(self) -> None:
+        self._depth += 1
+
+    def op_leave(self) -> None:
+        self._depth -= 1
+
     def op_apply_mod_op(self, cx: OpCall, tgt: EntityState, o: dict) -> None:
         tgt.runtime.op_apply_mod_op(cx, tgt.unit, o)   # тот же событийный слой mod-вкладов
 
@@ -1268,6 +1310,7 @@ class EffectManager:
             info.invulnerable = True
             self._notify(info)
             return info
+        amount = triggers.intercept_lethal(self, tgt_st, st, amount, kind)   # F4 on_lethal: may cancel the lethal part
         amount = min(amount, tgt_st.resource("hp"))
         self._set_health(tgt_st, tgt_st.resource("hp") - amount)
         info.damage = amount
