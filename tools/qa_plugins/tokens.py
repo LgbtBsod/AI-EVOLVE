@@ -131,8 +131,32 @@ def build(main: Path, c: dict, with_agents: bool, top: int, history: Path | None
     return [header(key, m, n_agents, lines, t0), *lines], {"session": key, **m, **extra, "agent_rows": agents}
 
 
+def workflow_lines(run: Path, agents: list[dict], wc: dict) -> list[str]:
+    """Header + one line per agent, untyped (cold start above `untyped_first_ctx`) first."""
+    bad = [a for a in agents if a["first_ctx"] > wc["untyped_first_ctx"]]
+    tot = {k: sum(a[k] for a in agents) for k in ("cw", "cr", "out", "billed")}
+    head = (f"QA verdict={'WARN' if bad else 'OK'} tokens workflow={run.name} agents={len(agents)} untyped={len(bad)} billed={fmt_num(tot['billed'])} "
+            f"cw={fmt_num(tot['cw'])} cr={fmt_num(tot['cr'])} out={fmt_num(tot['out'])}")
+    rows = [f"{'warn' if a in bad else 'ok':<5} {a['id']} {a['label'][:18]:18} turns={a['turns']} first_ctx={a['first_ctx']} cw={a['cw']} cr={a['cr']} out={a['out']} "
+            f"billed={a['billed']} cold_pct={a['cold_pct']}" + (" UNTYPED | use: " + wc["use"] if a in bad else "")
+            for a in sorted(agents, key=lambda a: (a not in bad, -a["billed"]))]
+    return [head, *rows]
+
+
+def cmd_workflow(args, c: dict) -> int:
+    run = L.find_workflow(Path.home() / ".claude" / "projects", args.workflow)
+    if run is None:
+        print(f"tokens: no workflow run '{args.workflow}' under ~/.claude/projects")
+        return 2
+    lines = workflow_lines(run, L.workflow_agents(run), c["workflow"])
+    print("\n".join(lines))
+    return 0
+
+
 def cmd_tokens(args) -> int:
     c = cfg()
+    if args.workflow:
+        return cmd_workflow(args, c)
     main = L.find_session(Path.home() / ".claude" / "projects", ROOT, args.session)
     if main is None:
         print("RESULT status=OK turns=0 agents=0 (no transcript for this project under ~/.claude/projects)" if args.check
@@ -153,6 +177,7 @@ def register(sub):
                        description=__doc__.strip().splitlines()[0], epilog=__doc__.split("\n\n", 1)[1],
                        formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--session", default="latest", help="latest | session id prefix | PATH to a .jsonl")
+    p.add_argument("--workflow", nargs="?", const="latest", metavar="RUN", help="per-agent billing of a workflow run (latest | wf_ID): first_ctx, cw, cr, out, billed, UNTYPED flag")
     p.add_argument("--agents", action="store_true", help="also the sub-agent summary and the heaviest agents")
     p.add_argument("--top", type=int, default=None, help="rows: metric groups / heaviest agents (default: tokens.top)")
     p.add_argument("--json", action="store_true", help="machine output")

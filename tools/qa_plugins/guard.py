@@ -24,7 +24,7 @@ import qa_report as R
 from probe_settings import ROOT, qa_settings
 
 HOOK_FILE = "guard_hook.py"
-EVENTS = {"PreToolUse": "Read|Grep|Glob|Bash", "PostToolUse": "Edit|Write|NotebookEdit", "PreCompact": None, "SessionStart": None, "Stop": None, "SubagentStop": None}     # event -> matcher (None: no matcher)
+EVENTS = {"PreToolUse": "Read|Grep|Glob|Bash|Workflow", "PostToolUse": "Edit|Write|NotebookEdit", "PreCompact": None, "SessionStart": None, "Stop": None, "SubagentStop": None}     # event -> matcher (None: no matcher)
 SETTINGS = ROOT / ".claude" / "settings.json"
 
 
@@ -207,7 +207,7 @@ def cmd_install(args, cfg: dict, t0: float) -> int:
     rel = path.relative_to(ROOT).as_posix() if path.is_relative_to(ROOT) else str(path)
     events = ",".join(installed_events(after)) or "none"
     print(_line("guard", "ok", {"hooks": events, "mode": cfg.get("mode")}, time.perf_counter() - t0))
-    print(f"  {verb} {rel}: PreToolUse (Read|Grep|Glob|Bash: read guard + bash rules) + PostToolUse (Edit|Write|NotebookEdit: python lint) + PreCompact + SessionStart (resume brief) + Stop/SubagentStop (auto ckpt) ->tools/{HOOK_FILE}. "
+    print(f"  {verb} {rel}: PreToolUse (Read|Grep|Glob|Bash|Workflow: read guard + bash rules + untyped-workflow deny) + PostToolUse (Edit|Write|NotebookEdit: python lint) + PreCompact + SessionStart (resume brief) + Stop/SubagentStop (auto ckpt) ->tools/{HOOK_FILE}. "
           + ("Restart the session (or review /hooks) so it stops." if args.uninstall else
              f"Mode={cfg.get('mode')}; restart the session or review /hooks to activate; off: AI_EVOLVE_GUARD=off | qa.py guard --uninstall"))
     return 0

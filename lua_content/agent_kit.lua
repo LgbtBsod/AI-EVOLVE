@@ -16,6 +16,41 @@ return {
   efforts = { "low", "medium", "high", "xhigh", "max" },
   planned = {},                              -- `qa.py X` named in the docs before X exists (roadmap steps 4 and 5); `route --check` warns when one exists and should be dropped here
 
+  -- `qa.py wf estimate` / `qa.py tokens --workflow`: MEASURED cost of Workflow agents. Source: run wf_970d0c97-06a (5 default agents: 73 turns, billed 787649, cw 637648, out 149855; first_ctx 67.1k x4, write 106.9k)
+  -- and wf_9b684e34-b18 (typed explorer: first_ctx 11679). billed = in + cache_write + out; per turn the context grows by `growth_per_turn` (cache write) and the agent writes `out_per_turn`.
+  workflow_cost = {
+    source_run = "wf_970d0c97-06a", typed_source_run = "wf_9b684e34-b18",
+    cold_default = 67000, cold_typed = 12000,       -- first context of an agent without / with agentType
+    avg_turns = 17,                                 -- turns of a map agent of that run (14-18)
+    growth_per_turn = 3600, out_per_turn = 2050,    -- (637648 - 375k cold) / 73 turns ; 149855 / 73 turns
+    default_fanout = 3,                             -- agent() inside .map(...) of an array whose size is not literal
+    untyped_first_ctx = 40000,
+  },
+
+  -- `qa.py wf new NAME --kind K`: lean skeletons (placeholders <name> <kind>); every agent() carries agentType, explorers write their own file section, the script only assembles.
+  wf = {
+    header = "Read docs/agent_context/preamble.md first, in ONE message (your role file is in your agent definition). Budget 14 tool calls; every ~10 run `qa.py ckpt \"done\" --next \"...\"`; at the cap end with `RELAY: continue with qa.py resume`.",
+    kinds = { "audit", "map-write", "review" },
+    agent_type = { audit = "explorer", ["map-write"] = "implementer", review = "reviewer" },  -- map-write agents WRITE their section: explorer has no Write tool
+    skeleton = {
+      "// workflow <name> (<kind>): lean by design - `qa.py wf new`; estimate: `qa.py wf estimate <this file>`; every agent() has agentType (untyped = 67k cold start vs 12k)",
+      "const HEADER = '<header>'",
+      "const AREAS = [",
+      "  { key: 'a', prompt: 'AREA = ... (say what to read and what to write)' },",
+      "  { key: 'b', prompt: 'AREA = ...' },",
+      "]",
+      "const DONE = { type: 'object', properties: { file: { type: 'string' }, lines: { type: 'number' } }, required: ['file', 'lines'] }",
+      "log('estimate: qa.py wf estimate <this file> (fan-out x turns x 12k typed cold start)')",
+      "phase('Work')",
+      "const done = (await parallel(AREAS.map(a => () =>",
+      "  agent(HEADER + ' ' + a.prompt + ' WRITE your section to docs/_wf/<name>/' + a.key + '.md (do not return its text); return only {file, lines}.',",
+      "    { label: a.key, phase: 'Work', schema: DONE, agentType: '<agent_type>' })",
+      "))).filter(Boolean)",
+      "// no verifier agent: the parent assembles and validates with a script step",
+      "return { sections: done, next: 'python tools/qa.py wf assemble docs/_wf/<name> --out docs/<NAME>.md' }",
+    },
+  },
+
   handoff = "every ~10 calls and at the cap run `qa.py ckpt \"done\" --next \"...\"`; at the cap print `RELAY: continue with qa.py resume` as the LAST line and stop.",   -- relay protocol (roadmap step 4)
   report = {
     max_words = 250,

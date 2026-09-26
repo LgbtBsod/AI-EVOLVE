@@ -360,6 +360,8 @@ return {
   ckpt = { keep = 20, history_tail_bytes = 30000, hook_timeout_s = 8 },
   -- qa.py tokens: transcript waste ledger. Read-only = calls that may share one message; a warn needs a value past its limit.
   tokens = {
+    -- `qa.py tokens --workflow`: an agent whose first context is above `untyped_first_ctx` ran without agentType (default agents cold-start ~67k, typed ~12k; agent_kit.lua `workflow_cost`)
+    workflow = { untyped_first_ctx = 40000, use = "agentType explorer|implementer|verifier|reviewer on agent()" },
     chars_per_token = 4, unbounded_lines = 250, top = 8, heavy_top = 5, retry_prefix = 120, trend_keep = 200,
     readonly_tools = { "Read", "Grep", "Glob", "WebFetch", "WebSearch" }, shell_tools = { "Bash", "PowerShell" },
     -- a shell command is a write when it matches one of these (after `2>&1`, `>/dev/null` are removed)
@@ -450,6 +452,8 @@ return {
         when = "start of a session or of a relay agent (continue: $(qa.py resume --brief)), after a limit crash", replaces = "re-exploring the repo to find out what was half done", output = "<= 6 lines", group = "build", cost = "low" },
       { id = "prompt", command = "python tools/qa.py prompt ROLE --task \"...\" [--files a,b] [--done \"...\"] [--pack] | --workflow ROLE", purpose = "a SHORT agent prompt (<= 400 tokens): the shared context is a repo file (docs/agent_context/), the prompt only points at it and states TASK / SCOPE / DONE WHEN",
         when = "before every Agent call or Workflow script (agent, prompt, subagent, context)", replaces = "hand-typing a 1.5-6k-char agent prompt or an inlined CONTEXT block of a Workflow script", output = "the prompt on stdout, one size line on stderr", group = "build", cost = "low" },
+      { id = "wf", command = "python tools/qa.py wf new NAME [--kind audit|map-write|review] | estimate SCRIPT|- | assemble DIR", purpose = "lean Workflow scripts: skeleton with agentType on every agent() (12k instead of 67k cold start), static billed-token estimate of a script, assembler of explorer-written sections",
+        when = "before writing or running a Workflow script", replaces = "hand-written workflows with untyped agents and big JSON embedded into a writer prompt", output = "qa_report line / script text", group = "build", cost = "low" },
       { id = "route", command = "python tools/qa.py route [STAGE|--list|--check|--write-agents]", purpose = "model / effort / tool-call budget per stage of a Workflow or Agent call (cheap for tests and logs, strong for design and review); generates .claude/agents/*.md",
         when = "choosing the model tier of an agent or a Workflow stage", replaces = "guessing the model and effort of each stage", output = "qa_report line + table", group = "build", cost = "low" },
       -- checks (`check:NAME`; purpose = the `what` of the check)

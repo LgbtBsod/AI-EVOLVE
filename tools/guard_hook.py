@@ -513,6 +513,71 @@ def _bash_rule(cmd: str, ctx: Ctx) -> Decision:
     return Decision()
 
 
+_AGENT_CALL = r"(?<![\w.$])agent\s*\("
+
+
+def _call_args(text: str, start: int) -> str:
+    """The text between the parentheses of the call whose `(` is at start-1 (strings skipped, unbalanced = rest of text)."""
+    depth, quote, i = 1, "", start
+    while i < len(text) and depth:
+        ch = text[i]
+        if quote:
+            i += 1 if ch == "\\" else 0
+            quote = "" if ch == quote else quote
+        elif ch in "\"'`":
+            quote = ch
+        else:
+            depth += (ch == "(") - (ch == ")")
+        i += 1
+    return text[start:i]
+
+
+def agent_calls(script: str):
+    """Matches of real `agent(` calls: not definitions (`function agent(`), not inside a `//` comment."""
+    for m in _rx(_AGENT_CALL).finditer(script):
+        head = script[script.rfind("\n", 0, m.start()) + 1:m.start()]
+        if "//" not in head and not head.rstrip().endswith("function"):
+            yield m
+
+
+def untyped_agent_lines(script: str) -> list[int]:
+    """Line numbers of the `agent(...)` calls that carry no `agentType` (definitions `function agent(` are not calls)."""
+    bad = []
+    for m in agent_calls(script):
+        if "agentType" in _call_args(script, m.end()):
+            continue
+        bad.append(script.count("\n", 0, m.start()) + 1)
+    return bad
+
+
+def _workflow_script(ti: dict) -> str:
+    if ti.get("script"):
+        return str(ti["script"])
+    try:
+        with open(str(ti.get("scriptPath") or ""), encoding="utf-8", errors="replace") as fh:
+            return fh.read()
+    except OSError:
+        return ""
+
+
+def _workflow_call(ti: dict, ctx: Ctx) -> Decision:
+    """Deny once a Workflow script with agent() calls lacking agentType (guards.lua `workflow`); the identical repeat or `# allow:untyped` passes."""
+    wcfg = ctx.cfg.get("workflow") or {}
+    script = _workflow_script(ti) if wcfg.get("enabled") else ""
+    if not script or wcfg["allow"] in script:
+        return Decision()
+    lines = untyped_agent_lines(script)
+    if not lines:
+        return Decision()
+    key = f"{ctx.owner}|workflow|{crc_of(script.encode('utf-8', 'replace'))}"
+    if _take_denied(ctx, key):
+        return Decision("allow", "workflow-retry", "untyped", key=key)
+    where = "line " + ", ".join(map(str, lines[:wcfg["max_calls_listed"]]))
+    say = _fmt(wcfg["say"], n=len(lines), where=where)
+    msg = _fmt(ctx.cfg["messages"]["workflow"], say=say, window=round(ctx.cfg["window_s"] / 60))
+    return Decision("deny", "workflow-untyped", where, msg, key=key)
+
+
 def _bash_call(ti: dict, ctx: Ctx) -> Decision:
     """Known-bad forms first (guard-bash); then `cat FILE` is an unranged Read: only the raw-log rule applies to it."""
     cmd = str(ti.get("command") or "")
@@ -621,6 +686,13 @@ def _on_compact(ctx: Ctx) -> Decision:
     return Decision("allow", "compact-reset")
 
 
+def _tool_call(tool, ti: dict, ctx: Ctx) -> Decision | None:
+    """The read / bash decision of a guarded tool; None for any other tool."""
+    if tool not in ("Read", "Bash", "Grep", "Glob"):
+        return None
+    return _read_call(ti, ctx) if tool == "Read" else _bash_call(ti, ctx) if tool == "Bash" else Decision()
+
+
 def evaluate(payload: dict, ctx: Ctx) -> Decision:
     event = payload.get("hook_event_name") or "PreToolUse"
     if event in ("PreCompact", "PostCompact"):
@@ -628,9 +700,11 @@ def evaluate(payload: dict, ctx: Ctx) -> Decision:
     if event != "PreToolUse":
         return Decision()
     tool, ti = payload.get("tool_name"), payload.get("tool_input") or {}
-    if tool not in ("Read", "Bash", "Grep", "Glob"):
+    if tool == "Workflow":
+        return _workflow_call(ti, ctx)
+    d = _tool_call(tool, ti, ctx)
+    if d is None:
         return Decision()
-    d = _read_call(ti, ctx) if tool == "Read" else _bash_call(ti, ctx) if tool == "Bash" else Decision()
     if d.action == "deny":
         return d
     nudge = _nudge(payload, ctx)

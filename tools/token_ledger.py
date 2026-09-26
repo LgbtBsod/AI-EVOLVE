@@ -145,7 +145,7 @@ def turn_shape(turns: list[list[dict]], readonly: list[bool]) -> dict:
             "saveable": saved, "saveable_pct": pct(saved)}
 
 
-_RELAY = re.compile(r"^RELAY:", re.M)
+_RELAY = re.compile(r"^RELAY:", re.MULTILINE)
 
 
 def readonly_flags(turns: list[list[dict]], cfg: dict, writes: list[re.Pattern]) -> list[bool]:
@@ -206,3 +206,60 @@ def find_session(projects: Path, root: Path, which: str) -> Path | None:
     if which == "latest":
         return files[-1] if files else None
     return next((p for p in files if p.stem.startswith(which)), None)
+
+
+def workflow_dirs(projects: Path) -> list[Path]:
+    """Every workflow run directory (`<session>/subagents/workflows/<run>`) under `projects`, newest first."""
+    runs = [d for d in projects.glob("*/*/subagents/workflows/*") if d.is_dir()]
+    return sorted(runs, key=lambda d: d.stat().st_mtime, reverse=True)
+
+
+def find_workflow(projects: Path, run: str) -> Path | None:
+    """`latest` | a run id (prefix, with or without `wf_`)."""
+    runs = workflow_dirs(projects)
+    if run == "latest":
+        return runs[0] if runs else None
+    want = run.removeprefix("wf_")
+    return next((d for d in runs if d.name.removeprefix("wf_").startswith(want)), None)
+
+
+def _ctx(u: dict) -> int:
+    return sum(int(u.get(k) or 0) for k in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens"))
+
+
+def _usages(path: Path) -> list[dict]:
+    """The last `usage` per message.id of one transcript, in order."""
+    seen: dict = {}
+    for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            o = _loads(line)
+        except ValueError:
+            continue
+        m = o.get("message") or {}
+        if o.get("type") == "assistant" and m.get("usage"):
+            seen[m.get("id") or o.get("uuid")] = m["usage"]
+    return list(seen.values())
+
+
+def _label(path: Path) -> str:
+    meta = path.with_suffix(".meta.json")
+    mj = json.loads(meta.read_text(encoding="utf-8")) if meta.is_file() else {}
+    return str(mj.get("label") or mj.get("description") or "")
+
+
+_FIELDS = (("inp", "input_tokens"), ("cw", "cache_creation_input_tokens"), ("cr", "cache_read_input_tokens"), ("out", "output_tokens"))
+
+
+def agent_usage(path: Path) -> dict | None:
+    """Billing facts of one agent transcript (`billed` = in + cache write + out; `cold_pct` = share of cw+cr that is the first context re-read every turn)."""
+    us = _usages(path)
+    if not us:
+        return None
+    tot = {k: sum(int(u.get(f) or 0) for u in us) for k, f in _FIELDS}
+    first, base = _ctx(us[0]), tot["cr"] + tot["cw"]
+    return {"id": path.stem[6:14], "label": _label(path), "turns": len(us), "first_ctx": first, **tot, "billed": tot["inp"] + tot["cw"] + tot["out"],
+            "cold_pct": min(100, round(100 * first * len(us) / base)) if base else 0}
+
+
+def workflow_agents(run_dir: Path) -> list[dict]:
+    return [a for a in (agent_usage(p) for p in sorted(run_dir.glob("agent-*.jsonl"))) if a]

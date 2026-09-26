@@ -45,6 +45,14 @@ return {
     bash_cat = [[^\s*(?:cat|type|more|less)\s+(?:--\s+)?(?P<path>"[^"]+"|'[^']+'|[^\s|;&<>]+)\s*$]],   -- `cat FILE` counts as an unranged Read
   },
 
+  -- WORKFLOW GUARD: a Workflow script whose agent(...) calls lack `agentType` is denied once (soft: the identical repeat passes; `# allow:untyped` in the script passes at once).
+  -- Numbers: a default workflow agent cold-starts at ~67k tokens re-read every turn, a typed one at ~12k (agent_kit.lua `workflow_cost`).
+  workflow = {
+    enabled = true, allow = "allow:untyped", max_calls_listed = 6,
+    say = "{n} agent() call(s) without agentType ({where}). Measured: a default agent cold-starts at ~67k context (re-read every turn), a typed one at ~12k (5.7x less; 5 untyped agents billed 788k). "
+       .. "Fix: add `{ agentType: 'explorer' }` (read-only), 'implementer' (edits), 'verifier' (runs checks) or 'reviewer'; `qa.py wf new NAME` prints a lean skeleton.",
+  },
+
   -- BASH GUARD: known-bad command forms are denied once with the replacement command (soft: the identical repeat passes; `# allow:ID` in the command passes at once).
   -- Each rule: id, pattern (Python `re`, searched in the whole command text), say = the fix (replaces = the tool-registry `replaces` column in lua_content/qa.lua).
   bash = {
@@ -99,6 +107,7 @@ return {
     batch = "GUARD batch: your last {n} tool calls were single read-only calls. Put ALL independent read-only calls "
          .. "(Read/Grep/Glob/qa.py ctx/sym) into ONE message; one turn re-reads the whole context, so N calls in one message cost one turn.",
     bash = "GUARD bash denied ({id}): {say}\nRepeat the identical command once within {window} min to force it, or append `# allow:{id}`.",
+    workflow = "GUARD workflow denied (untyped agents): {say}\nRepeat the identical call once within {window} min to force it, or put `# allow:untyped` in a comment of the script.",
     post_edit = "GUARD lint: {n} problem(s) in the file you just edited (fix them in this turn):\n{lines}",
   },
 }

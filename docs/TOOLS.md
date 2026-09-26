@@ -78,6 +78,7 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `route` | `python tools/qa.py route [STAGE\|--list\|--check\|--write-agents]` | model / effort / tool-call budget per stage of a Workflow or Agent call (cheap for tests and logs, strong... | guessing the model and effort of each stage | qa_report line + table | low |
 | `sym` | `python tools/qa.py sym FILE:NAME [--callers] [--context N]` | one function/class/struct/impl/Lua function with line numbers (+ static callers), capped | Read of a whole file | <= 60 numbered lines | low |
 | `tokens` | `python tools/qa.py tokens [--agents] [--top N] [--session latest\|ID\|PATH] [--json]` | transcript waste ledger: turns, calls per turn, batchable read-only runs, result and written tokens by... | a hand-written transcript scan | one QA line per metric group, worst first, each with `\| use: CMD` | low |
+| `wf` | `python tools/qa.py wf new NAME [--kind audit\|map-write\|review] \| estimate SCRIPT\|- \| assemble DIR` | lean Workflow scripts: skeleton with agentType on every agent() (12k instead of 67k cold start), static... | hand-written workflows with untyped agents and big JSON embedded into a writer prompt | qa_report line / script text | low |
 ### content - Lua data and items
 | tool | command | purpose | replaces | output | cost |
 |---|---|---|---|---|---|

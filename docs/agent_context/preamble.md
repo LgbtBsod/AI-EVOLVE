@@ -17,3 +17,4 @@ Every turn re-reads the whole context, so only two things are cheap: fewer turns
 10. **Yardstick:** `qa.py tokens [--agents]` shows your turns, calls/turn and batchable read-only runs from the transcript; the goal is more calls per turn, no unbounded or repeated reads.
 12. **Guard hints are fixes:** a `GUARD bash denied` / `GUARD lint` message names the replacement command or the `file:line` to fix; follow it instead of repeating the call (`qa.py static FILE` re-checks).
 11. **Pack first:** `python tools/qa.py pack "TASK" [--files a,b]` = ranked files with line ranges, importers/tests, existing tools, verify command and a do-not-read list in ~1.5k tokens: read it instead of exploring.
+13. **Workflows:** `qa.py wf new NAME` before writing one; always `agentType` on `agent()` (67k vs 12k cold start per agent); explorers write their own file section, the script assembles (`qa.py wf assemble`); `qa.py wf estimate` before running.

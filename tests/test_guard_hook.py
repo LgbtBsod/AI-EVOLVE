@@ -388,7 +388,7 @@ def test_install_is_idempotent_and_keeps_foreign_settings():
     assert GP.install(once, "${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe") == once
     assert once["permissions"] == _settings()["permissions"] and once["hooks"]["Stop"][0] == _settings()["hooks"]["Stop"][0]
     pre = once["hooks"]["PreToolUse"]
-    assert pre[0] == _settings()["hooks"]["PreToolUse"][0] and pre[1]["matcher"] == "Read|Grep|Glob|Bash"
+    assert pre[0] == _settings()["hooks"]["PreToolUse"][0] and pre[1]["matcher"] == "Read|Grep|Glob|Bash|Workflow"
     hook = pre[1]["hooks"][0]
     assert hook == {"type": "command", "command": "${CLAUDE_PROJECT_DIR}/.venv/Scripts/python.exe",
                     "args": ["-S", "-E", "${CLAUDE_PROJECT_DIR}/tools/guard_hook.py"], "timeout": 10}
@@ -591,3 +591,29 @@ def test_post_edit_reports_syntax_and_undefined_names_and_stays_silent_otherwise
         assert "d.py:2 F821" in json.loads(_post(g, "d.py", "def f():\n    return re.sub('a', 'b', x)\n"))["hookSpecificOutput"]["additionalContext"]
     assert G.post_edit(b"{{{", env={}) == "" and G.post_edit(b'{"hook_event_name": "PostToolUse"}', env={}, cfg=g.cfg) == ""
     assert G.post_edit(b'"PostToolUse"', env={"AI_EVOLVE_GUARD": "off"}) == ""
+
+
+# ---------------------------------------------------------------- workflow guard (untyped agents)
+
+UNTYPED = "const a = await agent('read x');\nconst b = await agent('y', { agentType: 'explorer' });\nfunction agent(p) {}\n"
+
+
+def test_workflow_untyped_agent_is_denied_once_then_repeat_passes(g):
+    d = g.call("Workflow", script=UNTYPED)
+    assert (d.action, d.rule) == ("deny", "workflow-untyped") and "line 1" in d.message and "67k" in d.message and "12k" in d.message
+    assert "1 agent() call" in d.message                                   # the typed call and the definition are not counted
+    assert g.call("Workflow", script=UNTYPED).rule == "workflow-retry"
+    assert g.call("Workflow", script=UNTYPED).action == "deny"
+
+
+def test_workflow_typed_or_allowed_or_script_path_cases(g, tmp_path):
+    assert g.call("Workflow", script="await agent('x', {agentType:'explorer', label: f(1)})").action == "allow"
+    assert g.call("Workflow", script="// allow:untyped\nawait agent('x')").action == "allow"
+    f = tmp_path / "w.js"
+    f.write_text("await agent('x')", encoding="utf-8")
+    assert g.call("Workflow", scriptPath=str(f)).rule == "workflow-untyped"
+    assert g.call("Workflow", scriptPath=str(tmp_path / "missing.js")).action == "allow"
+
+
+def test_workflow_guard_ignores_agent_in_comments(g):
+    assert g.call("Workflow", script="// every agent() has agentType\nawait agent('x', { agentType: 'explorer' })").action == "allow"
