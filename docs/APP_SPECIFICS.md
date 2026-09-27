@@ -165,8 +165,8 @@ Live vs dead: see section 2. `ai_evolve/`, `AI-EVOLVE/`, `game/` are imported on
 | 14 | Second hero bandit (engage/avoid or loot/fight), lessons in HUD | Hero learns 1 decision, enemies 6 | M | `hero_mind.py:150-154`, `hero_drive.py:154-168` |
 | 15 | Rust stubs: implement or delete (`SimulationEnv`, `WorldGenerator`, storage, training_room); add hero progression save | Constant data, no progress save | M | `ffi/mod.rs:53-82`, `db_core.py:35` |
 | 16 | Wire pathfinding: shared flow field in `enemy_ai` | Kernel exists, tests exist | L | `enemy_ai.py:156,175`, `pathfinding.py:377` |
-| 17 | Port statuses/combos and toughness/stagger to Lua + ops with specs | Blocks archiving `ai_evolve/` | L | `effects_plugin.py:80-162`, `cc_system.py:50`, `core_statuses.lua` |
-| 18 | Collapse damage to `manager._damage` + `damage.lua`; delete duplicates | 8+ implementations | L | section 3.3 list |
+| 17 | DONE 2026-09-27: Ported statuses/combos and toughness/stagger to Lua + ops with specs (S1-S5, `docs/CC_PORT_SPEC.md`); `ai_evolve/`, nested `AI-EVOLVE/`, `game/` archived (tag `archive/pre-legacy-islands`) | Was blocking archiving `ai_evolve/` | L | `core_statuses.lua`, `test_statuses_spec.py`, `test_cc_stacking_spec.py`, `test_combo_reactions_spec.py`, `test_toughness_break_spec.py` |
+| 18 | Collapse damage to `manager._damage` + `damage.lua`; delete duplicates (still includes `src/systems/combat` and its live importers `character.py`/`enemy.py`/`combat_plugin.py`/smoke tools -- separate task) | 8+ implementations | L | section 3.3 list |
 | 19 | Stat cache for passive effects, or Rust port of `refresh_passives`/ops (twin + parity test) | Heroes recompute every frame | L | `manager.py:330-348`, `runtime.py:607-665`, `ops.py` |
 | 20 | Typed player-lever event stream (record first) for replay and "why did the hero do that" | Influence is not observable data | L | `hero_drive.py`, `lua_content/timeline/event_kinds.lua` |
 

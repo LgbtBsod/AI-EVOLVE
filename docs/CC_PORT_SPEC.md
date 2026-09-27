@@ -86,7 +86,7 @@ Risk for 12-16: neutral until content applies two statuses; reaction uses existi
 4. **S4 (L): toughness/break.** Rows 17-26, 28, 30: new state on entity, op `toughness_damage`, matrix in `lua_content/toughness.lua`, break -> `broken` mod (reuses `damage.py:175`), revive dead event `on_shield_break`. Test: executable spec + play "spawn boss; hit until break; expect broken dmg x1.15". Risk: HIGH for traces if wired into `_damage` (dice order, `manager.py:1081-1090`); wire behind a Lua flag default off, `qa.py determinism`.
 5. **S5 (S): loot + cleanup.** Row 33 diff; drop 4, 15/16 (if unwanted), 20, 26, 31, 32, 34.
 
-## 4. Archive checklist (importers found by grep of `src tests tools main.py ai_evolve/tests`)
+## 4. Archive checklist (importers found by grep of `src tests tools main.py ai_evolve/tests`) -- DONE 2026-09-27, tag `archive/pre-legacy-islands`
 
 Tag first: `git tag archive/pre-legacy-islands` (then `git rm -r`).
 

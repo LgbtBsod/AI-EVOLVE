@@ -40,7 +40,6 @@ class TestGraph:
         assert status["src/__init__.py"] == "game"  # пакетные __init__ исполняются при import src.x
         # путь собран из частей: строковый литерал-путь в тесте граф считает запуском файла
         assert status["src/core/" + "async_game_core.py"] == "dead"
-        assert status["AI-EVOLVE/tools/dev_probe/core.py"] == "test"  # жив только в собственном тесте
 
     def test_impact_of_game_file(self, graph):
         tests, scripts, touched = qa_graph.impacted(graph, ["src/entities/character.py"])

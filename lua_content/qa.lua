@@ -264,7 +264,7 @@ return {
     baseline = "tests/quality_baseline.json",
     -- Second scope: tool modules (qa_graph.liveness == 'tool') with their own baseline; each key overrides the table above (`layers = false`: no
     -- import-linter contract for tools/). `qa.py quality --scope game|tools|all`.
-    scopes = { tools = { baseline = "tests/quality_baseline_tools.json", scope = { liveness = "tool", exclude = { "src/*", "python_layer/*", "tests/*", "AI-EVOLVE/*", "ai_evolve/*" } }, layers = false } },
+    scopes = { tools = { baseline = "tests/quality_baseline_tools.json", scope = { liveness = "tool", exclude = { "src/*", "python_layer/*", "tests/*" } }, layers = false } },
     -- Scope: live game modules = qa_graph.liveness == 'game' (reachable from main.py), recomputed every run - no file list to maintain.
     scope = { liveness = "game", exclude = { "setup.py" } },   -- setup.py = Panda3D build script, an entry point but not a game module
     ruff = {
@@ -350,7 +350,7 @@ return {
     max_tok = 1500, chars_per_token = 4, top = 5, pointers = 3, links = 6, tools = 4, churn_commits = 150, history_rows = 300,
     weights = { path = 3, doc = 2.5, tool = 2.5, symbol = 1, body = 0.7, neighbor = 0.5, churn = 0.3 },
     stopwords = { "add", "fix", "the", "for", "and", "check", "test", "flaky", "make", "with", "that", "this", "from", "into", "new", "use", "why", "does", "not", "all", "error", "file", "code", "static", "tool", "src", "name" },
-    do_not_read = { "dev_probe_output/*", "*.log", "*.jsonl", "tests/fixtures/*", "*_COMPLETE.md", "rust_core/target/*", ".venv*", "*/__pycache__/*", "*.sqlite", "AI-EVOLVE/*", "ai_evolve/*" },
+    do_not_read = { "dev_probe_output/*", "*.log", "*.jsonl", "tests/fixtures/*", "*_COMPLETE.md", "rust_core/target/*", ".venv*", "*/__pycache__/*", "*.sqlite" },
     answers = {
       { words = { "ci ", "actions", "workflow run", "github" }, use = "qa.py ci [--wait]", why = "CI verdict + failing step only; never gh run view --log" },
       { words = { "flaky", "same-seed", "same seed", "determinism", "nondetermin" }, use = "qa.py determinism \"SCRIPT\" --pairs 6", why = "first divergent frame + hypotheses" },
