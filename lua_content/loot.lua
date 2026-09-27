@@ -10,6 +10,11 @@
 return {
   chest = { gold = { 10, 40 }, rolls = 2, drop_chance = 1.0,
             kinds = { "equipment", "consumable", "map", "artifact" }, max_rarity = "epic" },
+  -- mimic: сундук-монстр - больше роллов (5-10 против 2 фиксированных) и потолок
+  -- редкости legendary (обычный сундук капается на epic); драться пока некому,
+  -- это только строка таблицы добычи (нет живого моба/ловушки mimic).
+  mimic = { gold = { 10, 40 }, rolls = { 5, 10 }, drop_chance = 1.0,
+            kinds = { "equipment", "consumable", "map", "artifact" }, max_rarity = "legendary" },
   enemies = {
     basic  = { gold = { 1, 6 },  rolls = 1, drop_chance = 0.15, kinds = { "consumable" }, max_rarity = "common" },
     strong = { gold = { 4, 12 }, rolls = 1, drop_chance = 0.35, kinds = { "consumable", "equipment" }, max_rarity = "rare",

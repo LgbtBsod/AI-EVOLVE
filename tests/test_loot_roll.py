@@ -63,6 +63,16 @@ class TestRollLoot:
         gold, _ = roll_loot({"gold": [-5, 0]}, random.Random(1), CAT)
         assert gold == 0
 
+    def test_rolls_range_bounds_item_count(self):
+        _, items = roll_loot({"rolls": [5, 10], "drop_chance": 1.0, "kinds": ("equipment",)},
+                             random.Random(1), CAT)
+        assert 5 <= len(items) <= 10
+
+    def test_rolls_range_zero_hi_skips(self):
+        _, items = roll_loot({"rolls": [0, 0], "drop_chance": 1.0, "kinds": ("equipment",)},
+                             random.Random(1), CAT)
+        assert items == []
+
     def test_missing_pool_returns_no_items(self):
         empty_cat = ItemCatalog({})
         _, items = roll_loot({"rolls": 3, "kinds": ("equipment",)}, random.Random(1), empty_cat)

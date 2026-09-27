@@ -22,13 +22,21 @@ def loot_tables() -> dict:
         return {"chest": {}, "enemies": {}}
 
 
+def _roll_range_or_int(value, rng: random.Random) -> int:
+    """int as-is; [lo, hi] (list/tuple) rolled via rng.randint, 0 if hi is falsy."""
+    if isinstance(value, (list, tuple)):
+        lo, hi = (list(value) + [0, 0])[:2]
+        return rng.randint(int(lo), int(hi)) if hi else 0
+    return int(value or 0)
+
+
 def roll_loot(table: dict, rng: random.Random, cat: Optional[ItemCatalog] = None) -> tuple[int, list[ItemDef]]:
     """(золото, предметы) по одной строке таблицы."""
     cat = catalog() if cat is None else cat        # пустой ItemCatalog (len 0) - тоже каталог, а не «не передали»
-    lo, hi = (table.get("gold") or [0, 0])[:2] if table.get("gold") else (0, 0)
-    gold = rng.randint(int(lo), int(hi)) if hi else 0
+    gold = _roll_range_or_int(table.get("gold"), rng)
+    rolls = _roll_range_or_int(table.get("rolls", 0), rng)
     items = []
-    for _ in range(int(table.get("rolls", 0) or 0)):
+    for _ in range(rolls):
         if rng.random() <= float(table.get("drop_chance", 1.0)):
             item = cat.roll(rng, kinds=tuple(table.get("kinds") or ("consumable",)),
                             max_rarity=table.get("max_rarity", "legendary"))
