@@ -950,8 +950,10 @@ class EffectManager:
 
     def _targets(self, st: EntityState, o: dict, primary, center, radius: float) -> list:
         tgt = o.get("target", "self")
-        if tgt in ("self", "ally", "allies", "world"):     # "world": the ops read no target (F7 timeworld.py), the caster stands in
+        if tgt in ("self", "world"):     # "world": the ops read no target (F7 timeworld.py), the caster stands in
             return [st.entity]
+        if tgt in ("ally", "allies"):
+            return self._ally_targets(st, tgt == "allies")
         if tgt in ("enemy", "source"):
             return [primary] if primary is not None else []
         if tgt == "area":
@@ -959,6 +961,19 @@ class EffectManager:
             spec = timeworld.sample_spec(o) if ("sample" in o or "filter" in o) else None
             return timeworld.sample(self, found, spec) if spec else found
         return []
+
+    def _allies(self, st: EntityState) -> list:
+        """Other living same-faction entities (boss-summoned minions share the boss's faction); excludes `st` itself."""
+        return [s.entity for s in self.states.values()
+                if s is not st and s.faction == st.faction and is_alive(s.entity)]
+
+    def _ally_targets(self, st: EntityState, want_all: bool) -> list:
+        """target="allies": every other same-faction entity; target="ally": only the nearest one (or none)."""
+        allies = self._allies(st)
+        if want_all or not allies:
+            return allies
+        origin = position(st.entity)
+        return [min(allies, key=lambda e: math.dist(origin, position(e)))]
 
     def _area_targets(self, st: EntityState, o: dict, primary, center, radius: float) -> list:
         """target=area: все живые в круге (френдли фаер: заклинатель тоже), суженные affects / arc и невыбираемостью."""

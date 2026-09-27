@@ -182,6 +182,28 @@ def test_area_is_friendly_fire_and_summon_uses_world(setup):
     assert mgr.world.summons == [("skeleton", "hero"), ("skeleton", "hero")]
 
 
+def test_ally_and_allies_target_real_other_same_faction_entities(setup):
+    mgr, hero, enemy = setup(atk=20.0)
+    near_ally = Fighter(x=1.0)
+    far_ally = Fighter(x=5.0)
+    mgr.register(near_ally, "hero")
+    mgr.register(far_ally, "hero")
+    hero.health = near_ally.health = far_ally.health = enemy.health = 50.0
+    mgr.cast(hero, {"id": "single_heal", "ops": [{"kind": "heal", "target": "ally", "value": {"flat": 10}}]})
+    assert near_ally.health == 60.0                                # nearest same-faction other, not self
+    assert far_ally.health == 50.0 and hero.health == 50.0 and enemy.health == 50.0
+    mgr.cast(hero, {"id": "group_heal", "ops": [{"kind": "heal", "target": "allies", "value": {"flat": 10}}]})
+    assert near_ally.health == 70.0 and far_ally.health == 60.0    # every other same-faction entity
+    assert hero.health == 50.0 and enemy.health == 50.0            # caster and enemy excluded
+
+
+def test_ally_target_is_empty_when_no_other_same_faction_entity_exists(setup):
+    mgr, hero, enemy = setup(atk=20.0)
+    enemy.health = 50.0
+    mgr.cast(hero, {"id": "lone_heal", "ops": [{"kind": "heal", "target": "ally", "value": {"flat": 10}}]})
+    assert hero.health == 100.0 and enemy.health == 50.0           # no-op: no other hero-faction entity
+
+
 def test_execute_revive_and_timed_debuff(setup):
     mgr, hero, enemy = setup(atk=20.0)
     mgr.equip(hero, items("executioner_axe", "venom_dagger")[:1])
