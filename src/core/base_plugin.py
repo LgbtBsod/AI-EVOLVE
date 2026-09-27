@@ -40,6 +40,11 @@ class BasePlugin(BaseComponent):
                 pass
     """
     
+    # Consecutive update() failures before the plugin is auto-disabled (system_state -> ERROR).
+    # Prevents a broken plugin from silently failing every frame forever while a probe reports
+    # a healthy run.
+    MAX_CONSECUTIVE_ERRORS = 5
+
     def __init__(
         self,
         plugin_id: str,
@@ -85,6 +90,7 @@ class BasePlugin(BaseComponent):
             'total_update_time': 0.0,
             'errors_count': 0,
         }
+        self._consecutive_errors = 0
         
         logger.info(f"Плагин {self.plugin_id} v{self.version} создан")
     
@@ -190,17 +196,30 @@ class BasePlugin(BaseComponent):
         try:
             import time
             start_time = time.perf_counter()
-            
+
             # Вызываем переопределенный метод update_logic
             self.update_logic(delta_time)
-            
+
             # Статистика
             self.plugin_stats['update_count'] += 1
             self.plugin_stats['total_update_time'] += time.perf_counter() - start_time
-            
+            self._consecutive_errors = 0
+
         except Exception as e:
             self.plugin_stats['errors_count'] += 1
-            logger.error(f"Ошибка обновления плагина {self.plugin_id}: {e}", exc_info=True)
+            self._consecutive_errors += 1
+            if self._consecutive_errors >= self.MAX_CONSECUTIVE_ERRORS:
+                # Log once, loudly, then disable: update() returns immediately next call
+                # (system_state != RUNNING guard above) instead of failing forever unseen.
+                self.system_state = LifecycleState.ERROR
+                logger.error(
+                    f"Плагин {self.plugin_id} отключён после {self._consecutive_errors} "
+                    f"ошибок подряд (errors_count={self.plugin_stats['errors_count']}), "
+                    f"последняя ошибка: {e}",
+                    exc_info=True,
+                )
+            else:
+                logger.error(f"Ошибка обновления плагина {self.plugin_id}: {e}", exc_info=True)
     
     def update_logic(self, delta_time: float) -> None:
         """

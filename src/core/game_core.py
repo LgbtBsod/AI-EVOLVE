@@ -196,7 +196,9 @@ class GameCore(BaseComponent):
             self.event_system.update(delta_time)
             self.state_manager.update(delta_time)
             
-            # Обновляем плагины
+            # Обновляем плагины. BasePlugin.update() already catches its own exceptions,
+            # counts them and disables the plugin after too many in a row - this try/except
+            # is only a backstop for a plugin that does not inherit BasePlugin.
             for plugin_id in self.plugin_order:
                 plugin = self.plugins.get(plugin_id)
                 if plugin and hasattr(plugin, 'update'):
