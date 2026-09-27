@@ -110,6 +110,44 @@ def test_level_up_gives_points_not_hidden_stats():
     assert hero.level == 2 and hero.attribute_points == 5 and hero.max_health == hp
 
 
+def test_hero_falls_back_to_ranged_skill_when_out_of_weapon_reach():
+    """Скилл класса (файрбол мага) бьёт дальше надетого оружия (посох, range=7)
+    фиксированной дальностью (range=8, lua_content/abilities.lua) - как враги-
+    лучники в enemy_ai, герой должен ударить скиллом вместо того, чтобы идти
+    на сближение до дальности оружия."""
+    from src.entities.character import Character
+    from src.gameplay.hero_drive import HeroDrive
+    from src.gameplay.items import catalog
+
+    class Game:
+        render = None
+
+    game = Game()
+    hero = Character("hero_mage", game, 0, 0, 0.5, "mage", is_player=True)
+    mgr = EffectManager(abilities=load_abilities(), rng=FakeRng(0.99))
+    game.effect_manager = mgr
+    mgr.register(hero, "hero")
+    staff = catalog().get("apprentice_staff")
+    assert staff is not None
+    mgr.equip(hero, [staff])
+    hero.mana = hero.max_mana = 100.0
+    weapon_reach = hero._weapon_reach()
+    skill_reach = mgr.range_of(hero, "fireball")
+    assert skill_reach > weapon_reach                        # файрбол бьёт дальше посоха
+
+    enemy = Fighter(x=(weapon_reach + skill_reach) / 2.0, hp=200.0)
+    mgr.register(enemy, "monsters")
+    assert weapon_reach < hero.get_distance_to(enemy) <= skill_reach  # вне оружия, но в скилле
+
+    hero.drive = HeroDrive()
+    x0 = hero.x
+    hero.update_ai([enemy], [], 0.1)
+
+    assert hero.ai_state == "fighting"
+    assert enemy.health < 200.0                              # ударил скиллом, а не молчал
+    assert hero.x == pytest.approx(x0)                        # не пошёл на сближение
+
+
 def test_conditions_see_hp_pct_of_the_real_max_hp():
     # раньше hp_pct считался от max_hp без вклада характеристик: на 35% настоящего HP
     # условие «hp_pct < 40» видело 60% и «Потерять себя» не включался

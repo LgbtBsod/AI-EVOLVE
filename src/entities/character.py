@@ -705,6 +705,32 @@ class Character(BaseEntity):
                 return not damage_info.is_dodged
         return False
 
+    def _engage(self, target, dt) -> None:
+        """Бой с целью: оружие в радиусе - бьём; иначе скилл дальнего боя, как у
+        enemy_ai (бьёт не приближаясь); иначе идём на сближение."""
+        if self.get_distance_to(target) <= self._weapon_reach():
+            self.attack(target)
+        elif not self._ranged_skill_attack(target):
+            self._move_towards_enemy(target, dt)
+
+    def _ranged_skill_attack(self, target) -> bool:
+        """Враг вне дальности оружия - пробуем скилл класса с большей дальностью
+        (файрбол мага и т.п.), не подходя ближе, как _use_skill() у enemy_ai."""
+        manager = getattr(self.game, "effect_manager", None)
+        if manager is None or manager.state(self) is None or target is None:
+            return False
+        return self._use_skills_via_manager(manager, [target])
+
+    def _weapon_reach(self) -> float:
+        """Дальность удара оружием (лук бьёт дальше меча) - как enemy_ai._in_reach()
+        для врагов; attack() всегда бьёт именно weapon_attack, поэтому дистанцию
+        решаем по нему, а не по скиллам (те бьёт _use_skills_via_manager отдельно).
+        Без менеджера эффектов (тесты с фейковой игрой) - фиксированный attack_range."""
+        manager = getattr(self.game, "effect_manager", None)
+        if manager is None or manager.state(self) is None:
+            return float(self.attack_range)
+        return float(manager.range_of(self, "weapon_attack"))
+
     def get_combat_stats(self) -> CombatStats:
         """Боевые характеристики в формате, ожидаемом CombatSystem.
 
@@ -835,17 +861,11 @@ class Character(BaseEntity):
                                    known_exit_positions, hint_positions)
             return
 
-        if nearest_enemy and self.get_distance_to(nearest_enemy) <= self.attack_range:
-            # Враг в зоне атаки - атакуем
+        if nearest_enemy and self.get_distance_to(nearest_enemy) <= 10:
+            # Враг в зоне боя (оружие/скилл или на подходе) - атакуем/преследуем
             self.ai_state = "fighting"
             self.target_enemy = nearest_enemy
-            self.attack(nearest_enemy)
-            return
-        elif nearest_enemy and self.get_distance_to(nearest_enemy) <= 10:
-            # Враг рядом - преследуем
-            self.ai_state = "fighting"
-            self.target_enemy = nearest_enemy
-            self._move_towards_enemy(nearest_enemy, dt)
+            self._engage(nearest_enemy, dt)
             return
 
         # 2. Лутинг и взаимодействие с найденными интерактивными объектами (например, сундуки)
@@ -918,10 +938,7 @@ class Character(BaseEntity):
         if goal == "fight":
             self.ai_state = "fighting"
             self.target_enemy = nearest_enemy
-            if self.get_distance_to(nearest_enemy) <= self.attack_range:
-                self.attack(nearest_enemy)
-            else:
-                self._move_towards_enemy(nearest_enemy, dt)
+            self._engage(nearest_enemy, dt)
             return
         self.target_enemy = None
         if goal in ("loot", "exit", "hint"):
