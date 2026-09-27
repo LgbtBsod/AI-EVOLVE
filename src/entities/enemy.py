@@ -22,6 +22,11 @@ except ImportError:
     PANDA3D_AVAILABLE = False
     CardMaker = None
 
+try:
+    from ..render.solid_box import make_solid_box
+except ImportError:
+    make_solid_box = None
+
 from ..core.stats_loader import StatsLoader
 from ..core.validation import CombatStats
 from ..systems.combat.components import HealthComponent
@@ -186,59 +191,8 @@ class EnhancedEnemy:
         return enemy
         
     def create_visible_cube(self, parent, name, x, y, z, width, height, depth, color):
-        """Создание видимого куба с правильной ориентацией"""
-        # Создаем куб из 6 граней с правильной ориентацией
-        cube = parent.attachNewNode(name)
-        
-        # Передняя грань (обращена к камере)
-        cm = CardMaker(f"{name}_front")
-        cm.setFrame(-width/2, width/2, -height/2, height/2)
-        front = cube.attachNewNode(cm.generate())
-        front.setPos(0, depth/2, 0)
-        front.setColor(*color)
-        
-        # Задняя грань
-        cm = CardMaker(f"{name}_back")
-        cm.setFrame(-width/2, width/2, -height/2, height/2)
-        back = cube.attachNewNode(cm.generate())
-        back.setPos(0, -depth/2, 0)
-        back.setHpr(0, 180, 0)
-        back.setColor(color[0] * 0.7, color[1] * 0.7, color[2] * 0.7, color[3])
-        
-        # Левая грань
-        cm = CardMaker(f"{name}_left")
-        cm.setFrame(-depth/2, depth/2, -height/2, height/2)
-        left = cube.attachNewNode(cm.generate())
-        left.setPos(-width/2, 0, 0)
-        left.setHpr(0, -90, 0)
-        left.setColor(color[0] * 0.8, color[1] * 0.8, color[2] * 0.8, color[3])
-        
-        # Правая грань
-        cm = CardMaker(f"{name}_right")
-        cm.setFrame(-depth/2, depth/2, -height/2, height/2)
-        right = cube.attachNewNode(cm.generate())
-        right.setPos(width/2, 0, 0)
-        right.setHpr(0, 90, 0)
-        right.setColor(color[0] * 0.6, color[1] * 0.6, color[2] * 0.6, color[3])
-        
-        # Верхняя грань
-        cm = CardMaker(f"{name}_top")
-        cm.setFrame(-width/2, width/2, -depth/2, depth/2)
-        top = cube.attachNewNode(cm.generate())
-        top.setPos(0, 0, height/2)
-        top.setHpr(0, 0, -90)
-        top.setColor(color[0] * 1.2, color[1] * 1.2, color[2] * 1.2, color[3])
-        
-        # Нижняя грань
-        cm = CardMaker(f"{name}_bottom")
-        cm.setFrame(-width/2, width/2, -depth/2, depth/2)
-        bottom = cube.attachNewNode(cm.generate())
-        bottom.setPos(0, 0, -height/2)
-        bottom.setHpr(0, 0, 90)
-        bottom.setColor(color[0] * 0.4, color[1] * 0.4, color[2] * 0.4, color[3])
-        
-        cube.setPos(x, y, z)
-        return cube
+        """Создание куба как настоящей 3D-сетки (единый unit-box меш)."""
+        return make_solid_box(parent, name, (x, y, z), (width, height, depth), color)
         
     def move_to(self, x, y, z=None):
         """Перемещение врага"""

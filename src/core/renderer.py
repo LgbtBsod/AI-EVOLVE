@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 class ICardMaker(Protocol):
     """Protocol for card/rectangle creation."""
     
-    def set_frame(self, left: float, right: float, bottom: float, top: float) -> None:
+    def set_frame(self, _left: float, _right: float, _bottom: float, _top: float) -> None:
         """Set card dimensions."""
         ...
     
