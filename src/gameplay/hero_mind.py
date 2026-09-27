@@ -28,6 +28,13 @@ SITUATIONS = ("plain", "empowered")
 STANCE_NAMES = {"retreat": "отступить", "press": "давить"}
 MIND_ENV = "AI_EVOLVE_HERO_MIND"
 
+# Физические (не магия) способы двигаться в бою - второе измерение той же памяти, что решает
+# стойку (retreat/press): контекст - выбранная стойка (герой, который решил давить, учится, что
+# в этой ситуации лучше сработало - прыжок на цель или рывок в сторону), рука - какое движение
+# взять. Ставки те же (выжил/урон/убийства, _close), только читаются отдельно от lessons_moves.
+MOVES = ("roll", "jump", "sprint", "dash")
+MOVE_NAMES = {"roll": "перекат", "jump": "прыжок", "sprint": "рывок бегом", "dash": "рывок в сторону"}
+
 LOW_HP = 0.30            # ниже - решение о стойке
 RECOVERED_HP = 0.60      # выше - эпизод окончен
 EPISODE_MAX = 15.0       # эпизод не длиннее, с
@@ -37,6 +44,10 @@ HEAL_AT = {"retreat": 0.35, "press": 0.12}
 
 def mind_path() -> Optional[Path]:
     return memory_path(MIND_ENV, "hero_mind.json")
+
+
+def move_path() -> Optional[Path]:
+    return memory_path(MIND_ENV, "hero_movement.json")
 
 
 def combat_power(hero) -> float:
@@ -55,10 +66,12 @@ class HeroMind:
         self.hero = hero
         self.inventory_brain = inventory_brain
         self.memory = BanditMemory(SITUATIONS, STANCES, path, backend, c=0.5, decay=0.98, count_key="episodes")
+        self.move_memory = BanditMemory(STANCES, MOVES, move_path(), backend, c=0.5, decay=0.98, count_key="episodes")
         stored = self.memory.extra.get("baseline")
         self.baseline: Optional[float] = float(stored) if isinstance(stored, (int, float)) else None
         self.episode: Optional[dict] = None
         self.stance: Optional[str] = None
+        self.move: Optional[str] = None
         self.log: list[str] = []
 
     @property
@@ -107,9 +120,11 @@ class HeroMind:
                 if drive is not None and STANCES[arm] == "retreat" and drive.press_bias > 0 \
                         and ((self.episodes * 7919 + int(now * 10)) % 100) / 100.0 < drive.press_bias:
                     arm = STANCES.index("press")
-                self.episode = {"ctx": ctx, "arm": arm, "t0": now, "dealt": 0.0, "taken": 0.0, "kills": 0,
-                                "calm": 0.0}
+                move_arm = self.move_memory.select(arm)     # контекст движения = выбранная стойка
+                self.episode = {"ctx": ctx, "arm": arm, "move_arm": move_arm, "t0": now, "dealt": 0.0,
+                                "taken": 0.0, "kills": 0, "calm": 0.0}
                 self._set_stance(STANCES[arm])
+                self.move = MOVES[move_arm]
             return
         ep["calm"] = 0.0 if in_combat else ep["calm"] + dt
         if not self.hero.is_alive():
@@ -143,8 +158,10 @@ class HeroMind:
         else:
             reward = 0.4 + ep["dealt"] / (ep["dealt"] + ep["taken"] + 1.0) * 0.6 + 0.2 * min(2, ep["kills"])
         self.memory.update(ep["ctx"], ep["arm"], reward)
-        self.log.append(f"{SITUATIONS[ep['ctx']]}:{STANCES[ep['arm']]}={reward:.2f}")
+        self.move_memory.update(ep["arm"], ep["move_arm"], reward)
+        self.log.append(f"{SITUATIONS[ep['ctx']]}:{STANCES[ep['arm']]}:{MOVES[ep['move_arm']]}={reward:.2f}")
         self._set_stance(None)
+        self.move = None
         return reward
 
     # ---------------------------------------------------------------- memory
@@ -154,7 +171,14 @@ class HeroMind:
     def preferred(self, situation: str) -> Optional[str]:
         return self.memory.best(situation)
 
+    def lessons_moves(self, skip_zero: bool = False) -> dict[str, dict[str, float]]:
+        return self.move_memory.summary(skip_zero=skip_zero)
+
+    def preferred_move(self, stance: str) -> Optional[str]:
+        return self.move_memory.best(stance)
+
     def save(self) -> None:
         if self.baseline is not None:
             self.memory.extra["baseline"] = self.baseline
         self.memory.save()
+        self.move_memory.save()

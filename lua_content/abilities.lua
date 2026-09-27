@@ -89,6 +89,26 @@ return {
                 stat = "vision_range", op = "add", value = { pct = -75 }, toward = "source",
                 duration = { flat = 6 } } } },
 
+    -- ------------------------------------------------------------ движение (физическое, не магия)
+    -- roll/jump/sprint/dash: тот же боевой набор move-ops, что уже несут боссы (charge/blink,
+    -- lua_content/bosses.lua) - только герой ими не наделён от рождения, а учится, КОГДА их брать
+    -- (src/gameplay/hero_mind.py: тот же бандит, что решает retreat/press, второе измерение памяти).
+    -- Стамина - общий ресурс с тяжёлыми ударами (power_strike, cleave ...) и быстрыми выстрелами;
+    -- здесь цена - предусловие G2 на самой операции (cost = {stat, amount}, src/effects/gate.py),
+    -- а не отдельное поле способности: короткая оплата отказывает операции целиком, без побочных эффектов.
+    { id = "roll", name = "Перекат", tags = { "skill", "move" }, range = 10, cooldown = 3,
+      ops = { { kind = "move", target = "self", mode = "dash", distance = 4,
+                cost = { stat = "stamina", amount = 10 } } } },
+    { id = "jump", name = "Прыжок", tags = { "skill", "move" }, range = 10, cooldown = 4,
+      ops = { { kind = "move", target = "self", mode = "charge", distance = 6,
+                cost = { stat = "stamina", amount = 15 } } } },
+    { id = "sprint", name = "Рывок бегом", tags = { "skill", "move", "buff" }, cooldown = 8,
+      ops = { { kind = "mod", target = "self", stat = "move_speed", op = "add", value = { pct = 40 },
+                duration = { flat = 3 }, cost = { stat = "stamina", amount = 20 } } } },
+    { id = "dash", name = "Рывок в сторону", tags = { "skill", "move" }, range = 14, cooldown = 5,
+      ops = { { kind = "move", target = "self", mode = "blink", distance = 8,
+                cost = { stat = "stamina", amount = 15 } } } },
+
     -- ------------------------------------------------------------ враги
     { id = "crushing_blow", name = "Сокрушающий удар", tags = { "attack", "skill" }, range = { pct = 110, of = "attack_range" },
       cooldown = 5,

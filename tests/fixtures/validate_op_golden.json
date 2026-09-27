@@ -1,5 +1,5 @@
 {
-"n_lua": 616,
+"n_lua": 620,
 "cases": [
 [
 "\"x\"",
@@ -480,7 +480,23 @@
 []
 ],
 [
+"{\"cost\": {\"amount\": 10, \"stat\": \"stamina\"}, \"distance\": 4, \"kind\": \"move\", \"mode\": \"dash\", \"target\": \"self\"}",
+[]
+],
+[
 "{\"cost\": {\"amount\": 15, \"stat\": \"hp\"}, \"duration\": {\"flat\": 20}, \"id\": \"titan\", \"kind\": \"transform\", \"stats\": [{\"kind\": \"mod\", \"op\": \"mul\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"flat\": 3}}], \"target\": \"self\"}",
+[]
+],
+[
+"{\"cost\": {\"amount\": 15, \"stat\": \"stamina\"}, \"distance\": 6, \"kind\": \"move\", \"mode\": \"charge\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"cost\": {\"amount\": 15, \"stat\": \"stamina\"}, \"distance\": 8, \"kind\": \"move\", \"mode\": \"blink\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"cost\": {\"amount\": 20, \"stat\": \"stamina\"}, \"duration\": {\"flat\": 3}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"move_speed\", \"target\": \"self\", \"value\": {\"pct\": 40}}",
 []
 ],
 [
