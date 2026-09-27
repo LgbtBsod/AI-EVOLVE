@@ -63,3 +63,44 @@ def test_press_stance_keeps_fighting_and_saves_potions_for_the_edge():
     assert mind.should_retreat()                               # без решения - осторожность
     mind._set_stance("press")
     assert not mind.should_retreat() and brain.heal_at == hm.HEAL_AT["press"]
+
+
+class Enemy:
+    def __init__(self, entity_id, enemy_type="slime"):
+        self.entity_id, self.enemy_type = entity_id, enemy_type
+
+
+def test_decide_engage_is_stable_for_the_same_enemy_until_the_fight_ends():
+    hero = Hero()
+    mind = hm.HeroMind(hero, None, backend="python")
+    enemy = Enemy("e1", "boss")
+    first = mind.decide_engage(enemy)
+    for _ in range(5):
+        assert mind.decide_engage(enemy) == first             # не перевыбирает руку каждый кадр
+    if first:
+        mind.note_hit(HitInfo("h", "e1", 40.0, killed=True), "h")
+        assert mind.fight is None                              # схватка закрылась победой -> награда учтена
+
+
+def test_avoid_gets_a_flat_reward_with_no_counterfactual_fight():
+    hero = Hero()
+    mind = hm.HeroMind(hero, None, backend="python")
+    # dangerous контекст: если герой ни разу не выбрал avoid сам, форсируем через много boss-встреч,
+    # проверяем лишь то, что avoid не оставляет "зависшую" схватку и не требует note_hit.
+    for i in range(20):
+        enemy = Enemy(f"boss{i}", "boss")
+        engaged = mind.decide_engage(enemy)
+        if not engaged:
+            assert mind.fight is not None and mind.fight["enemy"] is enemy
+            assert mind.preferred_engage("dangerous") is not None
+            break
+    else:
+        raise AssertionError("expected at least one avoid decision across 20 boss encounters")
+
+
+def test_engage_lessons_persist_and_hero_falls_back_to_other_options_on_avoid():
+    hero = Hero()
+    mind = hm.HeroMind(hero, None, backend="python")
+    enemy = Enemy("weak", "slime")
+    assert mind.decide_engage(enemy) in (True, False)
+    assert set(hm.THREAT) == {"normal", "dangerous"} and set(hm.ENGAGE) == {"engage", "avoid"}

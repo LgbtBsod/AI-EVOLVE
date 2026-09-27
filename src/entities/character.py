@@ -881,6 +881,15 @@ class Character(BaseEntity):
         self._explore_area(dt)
     
 
+    def _should_offer_fight(self, nearest_enemy, d) -> bool:
+        """В зоне боя? Решение ДО боя (HeroMind.decide_engage, src/gameplay/hero_mind.py): ввязаться
+        в этого врага или обойти его; False - "fight" не предлагается, HeroDrive.choose() сам найдёт
+        другую цель (лут/выход/подсказку)."""
+        if d > 12.0:
+            return False
+        mind = getattr(self, "mind", None)
+        return mind is None or mind.decide_engage(nearest_enemy)
+
     def _update_ai_driven(self, drive, nearest_enemy, items, dt, exit_position, vision_range,
                           known_exit_positions, hint_positions):
         """Цель - по полезности (src/gameplay/hero_drive.py): база из ситуации x вес эмоции
@@ -891,7 +900,7 @@ class Character(BaseEntity):
         options = []
         if nearest_enemy is not None:
             d = self.get_distance_to(nearest_enemy)
-            if d <= 12.0:
+            if self._should_offer_fight(nearest_enemy, d):
                 options.append(Option("fight", (nearest_enemy.x, nearest_enemy.y), max(0.2, 1.0 - d / 15.0)))
         item = self._find_nearest_item(items)
         if item is not None:

@@ -893,6 +893,9 @@ def _learning_lines(final_player, game) -> list[str]:
         lessons = _format_lessons(mind.lessons(skip_zero=True))
         lines.append("hero (situation: stance=avg reward):")
         lines += lessons if lessons else ["  no data yet"]
+        engage_lessons = _format_lessons(mind.lessons_engage(skip_zero=True))
+        lines.append("hero engage (threat: engage/avoid=avg reward):")
+        lines += engage_lessons if engage_lessons else ["  no data yet"]
     else:
         lines.append("hero: no HeroMind attached")
     scene = runtime.get_scene(game)

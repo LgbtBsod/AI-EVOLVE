@@ -191,6 +191,8 @@ class EnhancedHUD:
         mind = getattr(player, "mind", None)
         if mind is not None and mind.stance == "press":
             line += " · давлю до конца"
+        if mind is not None and mind.fight is not None:
+            line += " · ввязался" if mind.fight["arm"] == 0 else " · обхожу"
         self.mood_text.setText(line)
 
     def _update_feed(self, scene, latin):
