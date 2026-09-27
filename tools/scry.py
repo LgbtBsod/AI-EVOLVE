@@ -870,6 +870,33 @@ class WarningCollector(logging.Handler):
             self.errors.append(line)
 
 
+def _format_lessons(lessons: dict) -> list[str]:
+    out = []
+    for situation, stances in lessons.items():
+        row = ", ".join(f"{stance}={reward:.2f}" for stance, reward in stances.items())
+        out.append(f"- {situation}: {row}")
+    return out
+
+
+def _learning_lines(final_player, game) -> list[str]:
+    """Small digest of what the hero and the enemy tactics memory have learned so far."""
+    lines = []
+    mind = getattr(final_player, "mind", None)
+    if mind is not None:
+        lessons = _format_lessons(mind.lessons(skip_zero=True))
+        lines.append("hero (situation: stance=avg reward):")
+        lines += lessons if lessons else ["  no data yet"]
+    else:
+        lines.append("hero: no HeroMind attached")
+    scene = runtime.get_scene(game)
+    tactics_memory = getattr(scene, "tactics", None)
+    if tactics_memory is not None:
+        enemy_lessons = _format_lessons(tactics_memory.summary(skip_zero=True))
+        lines.append("enemies (archetype: tactic=avg reward):")
+        lines += enemy_lessons if enemy_lessons else ["  no data yet"]
+    return lines
+
+
 TIMELINE_LINES_IN_SUMMARY = 80
 
 
@@ -1394,6 +1421,7 @@ def main():
                 f"end: {p.health:.1f}/{p.max_health}",
                 "",
             ]
+        lines += ["## Learning", *_learning_lines(final_player, game), ""]
         if baseline_diff_text is not None:
             lines += ["## vs baseline (tools/scry_baseline.json)", baseline_diff_text, ""]
         if warning_collector.records:

@@ -148,8 +148,8 @@ class HeroMind:
         return reward
 
     # ---------------------------------------------------------------- memory
-    def lessons(self) -> dict[str, dict[str, float]]:
-        return self.memory.summary(skip_zero=False)
+    def lessons(self, skip_zero: bool = False) -> dict[str, dict[str, float]]:
+        return self.memory.summary(skip_zero=skip_zero)
 
     def preferred(self, situation: str) -> Optional[str]:
         return self.memory.best(situation)
