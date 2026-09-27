@@ -5,6 +5,7 @@
     под ними       - эмоция героя, подсказка игрока и что герой сейчас «думает»
     справа вверху  - лента событий (scene.messages: уровень, боссы, трюки, зелья)
     внизу по центру - полоса HP босса (если он на уровне) и клавиши управления
+    панели (клавиша I, по умолчанию скрыты) - инвентарь и статы (слева внизу), навыки/откаты (правее)
 
 Шрифт - DejaVu Sans из assets/fonts (встроенный шрифт Panda3D не знает кириллицу).
 Без шрифта HUD работает со встроенным и латиницей.
@@ -22,10 +23,58 @@ logger = logging.getLogger(__name__)
 
 FEED_LINES = 6
 KEYS_HELP = ("F1-F6 эмоция · стрелки - сторона · C сундук · X выход · N NPC · Z снять подсказку · "
-             "1/2/3/4 враг/ловушка/сундук/босс")
+             "1/2/3/4 враг/ловушка/сундук/босс · I панели")
 BARS = (("health", "max_health", (0.85, 0.15, 0.15, 1)),
         ("mana", "max_mana", (0.2, 0.35, 0.95, 1)),
         ("stamina", "max_stamina", (0.95, 0.75, 0.15, 1)))
+PANEL_LINES = 10   # inventory/skills/stats panel: max text lines each
+
+
+def inventory_summary_lines(player) -> list[str]:
+    """player.inventory (src/gameplay/inventory.py Inventory) -> text lines for the panel."""
+    inv = getattr(player, "inventory", None)
+    if inv is None:
+        return []
+    summary = inv.summary()
+    lines = [f"Золото: {summary['gold']}"]
+    for slot, name in summary["equipped"].items():
+        lines.append(f"{slot}: {name}")
+    if summary["bag"]:
+        lines.append("Сумка: " + ", ".join(summary["bag"][:PANEL_LINES]))
+    return lines
+
+
+def cooldowns_remaining(st, now: float) -> dict[str, float]:
+    """EntityState.cooldowns -> {способность: сколько секунд ещё ждать} (готовые не включены).
+
+    Та же форма, что EffectManager.snapshot строит для отладочного дампа (manager.py ~L1618): секунды
+    до готовности, округлённые до десятых, только пока способность ещё не готова.
+    """
+    return {k: round(v - now, 1) for k, v in st.cooldowns.items() if v > now}
+
+
+def skills_summary_lines(player, now: float) -> list[str]:
+    """EntityState.spells (выученные техники) + cooldowns -> текстовые строки."""
+    st = getattr(player, "effect_state", None)
+    if st is None:
+        return []
+    lines = [f"Техники: {', '.join(st.spells)}" if st.spells else "Техники: -"]
+    cds = cooldowns_remaining(st, now)
+    if cds:
+        lines.append("Откат: " + ", ".join(f"{k} {v:.1f}с" for k, v in sorted(cds.items())))
+    return lines
+
+
+def stats_summary_lines(player) -> list[str]:
+    """Полные текущие статы сущности из кэша EntityState (unit.base + toughness), не только 3 бара."""
+    st = getattr(player, "effect_state", None)
+    if st is None:
+        return []
+    unit = st.unit
+    lines = [f"{k}: {unit.stat(k):.1f}" for k in sorted(unit.base.keys())]
+    if st.toughness is not None and st.toughness_max is not None:
+        lines.append(f"toughness: {st.toughness:.0f}/{st.toughness_max:.0f}")
+    return lines
 
 
 def _font(game):
@@ -47,6 +96,10 @@ class EnhancedHUD:
         self.bars = []
         self.bar_labels = []
         self.boss_bar = None
+        self.panels_visible = False
+        self.inventory_text = None
+        self.skills_text = None
+        self.stats_text = None
 
     def _text(self, pos, scale, fg=(1, 1, 1, 1), align=TextNode.ALeft, text=""):
         kw = {"font": self.font} if self.font is not None else {}
@@ -69,9 +122,26 @@ class EnhancedHUD:
         self.boss_bar = DirectWaitBar(range=100, value=100, pos=(0, 0, -0.84), scale=(0.6, 1, 0.5),
                                       barColor=(0.75, 0.1, 0.1, 1), frameColor=(0.1, 0.1, 0.1, 0.8))
         self.boss_bar.hide()
-        help_text = KEYS_HELP if self.font is not None else "F1-F6 mood, arrows/C/X/N/Z hints, 1-4 spawn"
+        help_text = KEYS_HELP if self.font is not None else "F1-F6 mood, arrows/C/X/N/Z hints, 1-4 spawn, I panels"
         self.hint_text = self._text((0, -0.95), 0.036, fg=(1, 1, 0.6, 1), align=TextNode.ACenter, text=help_text)
+        self.inventory_text = self._text((-1.32, -0.05), 0.032, fg=(0.85, 0.9, 0.75, 1))
+        self.skills_text = self._text((-1.32, -0.45), 0.032, fg=(0.75, 0.85, 0.95, 1))
+        self.stats_text = self._text((-0.55, -0.05), 0.032, fg=(0.9, 0.85, 0.7, 1))
+        for w in (self.inventory_text, self.skills_text, self.stats_text):
+            w.hide()
         logger.info("HUD created (font: %s)", "DejaVu" if self.font is not None else "built-in")
+
+    def toggle_panels(self) -> bool:
+        """Показать/скрыть панели инвентаря, навыков и статов (клавиша I). -> новое состояние видимости."""
+        self.panels_visible = not self.panels_visible
+        for w in (self.inventory_text, self.skills_text, self.stats_text):
+            if w is None:
+                continue
+            if self.panels_visible:
+                w.show()
+            else:
+                w.hide()
+        return self.panels_visible
 
     # ---------------------------------------------------------------- update
     def update_hud(self, player):
@@ -93,6 +163,7 @@ class EnhancedHUD:
         scene = getattr(self.game, "scene", None)
         self._update_feed(scene, latin)
         self._update_boss(scene)
+        self._update_panels(player)
 
     def _update_mood(self, player, latin):
         drive = getattr(player, "drive", None)
@@ -124,11 +195,30 @@ class EnhancedHUD:
         name = getattr(b, "display_name", b.enemy_type) if self.font is not None else b.enemy_type
         self.boss_text.setText(f"{name}   {b.health:.0f}/{b.max_health:.0f}")
 
+    def _update_panels(self, player):
+        if not self.panels_visible:
+            return
+        self._update_inventory(player)
+        self._update_skills(player)
+        self._update_stats(player)
+
+    def _update_inventory(self, player):
+        self.inventory_text.setText("\n".join(inventory_summary_lines(player)))
+
+    def _update_skills(self, player):
+        now = getattr(getattr(self.game, "effect_manager", None), "now", 0.0)
+        self.skills_text.setText("\n".join(skills_summary_lines(player, now)))
+
+    def _update_stats(self, player):
+        self.stats_text.setText("\n".join(stats_summary_lines(player)))
+
     def destroy(self):
         for w in [self.status_text, self.mood_text, self.feed_text, self.boss_text, self.hint_text,
-                  self.boss_bar, *self.bars, *self.bar_labels]:
+                  self.boss_bar, self.inventory_text, self.skills_text, self.stats_text,
+                  *self.bars, *self.bar_labels]:
             if w is not None:
                 w.destroy()
         self.bars, self.bar_labels = [], []
         self.status_text = self.mood_text = self.feed_text = self.boss_text = self.hint_text = None
         self.boss_bar = None
+        self.inventory_text = self.skills_text = self.stats_text = None
