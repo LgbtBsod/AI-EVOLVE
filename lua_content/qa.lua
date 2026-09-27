@@ -403,6 +403,12 @@ return {
       relays = "qa.py resume (continue the relay)", guard = "qa.py guard --stats",
     },
   },
+  -- qa.py ctxwatch: session context-bloat watch (tools/qa_plugins/ctxwatch.py). `keep` snapshots in dev_probe_output/qa/ctxwatch_history.jsonl;
+  -- warn when >= warn_new plugin/skill names appeared since the last snapshot, or first_ctx grew by more than warn_ctx_grow tokens.
+  ctxwatch = { keep = 30, warn_new = 1, warn_ctx_grow = 0 },
+  -- check:standing_context (tools/qa_checks/standing_context.py): size of CLAUDE.md + docs/agent_context/*.md, paid on every session/agent
+  -- spawn. warn past these ceilings (today: claude_md ~3.3k tok, always ~4.3k); raise only alongside a deliberate addition, never to hide creep.
+  standing_context = { chars_per_token = 4, warn_claude_md_tok = 4000, warn_always_tok = 5500 },
   -- qa.py ship (tools/qa_plugins/ship.py): check -> stage -> commit -> push -> ci for exactly that sha, one command
   ship = {
     branches = { "main" },       -- ship only from these branches
@@ -414,7 +420,7 @@ return {
   new_tool = { similar_score = 6, show = 3 },
   -- qa.py coverage (tools/qa_plugins/coverage.py): share of the 60-ability corpus (tests/fixtures/ability_corpus.json) the canon ops + exact aliases express.
   -- floor = ratchet on with_aliases (FAIL under it; raise it whenever the number rises, never lower it); target = warn below; spec = doc's full-spec share.
-  coverage = { floor = 96.7, target = 95.0, spec = 80.0, holdout_floor = 36.0, holdout_target = 80.0 },
+  coverage = { floor = 96.7, target = 95.0, spec = 80.0, holdout_floor = 60.0, holdout_target = 80.0 },
   hygiene = {
     max_file_kb = 1024,          -- a tracked file above this fails (assets that must be bigger: list them in `allow`)
     allow = {},
@@ -521,10 +527,10 @@ return {
       { id = "boss_gauntlet", purpose = "boss test bench: the real hero against world bosses without a window (engine of qa.py gauntlet)", replaces = "playing bosses by hand", output = "one line per boss", group = "analyse", cost = "high", wraps = "python tools/qa.py gauntlet" },
       { id = "cas_training_demo", purpose = "demo run of the CAS engine 2.0 (conditional effect system)", replaces = "-", output = "prose", group = "analyse", status = "demo" },
       { id = "combat_smoke_test", purpose = "windowless smoke test of combat, effects, leveling and AI targeting (no Panda3D)", replaces = "hand-testing combat formulas", output = "passed/failed counts", group = "verify", cost = "low" },
-      { id = "dev_probe", purpose = "long headless run with anomaly hunt: samples, combat stats, contact sheet, findings in probe_db", when = "unattended run or anything visual", replaces = "reading raw state.jsonl and screenshots", output = "RESULT line + summary.md", group = "analyse", cost = "high" },
+      { id = "scry", purpose = "long headless run with anomaly hunt: samples, combat stats, contact sheet, findings in probe_db", when = "unattended run or anything visual", replaces = "reading raw state.jsonl and screenshots", output = "RESULT line + summary.md", group = "analyse", cost = "high" },
       { id = "guard_hook", command = "python tools/guard_hook.py  (hook JSON on stdin; installed by qa.py guard --install)", purpose = "hook entry point of the read guard: stdlib only, decides in a few ms, fails open (exit 2 + stderr = deny with the answer, JSON additionalContext = nudge)",
         replaces = "-", output = "exit code + stderr / hook JSON", group = "read", cost = "low", wraps = "python tools/qa.py guard" },
-      { id = "dev_probe_diff", purpose = "delta-only comparison of two dev_probe runs (--frames adds a visual diff)", replaces = "diffing two summary.json by eye", output = "changed metrics only", group = "analyse", cost = "low" },
+      { id = "scry_diff", purpose = "delta-only comparison of two scry runs (--frames adds a visual diff)", replaces = "diffing two summary.json by eye", output = "changed metrics only", group = "analyse", cost = "low" },
       { id = "probe_db", command = "python tools/probe_db.py stats|why|predict|compare|trend|sql", purpose = "SQLite analytics over every recorded probe run: stats, why, predict, compare, trend, free SQL", when = "numbers across runs, did my fix help", replaces = "reading state.jsonl / game.log", output = "short tables", group = "analyse", cost = "low" },
       { id = "repo_hygiene", purpose = "logic of the hygiene check: what git must never track (virtualenv, build output, saves, big files) and the .gitignore that keeps it out", replaces = "-", output = "RESULT line", group = "verify", cost = "low", wraps = "python tools/qa.py hygiene" },
       { id = "trace_compare", purpose = "did a refactor change behaviour: per-frame trace hashes of every play scenario, before vs after", replaces = "eyeballing runs after a refactor", output = "first divergent frame per scenario", group = "verify", cost = "medium" },
@@ -534,11 +540,11 @@ return {
       { id = "agent_kit", purpose = "roles, short prompts, stage routing and generated .claude/agents/*.md for sub-agents and Workflow stages (logic of qa.py prompt / route; data in lua_content/agent_kit.lua)", replaces = "re-typed CONTEXT blocks in agent prompts and Workflow scripts", output = "prompt text / problem list", group = "libs" },
       { id = "file_toc", purpose = "table of contents helper (stdlib only): Python via ast with line ranges, other languages via the regexes of guards.lua; behind qa.py ctx and the read guard", replaces = "reading a big file to see what is in it", output = "list of `Lnn name` lines", group = "libs" },
       { id = "lua_bridge", purpose = "alias of src/content/lua_bridge.py: load(path) runs a Lua file in the sandbox and returns its data (rust_core.LuaContent, lupa fallback)", replaces = "reading Lua files or embedding a Lua runtime", output = "dict from one JSON string", group = "libs" },
-      { id = "probe_analysis", purpose = "run analysis shared by dev_probe, agent_play and probe_db: hypotheses and one summary; the loops live in probe_kernels", replaces = "reading raw samples", output = "summary text", group = "libs" },
+      { id = "probe_analysis", purpose = "run analysis shared by scry, agent_play and probe_db: hypotheses and one summary; the loops live in probe_kernels", replaces = "reading raw samples", output = "summary text", group = "libs" },
       { id = "probe_rules", purpose = "generic evaluator of the hypothesis/outlook rules kept as data in lua_content/probe_rules.lua; JSON snapshot for a Python without Lua", replaces = "if/elif rule chains in probe_analysis", output = "hypothesis dicts", group = "libs" },
       { id = "probe_invariants", purpose = "world invariants checked on every frame of agent_play (HP over max, NaN, unit outside the map)", replaces = "noticing broken state by eye", output = "violation list", group = "libs" },
       { id = "probe_kernels", purpose = "number-crunching of run analysis: rust_core.RunAnalytics with an equivalent Python fallback", replaces = "Python loops over samples", output = "numbers", group = "libs" },
-      { id = "probe_runtime", purpose = "shared runtime of dev_probe and agent_play: quiet engine, render modes, virtual clock, scene reads", replaces = "booting Panda3D by hand", output = "-", group = "libs" },
+      { id = "probe_runtime", purpose = "shared runtime of scry and agent_play: quiet engine, render modes, virtual clock, scene reads", replaces = "booting Panda3D by hand", output = "-", group = "libs" },
       { id = "probe_settings", purpose = "loads lua_content/dev_tools.lua and qa.lua as settings (qa_settings(), Python defaults as fallback)", replaces = "hard-coded thresholds in Python", output = "dict", group = "libs" },
       { id = "qa_graph", purpose = "static import graph: what is live or dead, which tests a change touches (behind affected, dead, ctx, check)", replaces = "grepping for importers", output = "graph object", group = "libs" },
       { id = "glob_match", purpose = "the one path-glob matcher (PurePosixPath.full_match; ** = any dirs) for watches and selection", replaces = "regex glob translator in check.py", output = "bool", group = "libs" },

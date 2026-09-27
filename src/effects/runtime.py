@@ -463,6 +463,8 @@ _NOTES: dict[str, Callable[..., str]] = {
     "mark": lambda tg, mid, stacks: f"mark {mid}={stacks:g} -> {tg.name}",
     "detonate": lambda tg, mid, stacks: f"detonate {mid} ({stacks:g} stacks) -> {tg.name}",
     "detonate_empty": lambda tg, mid: f"detonate {mid}: no marks on {tg.name}",
+    "toughness_damage": lambda tg, dtype, amount: f"toughness_damage {amount:.2f}{'' if not dtype else ' ' + str(dtype)} -> {tg.name} (no toughness bar in the training room)",
+    "apply_status": lambda tg, bid, stacks: f"apply_status {bid} x{stacks} -> {tg.name}",
     "purge": lambda tg, want, tag: f"purge {want}{'' if not tag else ':' + str(tag)} -> {tg.name}",
     "nullify": lambda tg: f"nullify -> {tg.name}",
     "cancel_technique": lambda tg: f"cancel_technique -> {tg.name}",
@@ -486,6 +488,8 @@ _NOTES: dict[str, Callable[..., str]] = {
     "control_start": lambda tg, kind: f"control {kind} -> {tg.name}",
     "control_blocked": lambda tg, why: f"control blocked ({why}) -> {tg.name}",
     "control_end": lambda tg, cid: f"control_end {cid} -> {tg.name}",
+    "op_blocked": lambda tg, kind, why: f"op {kind} blocked ({why}) -> {tg.name}",
+    "interrupt_armed": lambda tg, rid: f"interrupt_armed {rid} -> {tg.name}",
     "perceive": lambda tg, what: f"perceive {what} -> {tg.name}",
     "reveal": lambda tg, to: f"reveal (to {to}) -> {tg.name}",
     "precognition": lambda tg, pid: f"precognition {pid} -> {tg.name}",
@@ -1004,6 +1008,15 @@ class EffectRuntime:
 
     def op_move(self, cx: OpCall, _tgt: Unit, o: dict) -> None:
         self.op_note(cx, "move", o)
+
+    def op_toughness_damage(self, cx: OpCall, tgt: Unit, o: dict, amount: float) -> None:
+        """S4: the toughness/break bar lives on EffectManager.EntityState (bestiary class, game clock
+        recovery); the training room has neither, so this is a log-only stub."""
+
+    def op_apply_status(self, cx: OpCall, _tgt: Unit, status_id: str, stacks: float) -> int:
+        """kind=apply_status op (S1/S2): the room only has one enemy (self.enemy), so it ignores `_tgt` and
+        reuses the same EffectRuntime.apply_status used by the executable status spec."""
+        return self.apply_status(status_id, cx.t, max(1, int(stacks)))
 
     # --- формы (ops.py stance/transform/timed_power_up): запись формы живёт в unit.external["forms"];
     # тренировочная комната не применяет stats формы и не гасит форму по таймеру (это делает EffectManager)

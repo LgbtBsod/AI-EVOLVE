@@ -49,7 +49,7 @@ def test_clean_log_strips_prefix_timestamp_ansi_and_bom():
 
 def test_group_steps_keeps_order_and_separates_jobs():
     steps = ci.group_steps(ci.clean_log(log("linux_pytest_diff") + log("windows_lua_crlf")))
-    assert list(steps) == [("Game (ubuntu-latest)", "Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)"),
+    assert list(steps) == [("Game (ubuntu-latest)", "Agent + QA tools (agent_play / scry --render none --fast / probe_db / qa.py)"),
                            ("rust_core (windows-latest)", "Lua bridge parity (mlua vs lupa)")]
 
 
@@ -57,7 +57,7 @@ def test_group_steps_keeps_order_and_separates_jobs():
 
 def test_linux_pytest_assertion_diff_without_the_full_diff_noise():
     blk, lines = one_block("linux_pytest_diff")
-    assert lines[0] == ("FAIL Game (ubuntu-latest) > Agent + QA tools (agent_play / dev_probe --render none --fast / pro..."
+    assert lines[0] == ("FAIL Game (ubuntu-latest) > Agent + QA tools (agent_play / scry --render none --fast / probe_db..."
                         "  [python -m pytest -q tests/test_agent_tools.py tests/test_qa_tools.py] exit=1")
     assert lines[1].startswith("  FAILED tests/test_agent_tools.py::TestRealGame::test_agent_play_is_deterministic - AssertionError")
     assert lines[2].startswith("  E AssertionError: assert ({'t': 8.07")

@@ -273,7 +273,7 @@ return {
 
 ```python
 # tools/plugins/training_room_plugin.py
-class TrainingRoomPlugin(DevProbePlugin):
+class TrainingRoomPlugin(ScryPlugin):
     def on_code_change(self, changed_files: List[str]):
         if any("items" in f for f in changed_files):
             self.run_auto_tests()

@@ -126,7 +126,7 @@ return {
     { stage = "summarise-log",   role = "verifier",    model = "haiku",  effort = "low",    max_calls = 10, escalate = "sonnet",
       why = "qa.py ci / probe_db already digest the log; the agent only relays the essentials" },
     { stage = "run-scenarios",   role = "verifier",    model = "haiku",  effort = "low",    max_calls = 15, escalate = "sonnet",
-      why = "launching agent_play / dev_probe / bench / smoke scripts and copying their RESULT lines is mechanical: haiku (owner rule: tests and simple launches on haiku, everything else sonnet, opus never)" },
+      why = "launching agent_play / scry / bench / smoke scripts and copying their RESULT lines is mechanical: haiku (owner rule: tests and simple launches on haiku, everything else sonnet, opus never)" },
     { stage = "mechanical-edit", role = "implementer", model = "sonnet", effort = "low",    max_calls = 30,
       why = "a rename or a rewrite by rule: exact edits matter more than depth (a wrong edit costs a retry turn)" },
     { stage = "grep-research",   role = "explorer",    model = "sonnet", effort = "low",    max_calls = 25,

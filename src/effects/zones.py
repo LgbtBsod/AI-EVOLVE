@@ -29,7 +29,9 @@ from typing import Any
 
 from . import damage
 
-ZONE_FEATURES = ("zone.sure_hit", "zone.on_inside")     # spec additions of the corpus that a zone provides (qa.py coverage)
+ZONE_FEATURES = ("zone.sure_hit", "zone.on_inside", "target.extraplanar_return")   # spec additions of the corpus a zone provides
+# target.extraplanar_return (G3 holdout #126 Banishment): `move` mode=teleport (a holding-zone point) + `untargetable`
+# (ops.py, already canon) for `duration`, then `delay` (triggers.py) teleports back and clears it -- no new zone code.
 _MAX_CATCHUP = 8
 _FLAGS = damage.CERTAIN_FLAGS | damage.NO_CRIT_FLAGS | {"true_damage"}
 

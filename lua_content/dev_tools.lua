@@ -1,5 +1,5 @@
 -- lua_content/dev_tools.lua
--- Настройки агентских dev-инструментов: tools/agent_play.py, tools/dev_probe.py,
+-- Настройки агентских dev-инструментов: tools/agent_play.py, tools/scry.py,
 -- tools/probe_db.py (анализ - tools/probe_analysis.py).
 -- Python читает этот файл через lupa.lua55 (tools/probe_runtime.py:
 -- load_tool_settings). Без lupa действуют те же значения по умолчанию из

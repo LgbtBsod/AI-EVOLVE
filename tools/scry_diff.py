@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Delta-only comparison between two tools/dev_probe.py runs.
+"""Delta-only comparison between two tools/scry.py runs.
 
 Without this, comparing "before my fix" vs "after my fix" means opening both
 summary.md files in full (Config/Timeline/Combat totals/Player HP/Issues
 detected/Screenshots - typically 20-60 lines each) and reasoning over the
 diff yourself. This reads each run's summary.json instead (a few plain
-fields dev_probe.py already computed in finish()) and prints ONLY what
+fields scry.py already computed in finish()) and prints ONLY what
 changed - usually a handful of lines, sometimes "No differences" - no image
 opening involved even when screenshot counts differ (see --before/--after
 screenshot reason counts, not the images themselves).
@@ -18,8 +18,8 @@ that actually changed (frames_diff.jpg: before | after | changes in red), so
 an unchanged visual costs zero image tokens.
 
 Usage:
-    .venv/Scripts/python.exe tools/dev_probe_diff.py --before dev_probe_output/2026...aaa --after dev_probe_output/2026...bbb
-    python tools/dev_probe_diff.py --before A --after B --frames
+    .venv/Scripts/python.exe tools/scry_diff.py --before dev_probe_output/2026...aaa --after dev_probe_output/2026...bbb
+    python tools/scry_diff.py --before A --after B --frames
 """
 import argparse
 import json
@@ -27,13 +27,13 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _dev_probe_compare import diff_is_empty, diff_summaries, format_diff  # noqa: E402
+from _scry_compare import diff_is_empty, diff_summaries, format_diff  # noqa: E402
 
 
 def load_summary(run_dir):
     path = Path(run_dir) / "summary.json"
     if not path.exists():
-        print(f"error: {path} not found (run tools/dev_probe.py first, or check the path)", file=sys.stderr)
+        print(f"error: {path} not found (run tools/scry.py first, or check the path)", file=sys.stderr)
         sys.exit(2)
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -62,7 +62,7 @@ def compare_frames(before, after, out_image=None):
         ProbeAnalyzer = None
     pairs = _frame_pairs(before, after)
     if not pairs:
-        return ["frames: none to compare (run dev_probe with --render offscreen/window)"], 0
+        return ["frames: none to compare (run scry with --render offscreen/window)"], 0
     rows, changed = [], []
     for a, b in pairs:
         ham = None
@@ -109,8 +109,8 @@ def main():
     if (sys.stdout.encoding or "").lower().replace("-", "") != "utf8":
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description=__doc__.strip().splitlines()[0])
-    parser.add_argument("--before", required=True, help="a dev_probe.py output directory (the earlier run)")
-    parser.add_argument("--after", required=True, help="a dev_probe.py output directory (the later run)")
+    parser.add_argument("--before", required=True, help="a scry.py output directory (the earlier run)")
+    parser.add_argument("--after", required=True, help="a scry.py output directory (the later run)")
     parser.add_argument("--frames", action="store_true",
                         help="also compare screenshots pairwise; an image is written only for changed frames")
     args = parser.parse_args()

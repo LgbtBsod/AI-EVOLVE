@@ -33,13 +33,17 @@ def canon_kinds() -> set:
 
 def _features() -> tuple:
     sys.path.insert(0, str(ROOT))
+    from src.effects.control import CONTROL_FEATURES
     from src.effects.exchange import EXCHANGE_FEATURES
+    from src.effects.gate import GATE_FEATURES
     from src.effects.mimic import MIMIC_FEATURES
     from src.effects.social import SOCIAL_FEATURES
     from src.effects.statecraft import STATE_FEATURES
     from src.effects.timeworld import TIME_FEATURES
+    from src.effects.triggers import TRIGGER_FEATURES
     from src.effects.zones import ZONE_FEATURES
-    return ZONE_FEATURES + MIMIC_FEATURES + TIME_FEATURES + STATE_FEATURES + EXCHANGE_FEATURES + SOCIAL_FEATURES + ("time_scale",)
+    return (ZONE_FEATURES + MIMIC_FEATURES + TIME_FEATURES + STATE_FEATURES + EXCHANGE_FEATURES + SOCIAL_FEATURES
+            + GATE_FEATURES + CONTROL_FEATURES + TRIGGER_FEATURES + ("time_scale",))
 
 
 def alias_rows() -> dict:

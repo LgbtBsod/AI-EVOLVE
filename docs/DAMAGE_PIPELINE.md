@@ -34,7 +34,7 @@ Then, outside the kernel (manager): invulnerability (`iframe` buff -> `HitInfo.i
 
 **Roll order** (fixed, one `rng.random()` each): accuracy, dodge, block, crit, variance. A miss or a dodge stops the hit: the later rolls are never drawn (a dodged hit draws no crit roll, as before). Neutral hit: dodge, crit.
 
-**Outcome** = `{need, hit, dodged, blocked, crit, damage_before, armor_ignored, armor_reduced, resisted, blocked_amount, final}` -> `HitInfo` (`missed`, `blocked`, `hit_type`, `damage_before`, `armor_reduced`, `resisted`, `blocked_amount`, `armor_ignored`; `landed` = not dodged, not missed) -> combat events (`combat.jsonl`: `type`, `armor`, `resisted`, `missed`, `blocked` + `guarded`, `pierced`; `dodged` = did not land) -> `agent_play` metrics `misses blocks resisted armored pierced` (RESULT line) and the `dev_probe` combat totals.
+**Outcome** = `{need, hit, dodged, blocked, crit, damage_before, armor_ignored, armor_reduced, resisted, blocked_amount, final}` -> `HitInfo` (`missed`, `blocked`, `hit_type`, `damage_before`, `armor_reduced`, `resisted`, `blocked_amount`, `armor_ignored`; `landed` = not dodged, not missed) -> combat events (`combat.jsonl`: `type`, `armor`, `resisted`, `missed`, `blocked` + `guarded`, `pierced`; `dodged` = did not land) -> `agent_play` metrics `misses blocks resisted armored pierced` (RESULT line) and the `scry` combat totals.
 
 ## Stats (defaults 0 = neutral; bounds in `effect_rules.lua`)
 
@@ -56,3 +56,7 @@ Rich mix: twin 2.64 us, Rust single 1.49 us. So the Rust path is NOT slower per 
 ## After the kernel: damage while CC'd (S2)
 
 `EffectManager._damage` applies `damage.cc_adjust(final, cc_damage_flat, cc_damage_reduction, row.cc_damage_mult * attacker cc_damage_mult)` = `max(0, (d - flat) * (1 - pct/100)) * mult` to the kernel's `final`, only when the target carries a CC status (`active_cc`). Python only (not in `resolve_hit`), so no Rust twin; defaults 0 / 0 / 1.0 return `final` unchanged. Stats are in `lua_content/effect_rules.lua`.
+
+## After HP: toughness / break (S4, row 17)
+
+Every landed hit that reaches HP subtraction also calls `EffectManager._toughness_hit(src, tgt_st, amount, kind)` with the same `final` damage and damage type, automatically -- no ability opts in. Excluded: hits carrying any of `damage.CERTAIN_FLAGS` (`true_damage`, `unavoidable`, `periodic`) -- i.e. execute/guaranteed hits and DoT ticks do not chip toughness, matching legacy row 17's "damage per hit" (a landed, avoidable attack), not every HP change. `type_factor` (`lua_content/toughness.lua`) is applied on top, base by class from `toughness_class(entity, faction)` (`src/effects/toughness.py`; `faction` is the caller's `EntityState.faction`, since the raw entity itself never sets `.faction` -- only `is_boss`/`is_elite`, which callers do set directly on it). Gated end-to-end by `toughness.enabled()` (`lua_content/toughness.lua` `enabled`): flip to `false` to fully revert to pre-S4 traces. `op_toughness_damage` (an explicit effect op) shares the same `_toughness_hit` core.

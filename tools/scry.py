@@ -61,7 +61,7 @@ AI-таргетинг/движение) СНАЧАЛА запускай tools/co
 без скриншотов, доли секунды вместо реального --duration секунд с открытым
 Panda3D. Он уже сейчас проверяет ровно то, что раньше приходилось выяснять
 через этот файл (death-latch регрессию, floor урона, крит/додж через
-CombatSystem, AI retreat/targeting). Возвращайся к dev_probe.py, когда нужна
+CombatSystem, AI retreat/targeting). Возвращайся к scry.py, когда нужна
 именно визуальная/рендер/сценовая проверка, а не просто "правильно ли считает
 формула".
 
@@ -73,11 +73,11 @@ CombatSystem, AI retreat/targeting). Возвращайся к dev_probe.py, к�
 summary на что-то указывает и нужно копнуть глубже.
 
 Использование (этот проект):
-    .venv/Scripts/python.exe tools/dev_probe.py --duration 30
-    .venv/Scripts/python.exe tools/dev_probe.py --action-at 1:1 --action-at 1:2 --action-at 1:3
-    .venv/Scripts/python.exe tools/dev_probe.py --seed 42 --duration 20   # меньший разброс
-    python tools/dev_probe.py --render none --fast --seed 42 --duration 120 --action-at 1:1  # логика, <1 с
-    xvfb-run -a python tools/dev_probe.py --headless --fast --seed 42 --screenshot-interval 10
+    .venv/Scripts/python.exe tools/scry.py --duration 30
+    .venv/Scripts/python.exe tools/scry.py --action-at 1:1 --action-at 1:2 --action-at 1:3
+    .venv/Scripts/python.exe tools/scry.py --seed 42 --duration 20   # меньший разброс
+    python tools/scry.py --render none --fast --seed 42 --duration 120 --action-at 1:1  # логика, <1 с
+    xvfb-run -a python tools/scry.py --headless --fast --seed 42 --screenshot-interval 10
 
 Переиспользование в другом Panda3D-проекте:
     - Всё, что касается запуска окна (screenshot+пиксельная проекция через
@@ -94,7 +94,7 @@ summary на что-то указывает и нужно копнуть глу�
       (entity_id/health/max_health/x/y/node/is_alive()).
 
 Пример под другой проект:
-    .venv/Scripts/python.exe tools/dev_probe.py --entry-module app --game-class App \
+    .venv/Scripts/python.exe tools/scry.py --entry-module app --game-class App \
         --game-kwargs '{"headless": false}'
 """
 import argparse
@@ -109,7 +109,7 @@ from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from _dev_probe_compare import diff_is_empty, diff_summaries, format_diff  # noqa: E402
+from _scry_compare import diff_is_empty, diff_summaries, format_diff  # noqa: E402
 
 try:
     from PIL import Image, ImageDraw, ImageStat
@@ -141,7 +141,7 @@ from panda3d.core import Filename, Point2, TextNode  # noqa: E402
 import probe_analysis as analysis  # noqa: E402
 import probe_runtime as runtime  # noqa: E402
 # ADAPTER-функции живут в probe_runtime (общие с agent_play.py); имена
-# оставлены здесь для обратной совместимости импортов из dev_probe.
+# оставлены здесь для обратной совместимости импортов из scry.
 from probe_runtime import (  # noqa: E402,F401
     entity_id_of, entity_state, get_combat_system, get_entities, get_scene,
 )
@@ -220,7 +220,7 @@ def parse_args():
                               "summary.md's Timeline always has everything regardless of this flag - this "
                               "only controls what's echoed live to the console you're reading right now")
     parser.add_argument("--save-baseline", action="store_true",
-                         help="also save this run's summary.json as tools/dev_probe_baseline.json. Every "
+                         help="also save this run's summary.json as tools/scry_baseline.json. Every "
                               "later run auto-compares against it (see '## vs baseline' in summary.md) - "
                               "save once after confirming a run is good, then every subsequent run's own "
                               "output already carries the before/after verdict without a separate diff step")
@@ -942,7 +942,7 @@ def main():
         kill_tracker.update(game, clock())
         return task.cont
 
-    game.taskMgr.add(track_kills, "dev_probe_kill_tracker", sort=100)
+    game.taskMgr.add(track_kills, "scry_kill_tracker", sort=100)
 
     state_log = (out_dir / "state.jsonl").open("w", encoding="utf-8")
     samples = []
@@ -1278,11 +1278,11 @@ def main():
         hyps = analysis.hypotheses(samples, combat_events, analysis_ctx)
         fc = analysis.forecast(samples, combat_events, analysis_ctx)
 
-        repro = "python tools/dev_probe.py " + " ".join(shlex.quote(a) for a in sys.argv[1:])
+        repro = "python tools/scry.py " + " ".join(shlex.quote(a) for a in sys.argv[1:])
         exact = args.fast and args.seed is not None
 
         summary_data = {
-            "kind": "dev_probe",
+            "kind": "scry",
             "status": status,
             "fail_reasons": fail_reasons,
             "entities_max": entities_max["value"],
@@ -1323,7 +1323,7 @@ def main():
             f"#!/bin/sh\n# {status}; {'exact replay (--fast + --seed)' if exact else 'approximate: add --fast --seed N for an exact replay'}\n{repro}\n",
             encoding="utf-8")
 
-        baseline_path = ROOT / "tools" / "dev_probe_baseline.json"
+        baseline_path = ROOT / "tools" / "scry_baseline.json"
         baseline_diff_text = None
         baseline_changed = None
         if baseline_path.exists():
@@ -1339,7 +1339,7 @@ def main():
 
         from probe_db import ingest_quietly
         db_err = ingest_quietly(out_dir.name, {
-            "kind": "dev_probe", "dir": str(out_dir), "status": status, "seed": args.seed,
+            "kind": "scry", "dir": str(out_dir), "status": status, "seed": args.seed,
             "duration": round(run_state["last_elapsed"], 2), "fast": args.fast, "render": args.render,
             "errors": len(warning_collector.errors), "warnings": len(warning_collector.records),
             "crit_chance": getattr(final_player, "critical_chance", None),
@@ -1395,7 +1395,7 @@ def main():
                 "",
             ]
         if baseline_diff_text is not None:
-            lines += ["## vs baseline (tools/dev_probe_baseline.json)", baseline_diff_text, ""]
+            lines += ["## vs baseline (tools/scry_baseline.json)", baseline_diff_text, ""]
         if warning_collector.records:
             lines += ["## Warnings / errors (deduplicated, full text in game.log)",
                       *analysis.digest_log(warning_collector.records, 15), ""]
@@ -1471,7 +1471,7 @@ def main():
         print(f"Read {out_dir / 'summary.md'} for the full story.")
 
     try:
-        game.taskMgr.doMethodLater(args.sample_interval, sample, "dev_probe_sample")
+        game.taskMgr.doMethodLater(args.sample_interval, sample, "scry_sample")
         game.run()
     finally:
         finish()

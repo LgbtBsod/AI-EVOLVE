@@ -20,7 +20,9 @@ from __future__ import annotations
 import json
 from typing import Any
 
-STATE_FEATURES = ("respawn_at", "kill.cause")     # spec additions provided by these ops (qa.py coverage)
+STATE_FEATURES = ("respawn_at", "kill.cause", "state.rewind_hp_and_position_3s")     # spec additions provided by these ops (qa.py coverage)
+# state.rewind_hp_and_position_3s (G3 holdout #136 Recall): `snapshot` now + `delay` (triggers.py) `after` the window running
+# `restore_state` of that same id IS a rewind to "N seconds ago" the moment it fires -- three already-canon ops composed, no new code.
 ST_ATTRS = ("abilities", "applied", "cooldowns", "fired_at", "buff_granted_at", "periodic", "zones", "vision_vs", "marks", "spells",
             "adapt_stacks", "absorbed_kinetic", "absorbed_until", "faction")
 UNIT_ATTRS = ("buffs", "marks", "spells", "adapt_stacks", "absorbed_kinetic", "absorbed_until", "external", "pools", "current_hp", "alive", "kills")

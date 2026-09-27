@@ -1,5 +1,5 @@
 -- lua_content/probe_config.lua
--- Конфигурация для dev_probe визуальной аналитики
+-- Конфигурация для scry визуальной аналитики
 -- Используется Rust probe модулем через mlua
 
 return {

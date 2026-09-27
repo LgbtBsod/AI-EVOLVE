@@ -1,7 +1,7 @@
 # Разбор геймплея (сентябрь 2026)
 
 Игра прогнана инструментами агента, а не на глаз: `agent_play` (управление игрока: спавн врага /
-ловушки / сундука, атака, взаимодействие), `qa.py sweep` (Monte Carlo по seed), `dev_probe` со
+ловушки / сундука, атака, взаимодействие), `qa.py sweep` (Monte Carlo по seed), `scry` со
 скриншотами, `probe_db stats`. Все цифры ниже воспроизводятся командами из последнего раздела.
 
 ## Коротко
@@ -61,5 +61,5 @@ python tools/qa.py sweep "spawn enemy x10; wait 60" --seeds 16
 python tools/qa.py sweep "wait 300" --seeds 8
 python tools/agent_play.py "spawn enemy x10; wait 60" && python tools/probe_db.py stats
 python tools/agent_play.py "spawn chest; observe; interact 3; observe"
-xvfb-run -a python tools/dev_probe.py --headless --fast --seed 3 --duration 60 --screenshot-interval 10 --action-at 1:1
+xvfb-run -a python tools/scry.py --headless --fast --seed 3 --duration 60 --screenshot-interval 10 --action-at 1:1
 ```

@@ -7,32 +7,28 @@ or when the controller dies (EffectManager.update calls `release_control`); `tam
 The game has no "player drives another entity" concept, so `possess` = faction switch + targeting override + restore (docs/EFFECT_SCHEMA.md "Control").
 Gates before anything is applied: an `immune` op with effect=control (buff block:control), `status_resist_<id|kind|control>`
 (>=100 always resists, 0<p<100 one seeded draw), and the optional `requires` = {stat, cmp: lt|le|gt|ge, vs: "source" | number}.
+`chance` (a seeded roll, default 100 = always lands) gates every kind, not only `tame`: a "will save" / resisted persuasion
+(G3 holdout: #111 Soothing emotions = dominance with a chance roll, #129 Jedi Mind Trick = command with one).
 """
 from __future__ import annotations
 
 from typing import Any
 
-_CMP = {"lt": lambda a, b: a < b, "le": lambda a, b: a <= b, "gt": lambda a, b: a > b, "ge": lambda a, b: a >= b}
+CONTROL_FEATURES = ("emotion_control", "persuasion.will_check")   # spec additions the `chance` roll provides on any control kind
 _FACTION_KINDS = ("possess", "dominance", "tame")          # these also change the faction (the rest only steer the target)
 _MODES = {"hypnosis": "illusion", "command": "command", "possess": "controlled", "dominance": "dominated",
           "tame": "tamed", "temptation": "tempted"}
 
 
 def _blocked(h: Any, cx: Any, tgt: Any, kind: str, o: dict) -> str | None:
-    """Why the control does not land (None = it lands): immune / resisted / condition not met."""
+    """Why the control does not land (None = it lands): immune / resisted. `requires` is gated generically before the
+    handler ever runs (G2, `apply_op` in ops.py); by the time `_control` calls this, a failed `requires` never got here."""
     b = h.op_buffs(tgt).get("block:control")
     if b is not None and b.get("until", 1e18) > cx.t:
         return "immune"
     for sid in dict.fromkeys((o.get("id") or kind, kind, "control")):
         if h.op_resisted(cx, tgt, sid):
             return "resisted"
-    req = o.get("requires")
-    if req:
-        mine = h.op_stat_of(cx, "target", tgt, req["stat"])
-        vs = req.get("vs", 0.0)
-        other = h.op_stat_of(cx, "source", tgt, req["stat"]) if vs == "source" else float(vs)
-        if not _CMP[req.get("cmp", "lt")](mine, other):
-            return "condition"
     return None
 
 
@@ -76,7 +72,7 @@ def _record(h: Any, cx: Any, tgt: Any, o: dict, kind: str) -> dict:
 
 def _control(h: Any, cx: Any, tgt: Any, o: dict, kind: str) -> None:
     why = _blocked(h, cx, tgt, kind, o)
-    if why or (kind == "tame" and not _roll_lands(h, cx, o)):
+    if why or not _roll_lands(h, cx, o):
         h.op_note(cx, "control_blocked", tgt, why or "failed")
         return
     holder = h.op_control(tgt)

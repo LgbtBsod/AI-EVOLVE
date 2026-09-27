@@ -16,6 +16,10 @@ from typing import Any
 
 from . import statecraft
 
+TRIGGER_FEATURES = ("delay.countdown_visible",)   # spec additions these ops provide (qa.py coverage)
+# delay.countdown_visible (G3 holdout #137 Perish Song): a `status` (already canon) applied alongside `delay` IS the visible
+# countdown (its remaining duration is a normal buff read); no new field, just the composition.
+
 
 def op_on_lethal(h: Any, cx: Any, tgt: Any, o: dict, amount: float) -> None:
     """Arm a lethal-hit interceptor on the target. charges default 1 (0 = unlimited), keep = hp left (default 1), restore = % max hp instead."""

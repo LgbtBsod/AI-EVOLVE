@@ -26,6 +26,7 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `check:play:*` | `python tools/qa.py check --tag play` | 7 gameplay checks (agent_play scripts of qa.lua scenarios/plays): forced_attacks, golem_guard,... | playing the game to test behaviour | qa_report line | low |
 | `check:quality` | `python tools/qa.py check --name quality` | SOLID/DRY/SRP/SSOT ratchet: ruff + radon CC + vulture + import-linter layers + duplicate definitions vs... | running ruff, radon, vulture, import-linter separately | qa_report line | low |
 | `check:quality_tools` | `python tools/qa.py check --name quality_tools` | the quality ratchet for tools/ (ruff + radon CC + vulture + duplicate definitions vs... | - | qa_report line | low |
+| `check:standing_context` | `python tools/qa.py check --name standing_context` | Token size of CLAUDE.md + docs/agent_context/*.md, paid on every session/agent spawn; warns past... | - | qa_report line | low |
 | `check:static` | `python tools/qa.py check --name static` | no undefined name / redefinition / syntax error in Python, every Lua file compiles (LuaJIT + 5.5),... | - | qa_report line | low |
 | `check:tests` | `python tools/qa.py check --name tests` | pytest in parallel shards (only affected files in diff mode; known failures do not count as NEW) | raw pytest and its full output | qa_report line | medium |
 | `check:tokens` | `python tools/qa.py check --name tokens` | the transcript ledger parses the latest local session (turns=0 when there is no transcript dir) | - | qa_report line | low |
@@ -56,17 +57,19 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 |---|---|---|---|---|---|
 | `bench_damage` | `python tools/bench_damage.py` | Damage pipeline benchmark: the Python twin vs the Rust kernel (one call per hit) vs the Rust batch, hits... | timing the damage pipeline ad hoc | hits per second per backend | medium |
 | `bench_pathfinding` | `python tools/bench_pathfinding.py` | A*/JPS/flow-field benchmark: rust_core vs the Python twin | timing pathfinding ad hoc | time per backend | medium |
+| `bisect` | `python tools/qa.py bisect` | coordinator-only: does the working-tree diff explain a scenario's behaviour change, and if so which dirty... | - | - | - |
 | `boss_gauntlet` | `python tools/boss_gauntlet.py` | boss test bench: the real hero against world bosses without a window (engine of qa.py gauntlet) | playing bosses by hand | one line per boss | high |
 | `cas_training_demo` | `python tools/cas_training_demo.py` | demo run of the CAS engine 2.0 (conditional effect system) [demo] | - | prose | - |
 | `coverage` | `python tools/qa.py coverage` | share of the 60-ability corpus the canon effect system can express (floor ratchet) | - | - | - |
+| `ctxwatch` | `python tools/qa.py ctxwatch` | session context-bloat watch: snapshot enabled account plugins/skills (fed by the calling agent) +... | - | - | - |
 | `dead` | `python tools/qa.py dead` | modules nobody imports (dead code) with LOC; --list names them | reading modules to see if they are still used | summary line + list | low |
 | `determinism` | `python tools/qa.py determinism "SCRIPT" --pairs 6` | why two same-seed runs differ: paired traced runs, first divergent frame, hypotheses | bisecting a desync by hand | verdict + first divergent frame | high |
-| `dev_probe` | `python tools/dev_probe.py` | long headless run with anomaly hunt: samples, combat stats, contact sheet, findings in probe_db | reading raw state.jsonl and screenshots | RESULT line + summary.md | high |
-| `dev_probe_diff` | `python tools/dev_probe_diff.py` | delta-only comparison of two dev_probe runs (--frames adds a visual diff) | diffing two summary.json by eye | changed metrics only | low |
 | `gauntlet` | `python tools/qa.py gauntlet [--campaign --lives 5]` | hero vs every boss (or a whole campaign), results in probe_db | playing bosses by hand | one line per boss | high |
 | `new` | `python tools/qa.py new` | scaffold a tool: script or plugin + smoke test + docs/TOOLS.md, with a look-alike (DRY) guard | - | - | - |
 | `perf` | `python tools/qa.py perf "SCRIPT"` | hot functions of a game run (cProfile, fast mode) | ad-hoc cProfile runs | top-N table | medium |
 | `probe_db` | `python tools/probe_db.py stats\|why\|predict\|compare\|trend\|sql` | SQLite analytics over every recorded probe run: stats, why, predict, compare, trend, free SQL | reading state.jsonl / game.log | short tables | low |
+| `scry` | `python tools/scry.py` | long headless run with anomaly hunt: samples, combat stats, contact sheet, findings in probe_db | reading raw state.jsonl and screenshots | RESULT line + summary.md | high |
+| `scry_diff` | `python tools/scry_diff.py` | delta-only comparison of two scry runs (--frames adds a visual diff) | diffing two summary.json by eye | changed metrics only | low |
 | `ship` | `python tools/qa.py ship` | check -> stage -> commit -> push -> ci --wait for that sha, one command, one line | - | - | - |
 | `sweep` | `python tools/qa.py sweep "SCRIPT"` | one agent_play script over many seeds: metric distributions + bootstrap CI (Rust) | eyeballing a few seeds | table per metric | high |
 | `training_room` | `python tools/training_room.py` | training room with mannequins to try equipment and effects (v2.0) | - | prose | - |
@@ -124,11 +127,11 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `jsonl_io` | `import jsonl_io` | the one jsonl reader/writer: read_jsonl, tail_jsonl, append_jsonl (utf-8, LF, skips corrupt or partial lines) | hand-written json.loads(line) loops | list of rows | - |
 | `lua_bridge` | `import lua_bridge` | alias of src/content/lua_bridge.py: load(path) runs a Lua file in the sandbox and returns its data... | reading Lua files or embedding a Lua runtime | dict from one JSON string | - |
 | `pack_builder` | `import pack_builder` | pack_builder - the logic behind `qa.py pack`: rank files for a task, pick symbol pointers, collect... | - | - | - |
-| `probe_analysis` | `import probe_analysis` | run analysis shared by dev_probe, agent_play and probe_db: hypotheses and one summary; the loops live in... | reading raw samples | summary text | - |
+| `probe_analysis` | `import probe_analysis` | run analysis shared by scry, agent_play and probe_db: hypotheses and one summary; the loops live in... | reading raw samples | summary text | - |
 | `probe_invariants` | `import probe_invariants` | world invariants checked on every frame of agent_play (HP over max, NaN, unit outside the map) | noticing broken state by eye | violation list | - |
 | `probe_kernels` | `import probe_kernels` | number-crunching of run analysis: rust_core.RunAnalytics with an equivalent Python fallback | Python loops over samples | numbers | - |
 | `probe_rules` | `python tools/probe_rules.py` | generic evaluator of the hypothesis/outlook rules kept as data in lua_content/probe_rules.lua; JSON... | if/elif rule chains in probe_analysis | hypothesis dicts | - |
-| `probe_runtime` | `import probe_runtime` | shared runtime of dev_probe and agent_play: quiet engine, render modes, virtual clock, scene reads | booting Panda3D by hand | - | - |
+| `probe_runtime` | `import probe_runtime` | shared runtime of scry and agent_play: quiet engine, render modes, virtual clock, scene reads | booting Panda3D by hand | - | - |
 | `probe_settings` | `import probe_settings` | loads lua_content/dev_tools.lua and qa.lua as settings (qa_settings(), Python defaults as fallback) | hard-coded thresholds in Python | dict | - |
 | `qa_graph` | `import qa_graph` | static import graph: what is live or dead, which tests a change touches (behind affected, dead, ctx, check) | grepping for importers | graph object | - |
 | `qa_pool` | `import qa_pool` | thread-pool subprocess runner: many game runs or tests in parallel with timeouts (kills the process tree) | hand-written subprocess loops | results per job | - |

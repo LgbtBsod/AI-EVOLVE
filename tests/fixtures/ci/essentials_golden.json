@@ -61,7 +61,7 @@
    "1 failed, 44 passed, 3 skipped in 9.02s"
   ]
  ],
- "linux_pytest_diff|Game (ubuntu-latest)|Agent + QA tools (agent_play / dev_probe --render none --fast / probe_db / qa.py)": [
+ "linux_pytest_diff|Game (ubuntu-latest)|Agent + QA tools (agent_play / scry --render none --fast / probe_db / qa.py)": [
   [
    "failed",
    "FAILED tests/test_agent_tools.py::TestRealGame::test_agent_play_is_deterministic - AssertionError: assert ({'t': 8.07, ...', 'goblin']]) == ({'t': 8.07, ...', 'goblin']])"

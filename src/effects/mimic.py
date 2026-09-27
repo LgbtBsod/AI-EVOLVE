@@ -17,10 +17,10 @@ from functools import partial
 from typing import Any
 
 from . import control
+from .gate import _CMP
 
 MIMIC_FEATURES = ("on_dispel", "false_percept", "control_link")   # spec additions of the corpus that these ops provide (qa.py coverage)
 _LINK_KINDS = ("possess", "command", "dominance", "hypnosis", "temptation")
-_CMP = control._CMP
 
 
 def _ext(tgt: Any) -> dict:

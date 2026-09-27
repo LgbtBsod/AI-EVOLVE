@@ -34,6 +34,9 @@ OP_KINDS = {
     "deal",         # нанесение урона
     "set",          # жёсткая установка значения
     "buff",         # повесить эффект/бафф по buff_id
+    "apply_status",  # наложить статус из lua_content/statuses по id (buff_id): CC gate/resist/stack/cc_priority,
+                     # тот же apply_status что и EffectManager.apply_status/op_toughness_damage->broken (S1/S2
+                     # docs/CC_PORT_SPEC.md). Не "status" - тот kind уже alias на apply_effect (kind_aliases.lua)
     "extend",       # продлить таймер существующего баффа
     "remove_buff",  # снять бафф
     "apply_effect",  # применить другой эффект по id
@@ -52,6 +55,8 @@ OP_KINDS = {
     "zone", "zone_mod", "rule_override",   # F5: зоны, ауры, реальности (src/effects/zones.py, docs/EFFECT_SCHEMA.md "Zones")
     "perceive", "reveal", "precognition",   # восприятие: данные на unit.external["perception"] (src/effects/perception.py, docs/EFFECT_SCHEMA.md "Perception")
     "hypnosis", "command", "possess", "dominance", "temptation", "tame",   # контроль цели (src/effects/control.py, docs/EFFECT_SCHEMA.md "Control")
+    "arm_interrupt",   # G2: bounded reaction window -- the next matching op against the target is nullified once (src/effects/gate.py)
+    "toughness_damage",  # S4: subtract from the target's toughness bar; value (+ type, damage.lua id) -> matrix in lua_content/toughness.lua; at 0, break (docs/CC_PORT_SPEC.md 2.3)
 
     # --- примитивы боя (аудит Сукуна/Годжо/Тоджи): все через существующие поля Op ---
     "resist",       # временный резист типа урона: damage_type + value (+ duration) -> mod resist_<тип>

@@ -143,11 +143,34 @@ CONTROL_KINDS = ("hypnosis", "command", "possess", "dominance", "temptation", "t
 
 
 def _control_errors(o, kind):
-    req, ch = o.get("requires"), o.get("chance")
-    if req is not None and (not isinstance(req, dict) or not req.get("stat") or req.get("cmp", "lt") not in ("lt", "le", "gt", "ge")):
-        return [f"kind={kind} requires: {{stat, cmp: lt|le|gt|ge, vs: 'source' | number}}"]
+    ch = o.get("chance")
     if ch is not None and (not isinstance(ch, (int, float)) or not 0 <= ch <= 100):
         return [f"kind={kind} chance must be 0..100"]
+    return []
+
+
+_REQ_CMPS = ("lt", "le", "gt", "ge", "eq", "ne")
+
+
+def _c_requires(o, kind, path, ie):
+    """G2: `requires` any op may carry (src/effects/gate.py), not just the CONTROL_KINDS."""
+    req = o.get("requires")
+    if req is None:
+        return []
+    for r in (req if isinstance(req, list) else [req]):
+        if not isinstance(r, dict) or not r.get("stat") or r.get("cmp", "lt") not in _REQ_CMPS:
+            return [f"requires: {{stat, cmp: {'|'.join(_REQ_CMPS)}, vs: 'source' | number, who: 'target'|'source'}}"]
+    return []
+
+
+def _c_cost(o, kind, path, ie):
+    """G2: `cost` any op may carry, paid by the caster before it runs (src/effects/gate.py)."""
+    cost = o.get("cost")
+    if cost is None:
+        return []
+    for c in (cost if isinstance(cost, list) else [cost]):
+        if not isinstance(c, dict) or not isinstance(c.get("amount", 0), (int, float)):
+            return ["cost: {stat, amount, lethal?}"]
     return []
 
 
@@ -238,7 +261,7 @@ def _c_fail(o, kind, path, ie):
 
 # order = order of the messages; _c_when and _c_fail already return path-prefixed messages
 _OP_CHECKS = (_c_head, _c_stat, _c_flags_extend, _c_required_early, _c_area, _c_toward_every,
-              _c_required_late, _c_when, _c_value, _c_scale, _c_fail)
+              _c_required_late, _c_requires, _c_cost, _c_when, _c_value, _c_scale, _c_fail)
 _PREFIXED = (_c_when, _c_fail)
 
 

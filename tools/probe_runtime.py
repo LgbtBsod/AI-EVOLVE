@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Общий рантайм агентских инструментов (dev_probe.py, agent_play.py).
+"""Общий рантайм агентских инструментов (scry.py, agent_play.py).
 
 Раньше каждый инструмент сам поднимал игру, сам разбирался со временем и
 сам читал модель данных сцены. Здесь это собрано один раз:
@@ -24,7 +24,7 @@
 3. Адаптеры к модели данных AI-EVOLVE (get_scene/get_entities/...) и
    KillTracker - один источник правды для всех инструментов.
 
-Библиотека, не CLI: см. tools/dev_probe.py и tools/agent_play.py.
+Библиотека, не CLI: см. tools/scry.py и tools/agent_play.py.
 """
 import importlib
 import importlib.abc
@@ -573,7 +573,7 @@ def player_state(player):
 
 
 def sample_state(game, t):
-    """Одна строка state.jsonl (общий формат dev_probe/agent_play/probe_db)."""
+    """Одна строка state.jsonl (общий формат scry/agent_play/probe_db)."""
     entities = get_entities(game)
     player = next((e for e, is_player in entities if is_player), None)
     return {
@@ -586,7 +586,7 @@ def sample_state(game, t):
 class KillTracker:
     """Считает убийства покадрово. Враг, пропавший из сцены ЖИВЫМ (зачистка
     уровня при переходе к следующему, а не смерть), - это despawn, не kill:
-    раньше dev_probe считал убийством любое исчезновение."""
+    раньше scry считал убийством любое исчезновение."""
 
     def __init__(self):
         self.known = {}

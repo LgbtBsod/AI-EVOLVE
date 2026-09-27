@@ -34,6 +34,7 @@ from src.effects.exchange import EXCHANGE_HANDLERS
 from src.effects.social import SOCIAL_HANDLERS
 from src.effects.timeworld import TIME_HANDLERS
 from src.effects.mimic import MIMIC_HANDLERS, scaled
+from src.effects.gate import GATE_HANDLERS, is_interrupted, pay_costs, requires_blocked
 
 # ---------------------------------------------------------------- spec kind names -> canon (lua_content/kind_aliases.lua)
 
@@ -348,6 +349,8 @@ class OpHost(Protocol):
     def op_damage_taken(self, cx: OpCall, tgt: Any) -> float: ...         # сколько урона обработчик уже нанёс цели
     # --- протокол Махораги (src/core/adaptation.py; поля external["mahoraga"] / external["aggro"] ---
     def op_adaptation(self, cx: OpCall, tgt: Any) -> dict: ...  # сериализуемое состояние колеса/памяти цели
+    def op_toughness_damage(self, cx: OpCall, tgt: Any, o: dict, amount: float) -> None: ...  # S4: guard-break bar (EffectManager only, lua_content/toughness.lua)
+    def op_apply_status(self, cx: OpCall, tgt: Any, status_id: str, stacks: float) -> int: ...  # S1/S2: lua_content/statuses by id (apply_status)
     def set_adaptation(self, cx: OpCall, tgt: Any, state: dict) -> None: ...
     def op_aggro(self, cx: OpCall, tgt: Any) -> dict: ...       # {faction, aggro_mode, targeting, target}
     def set_aggro(self, cx: OpCall, tgt: Any, **kv: Any) -> None: ...
@@ -1045,9 +1048,29 @@ def op_timed_power_up(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -
     _enter_form(h, cx, tgt, o, "timed_power_up")
 
 
+def op_toughness_damage(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """S4 (docs/CC_PORT_SPEC.md 2.3 row 17): subtract from the target's toughness bar. `type` (damage.lua id,
+    default `physical`) picks the multiplier from `lua_content/toughness.lua` `type_factor`. No-op while the
+    feature flag there is off (EffectManager.op_toughness_damage), so content using this op is inert by default."""
+    h.op_toughness_damage(cx, tgt, o, amount)
+    h.op_note(cx, "toughness_damage", tgt, o.get("type"), amount)
+
+
+def op_apply_status_kind(h: OpHost, cx: OpCall, tgt: Any, o: dict, amount: float) -> None:
+    """S1/S2 (docs/CC_PORT_SPEC.md): apply a status row from lua_content/statuses by id (buff_id), through the
+    same gate/resist/stacking/cc_priority pipeline as EffectManager.apply_status - content just needs a
+    `{ kind = "apply_status", target = ..., buff_id = "<id>" }` op; `stacks` on the op picks how many (default 1).
+    Not `kind = "status"`: that spec name is already an alias of `apply_effect` (lua_content/kind_aliases.lua)."""
+    bid = o.get("buff_id")
+    if not bid:
+        return
+    stacks = h.op_apply_status(cx, tgt, str(bid), o.get("stacks", 1))
+    h.op_note(cx, "apply_status", tgt, bid, stacks)
+
+
 OP_HANDLERS: dict[str, Handler] = {
     "deal": op_deal, "heal": op_heal, "drain": op_drain, "set": op_set, "mod": op_mod,
-    "buff": op_buff, "extend": op_extend, "remove_buff": op_remove_buff,
+    "buff": op_buff, "apply_status": op_apply_status_kind, "extend": op_extend, "remove_buff": op_remove_buff,
     "apply_effect": op_apply_effect, "kill": op_kill, "summon": op_summon, "move": op_move,
     "resist": op_resist, "immune": op_immune, "mark": op_mark, "detonate": op_detonate,
     "purge": op_purge, "nullify": op_nullify, "cancel_technique": op_cancel_technique,
@@ -1062,7 +1085,8 @@ OP_HANDLERS: dict[str, Handler] = {
     "escalate": op_escalate, "deescalate": op_deescalate, "trigger_true_form": op_trigger_true_form,
     "rotate_wheel": op_rotate_wheel, "display_wheel": op_display_wheel, "halt_wheel": op_halt_wheel,
     "stance": op_stance, "transform": op_transform, "timed_power_up": op_timed_power_up,
-    **CONTROL_HANDLERS, **PERCEPTION_HANDLERS, **TRIGGER_HANDLERS, **ZONE_HANDLERS, **MIMIC_HANDLERS, **TIME_HANDLERS, **STATE_HANDLERS, **EXCHANGE_HANDLERS, **SOCIAL_HANDLERS,
+    "toughness_damage": op_toughness_damage,
+    **CONTROL_HANDLERS, **PERCEPTION_HANDLERS, **TRIGGER_HANDLERS, **ZONE_HANDLERS, **MIMIC_HANDLERS, **TIME_HANDLERS, **STATE_HANDLERS, **EXCHANGE_HANDLERS, **SOCIAL_HANDLERS, **GATE_HANDLERS,
 }
 
 
@@ -1083,9 +1107,13 @@ def _note_unknown_kind(kind: Any) -> None:
 
 
 def apply_op(h: OpHost, cx: OpCall, tgt: Any, o: dict) -> None:
-    """Одна операция на одной цели (условие `when` и выбор цели - забота хоста): значение -> DoT/HoT? -> обработчик."""
+    """Одна операция на одной цели (условие `when` и выбор цели - забота хоста): гейт (G2) -> значение -> DoT/HoT? -> обработчик."""
     o = canonicalize_op(o)
     kind = o.get("kind")
+    why = requires_blocked(h, cx, tgt, o) or (is_interrupted(h, cx, tgt, o) and "interrupted") or pay_costs(h, cx, o)
+    if why:
+        h.op_note(cx, "op_blocked", tgt, kind, why)
+        return
     amount = compute_amount(o, cx.ctx, default_stat_of(o, h.op_stat_prefix(cx, tgt)))
     if kind in ("deal", "heal") and o.get("every") and h.op_periodic_ok(o):
         # DoT/HoT: тик каждые every с в течение duration

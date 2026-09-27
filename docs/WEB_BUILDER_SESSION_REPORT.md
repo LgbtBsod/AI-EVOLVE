@@ -264,10 +264,10 @@ print(f"DPS: {result.dps:.1f}")
 ### 3. С Dev Probe
 ```bash
 # Автоматическое тестирование предметов при изменениях
-dev_probe --test-items --auto-balance --web-builder-integration
+scry --test-items --auto-balance --web-builder-integration
 
 # Прогон сессии с новыми предметами
-dev_probe run-session --item="sorrow_of_berserk" --duration=300
+scry run-session --item="sorrow_of_berserk" --duration=300
 ```
 
 ### 4. С Rust Core (Future)

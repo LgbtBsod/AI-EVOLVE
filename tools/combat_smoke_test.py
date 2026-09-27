@@ -2,7 +2,7 @@
 """Windowless smoke test for combat/entity/AI-targeting logic - no Panda3D
 window, no screenshots, sub-second.
 
-tools/dev_probe.py boots the whole game and watches it run for real seconds
+tools/scry.py boots the whole game and watches it run for real seconds
 to answer questions like "does crit damage still compute right" or "is the
 historical death-oscillation bug (d69c002, Character.is_defeated) still
 fixed" - real token cost (every stdout line, every screenshot an agent opens)
@@ -15,7 +15,7 @@ exercised directly against a fake game/entity stand-ins.
 
 Reach for this FIRST for logic-only changes confined to src/entities/ or
 src/systems/combat/ (damage formulas, the is_alive()/is_defeated latch, AI
-targeting/movement math). Fall back to tools/dev_probe.py only when the
+targeting/movement math). Fall back to tools/scry.py only when the
 change needs visual/rendering/scene-wiring/real-time verification - this
 script proves the math is right, not that it renders or gets called at all
 from the actual game loop.
@@ -57,7 +57,7 @@ class FakeRNG:
     """Deterministic stand-in for RNGManager: feeds a fixed sequence of
     .random() results so crit/dodge branches can be exercised on demand,
     instead of only ever getting False (rng=None) or a real RNGManager whose
-    run-to-run variance is exactly what dev_probe.py's --seed docstring
+    run-to-run variance is exactly what scry.py's --seed docstring
     already documents as unresolved."""
 
     def __init__(self, values):
@@ -229,7 +229,7 @@ def test_enemy_take_damage_has_its_own_independent_dodge_roll():
     # the moment any enemy type gets nonzero dodge, an attack that survives
     # CombatSystem's own dodge roll gets a SECOND, independently-seeded
     # chance to dodge the exact same hit - a real double-roll that a windowed
-    # dev_probe run could only notice via statistical hit-rate drift over a
+    # scry run could only notice via statistical hit-rate drift over a
     # long --seed'd session, not a single deterministic assertion.
     #
     # This test forces dodge_chance=100 (always dodges, regardless of the
@@ -439,7 +439,7 @@ def test_time_based_enemy_scaling_applies_on_spawn():
     # attachNewNode() on a bare NodePath (confirmed by reading the file - no
     # camera/window dependency), so the wiring between "time elapsed" and
     # "newly spawned enemies get apply_level_bonus()" can be checked exactly,
-    # deterministically, instead of hoping a real dev_probe.py run happens to
+    # deterministically, instead of hoping a real scry.py run happens to
     # spawn a replacement enemy after the right number of real seconds.
     game = make_game()
     scene = EnhancedGameScene(game, dev_mode=True)

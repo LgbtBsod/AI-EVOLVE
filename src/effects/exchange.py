@@ -17,7 +17,9 @@ from __future__ import annotations
 import math
 from typing import Any
 
-EXCHANGE_FEATURES = ("exchange.equal_mass", "read.wand_history")   # spec gaps these ops say
+EXCHANGE_FEATURES = ("exchange.equal_mass", "read.wand_history", "resurrect.single_target_delay")   # spec gaps these ops say
+# resurrect.single_target_delay (G3 holdout #135 Resurrect): `delay` (triggers.py, already canon) wrapping `mass_resurrect`
+# with radius 0 (only the caster's own spot) is a single-target delayed revive; no new code, just the composition.
 
 
 def cfg() -> dict:

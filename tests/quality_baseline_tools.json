@@ -32,7 +32,7 @@
    "tools/boot_smoke_test.py",
    "tools/boss_gauntlet.py",
    "tools/combat_smoke_test.py",
-   "tools/dev_probe.py",
+   "tools/scry.py",
    "tools/guard_hook.py",
    "tools/probe_runtime.py",
    "tools/probe_settings.py",
@@ -51,7 +51,7 @@
   ]
  },
  "files": {
-  "tools/_dev_probe_compare.py": {
+  "tools/_scry_compare.py": {
    "C901": 1,
    "PERF401": 4
   },
@@ -88,7 +88,7 @@
    "RET504": 1,
    "dup_defs": 1
   },
-  "tools/dev_probe.py": {
+  "tools/scry.py": {
    "B007": 2,
    "B904": 1,
    "BLE001": 13,
@@ -99,7 +99,7 @@
    "dup_defs": 1,
    "vulture": 3
   },
-  "tools/dev_probe_diff.py": {
+  "tools/scry_diff.py": {
    "B007": 1,
    "C901": 1,
    "PLR0912": 1
@@ -264,8 +264,8 @@
   }
  },
  "functions": {
-  "tools/_dev_probe_compare.py::diff_summaries": 20,
-  "tools/_dev_probe_compare.py::format_diff": 11,
+  "tools/_scry_compare.py::diff_summaries": 20,
+  "tools/_scry_compare.py::format_diff": 11,
   "tools/agent_play.py::PlaySession.finish": 28,
   "tools/agent_play.py::PlaySession.metrics": 14,
   "tools/agent_play.py::PlaySession.run_command": 19,
@@ -280,11 +280,11 @@
   "tools/boss_gauntlet.py::Session._battle": 20,
   "tools/boss_gauntlet.py::campaign": 14,
   "tools/boss_gauntlet.py::run": 18,
-  "tools/dev_probe.py::_cluster_similar_frames": 11,
-  "tools/dev_probe.py::_detect_ui_changes": 19,
-  "tools/dev_probe.py::_track_entities_across_frames": 12,
-  "tools/dev_probe.py::analyze_screenshot": 22,
-  "tools/dev_probe_diff.py::compare_frames": 22,
+  "tools/scry.py::_cluster_similar_frames": 11,
+  "tools/scry.py::_detect_ui_changes": 19,
+  "tools/scry.py::_track_entities_across_frames": 12,
+  "tools/scry.py::analyze_screenshot": 22,
+  "tools/scry_diff.py::compare_frames": 22,
   "tools/effect_schema/digest.py::diff": 12,
   "tools/effect_schema/digest.py::op_brief": 15,
   "tools/effect_schema/forge.py::PredGen.num": 14,

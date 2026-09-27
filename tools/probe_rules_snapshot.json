@@ -1,11 +1,6 @@
 {
  "hypotheses": [
   {
-   "id": "ERRORS",
-   "when": {
-    "op": "truthy",
-    "m": "errors_n"
-   },
    "evidence": [
     [
      "first",
@@ -16,64 +11,49 @@
      "err_where"
     ]
    ],
-   "look": "@err_look",
    "next": "fix the first error; later ones are often its consequences",
+   "when": {
+    "m": "errors_n",
+    "op": "truthy"
+   },
    "say": "{errors_n} ERROR log line(s) during the run",
+   "look": "@err_look",
+   "id": "ERRORS",
    "severity": "high"
   },
   {
-   "when": {
-    "all": [
-     {
-      "op": "eq",
-      "v": 0,
-      "m": "attacks"
-     },
-     {
-      "op": "ge",
-      "v": 5,
-      "m": "duration"
-     },
-     {
-      "op": "isnone",
-      "m": "min_near"
-     }
-    ]
-   },
-   "id": "NO_ENEMIES",
-   "look": [
-    "src/scenes/main_game_scene.py:_spawn_enemies/_spawn_initial_enemies"
-   ],
-   "say": "no living enemies existed during the whole run",
    "evidence": [
     [
      "samples",
      "n_samples"
     ]
    ],
-   "severity": "high"
-  },
-  {
-   "id": "NO_COMBAT",
    "when": {
     "all": [
      {
+      "m": "attacks",
       "op": "eq",
-      "v": 0,
-      "m": "attacks"
+      "v": 0
      },
      {
+      "m": "duration",
       "op": "ge",
-      "v": 5,
-      "m": "duration"
+      "v": 5
      },
      {
-      "op": "gt",
-      "v": "$close_range",
-      "m": "min_near"
+      "m": "min_near",
+      "op": "isnone"
      }
     ]
    },
+   "look": [
+    "src/scenes/main_game_scene.py:_spawn_enemies/_spawn_initial_enemies"
+   ],
+   "id": "NO_ENEMIES",
+   "say": "no living enemies existed during the whole run",
+   "severity": "high"
+  },
+  {
    "evidence": [
     [
      "min_distance",
@@ -86,41 +66,35 @@
      "r1"
     ]
    ],
+   "next": "spawn an enemy next to the hero: agent_play 'spawn enemy' or scry --action-at 1:1",
+   "when": {
+    "all": [
+     {
+      "m": "attacks",
+      "op": "eq",
+      "v": 0
+     },
+     {
+      "m": "duration",
+      "op": "ge",
+      "v": 5
+     },
+     {
+      "m": "min_near",
+      "op": "gt",
+      "v": "$close_range"
+     }
+    ]
+   },
+   "say": "no combat at all: nearest enemy never came closer than {min_near:.0f}u",
    "look": [
     "src/scenes/main_game_scene.py:_spawn_enemies (spawns at map edges)",
     "src/entities/enemy.py:update_ai (detection_range)"
    ],
-   "next": "spawn an enemy next to the hero: agent_play 'spawn enemy' or dev_probe --action-at 1:1",
-   "say": "no combat at all: nearest enemy never came closer than {min_near:.0f}u",
+   "id": "NO_COMBAT",
    "severity": "medium"
   },
   {
-   "when": {
-    "all": [
-     {
-      "op": "eq",
-      "v": 0,
-      "m": "attacks"
-     },
-     {
-      "op": "ge",
-      "v": 5,
-      "m": "duration"
-     },
-     {
-      "op": "le",
-      "v": "$close_range",
-      "m": "min_near"
-     }
-    ]
-   },
-   "id": "CLOSE_BUT_NO_ATTACKS",
-   "look": [
-    "src/entities/character.py:update_ai",
-    "src/entities/enemy.py:update_ai/attack",
-    "src/features/combat_plugin.py (combat_system wiring)"
-   ],
-   "say": "enemy was {min_near:.1f}u from the hero yet nobody attacked",
    "evidence": [
     [
      "min_distance",
@@ -128,58 +102,62 @@
      "r1"
     ]
    ],
-   "severity": "high"
-  },
-  {
    "when": {
     "all": [
      {
-      "op": "truthy",
-      "m": "enemy_attacks"
+      "m": "attacks",
+      "op": "eq",
+      "v": 0
      },
      {
-      "op": "falsy",
-      "m": "player_attacks"
+      "m": "duration",
+      "op": "ge",
+      "v": 5
+     },
+     {
+      "m": "min_near",
+      "op": "le",
+      "v": "$close_range"
      }
     ]
    },
-   "id": "HERO_NEVER_ATTACKS",
    "look": [
-    "src/entities/character.py:update_ai (fighting state)",
-    "src/entities/character.py:attack"
+    "src/entities/character.py:update_ai",
+    "src/entities/enemy.py:update_ai/attack",
+    "src/features/combat_plugin.py (combat_system wiring)"
    ],
-   "say": "hero was attacked {enemy_attacks}x but never attacked back",
+   "id": "CLOSE_BUT_NO_ATTACKS",
+   "say": "enemy was {min_near:.1f}u from the hero yet nobody attacked",
+   "severity": "high"
+  },
+  {
    "evidence": [
     [
      "taken",
      "taken"
     ]
    ],
-   "severity": "high"
-  },
-  {
    "when": {
     "all": [
      {
-      "op": "truthy",
-      "m": "player_attacks"
+      "m": "enemy_attacks",
+      "op": "truthy"
      },
      {
-      "op": "falsy",
-      "m": "enemy_attacks"
-     },
-     {
-      "op": "lt",
-      "v": 2,
-      "m": "min_near"
+      "m": "player_attacks",
+      "op": "falsy"
      }
     ]
    },
-   "id": "ENEMIES_PASSIVE",
    "look": [
-    "src/entities/enemy.py:update_ai/attack"
+    "src/entities/character.py:update_ai (fighting state)",
+    "src/entities/character.py:attack"
    ],
-   "say": "hero attacked {player_attacks}x, enemies never attacked back despite contact",
+   "id": "HERO_NEVER_ATTACKS",
+   "say": "hero was attacked {enemy_attacks}x but never attacked back",
+   "severity": "high"
+  },
+  {
    "evidence": [
     [
      "min_distance",
@@ -187,31 +165,31 @@
      "r1"
     ]
    ],
-   "severity": "medium"
-  },
-  {
    "when": {
     "all": [
      {
-      "op": "ge",
-      "v": 5,
-      "m": "hits"
+      "m": "player_attacks",
+      "op": "truthy"
      },
      {
-      "op": "gt",
-      "v": "$zero_damage_ratio",
-      "m": [
-       "zero_damage_hits",
-       "hits"
-      ]
+      "m": "enemy_attacks",
+      "op": "falsy"
+     },
+     {
+      "m": "min_near",
+      "op": "lt",
+      "v": 2
      }
     ]
    },
-   "id": "ZERO_DAMAGE_HITS",
    "look": [
-    "src/systems/combat/combat_system.py:execute_attack (defense/floor)"
+    "src/entities/enemy.py:update_ai/attack"
    ],
-   "say": "{zero_damage_hits}/{hits} landed hits dealt 0 damage",
+   "id": "ENEMIES_PASSIVE",
+   "say": "hero attacked {player_attacks}x, enemies never attacked back despite contact",
+   "severity": "medium"
+  },
+  {
    "evidence": [
     [
      "zero",
@@ -222,38 +200,31 @@
      "hits"
     ]
    ],
-   "severity": "medium"
-  },
-  {
    "when": {
     "all": [
      {
-      "op": "truthy",
-      "m": "crit_chance"
-     },
-     {
+      "m": "hits",
       "op": "ge",
-      "v": "$crit_min_chance",
-      "m": "crit_chance"
+      "v": 5
      },
      {
-      "op": "ge",
-      "v": "$crit_min_hits",
-      "m": "player_hits"
-     },
-     {
-      "op": "eq",
-      "v": 0,
-      "m": "player_crits"
+      "m": [
+       "zero_damage_hits",
+       "hits"
+      ],
+      "op": "gt",
+      "v": "$zero_damage_ratio"
      }
     ]
    },
-   "id": "CRIT_NEVER_FIRES",
    "look": [
-    "src/systems/combat/combat_system.py:execute_attack (critical roll)",
-    "src/core/rng_manager.py"
+    "src/systems/combat/combat_system.py:execute_attack (defense/floor)"
    ],
-   "say": "0 crits in {player_hits} hero hits with crit_chance={crit_chance:.0%}",
+   "id": "ZERO_DAMAGE_HITS",
+   "say": "{zero_damage_hits}/{hits} landed hits dealt 0 damage",
+   "severity": "medium"
+  },
+  {
    "evidence": [
     [
      "expected",
@@ -261,18 +232,38 @@
      "r1"
     ]
    ],
+   "when": {
+    "all": [
+     {
+      "m": "crit_chance",
+      "op": "truthy"
+     },
+     {
+      "m": "crit_chance",
+      "op": "ge",
+      "v": "$crit_min_chance"
+     },
+     {
+      "m": "player_hits",
+      "op": "ge",
+      "v": "$crit_min_hits"
+     },
+     {
+      "m": "player_crits",
+      "op": "eq",
+      "v": 0
+     }
+    ]
+   },
+   "look": [
+    "src/systems/combat/combat_system.py:execute_attack (critical roll)",
+    "src/core/rng_manager.py"
+   ],
+   "id": "CRIT_NEVER_FIRES",
+   "say": "0 crits in {player_hits} hero hits with crit_chance={crit_chance:.0%}",
    "severity": "medium"
   },
   {
-   "when": {
-    "op": "truthy",
-    "m": "invalid_count"
-   },
-   "id": "HP_INVALID",
-   "look": [
-    "src/entities/character.py (health setter / level-up max_health)"
-   ],
-   "say": "invalid hero HP/position in {invalid_count} sample(s)",
    "evidence": [
     [
      "first_t",
@@ -287,14 +278,18 @@
      "invalid_mhp"
     ]
    ],
+   "when": {
+    "m": "invalid_count",
+    "op": "truthy"
+   },
+   "look": [
+    "src/entities/character.py (health setter / level-up max_health)"
+   ],
+   "id": "HP_INVALID",
+   "say": "invalid hero HP/position in {invalid_count} sample(s)",
    "severity": "high"
   },
   {
-   "id": "HP_PINNED",
-   "when": {
-    "op": "truthy",
-    "m": "pinned"
-   },
    "evidence": [
     [
      "from_t",
@@ -306,25 +301,20 @@
      "r1"
     ]
    ],
+   "next": "possible death latch / regen fighting damage",
+   "when": {
+    "m": "pinned",
+    "op": "truthy"
+   },
+   "say": "hero stayed under {cfg[low_hp_fraction]:.0%} HP for {pinned_secs:.0f}s without dying",
    "look": [
     "src/scenes/main_game_scene.py:update (health_regen)",
     "src/entities/character.py:is_alive/take_damage"
    ],
-   "next": "possible death latch / regen fighting damage",
-   "say": "hero stayed under {cfg[low_hp_fraction]:.0%} HP for {pinned_secs:.0f}s without dying",
+   "id": "HP_PINNED",
    "severity": "high"
   },
   {
-   "when": {
-    "op": "notnone",
-    "m": "death_t"
-   },
-   "id": "HERO_DIED",
-   "look": [
-    "src/entities/enemy.py (damage by type)",
-    "src/entities/enemy.py:apply_level_bonus"
-   ],
-   "say": "hero died at t={death_t:.1f}s{died_note}",
    "evidence": [
     [
      "killed_by_last5s",
@@ -335,16 +325,19 @@
      "died_dmg"
     ]
    ],
+   "when": {
+    "m": "death_t",
+    "op": "notnone"
+   },
+   "look": [
+    "src/entities/enemy.py (damage by type)",
+    "src/entities/enemy.py:apply_level_bonus"
+   ],
+   "id": "HERO_DIED",
+   "say": "hero died at t={death_t:.1f}s{died_note}",
    "severity": "@died_sev"
   },
   {
-   "when": {
-    "op": "truthy",
-    "m": "stuck"
-   },
-   "id": "HERO_STUCK",
-   "look": "@stuck_look",
-   "say": "hero didn't move for {stuck_secs:.0f}s and wasn't fighting",
    "evidence": [
     [
      "from_t",
@@ -359,28 +352,16 @@
      "stuck_pos"
     ]
    ],
+   "when": {
+    "m": "stuck",
+    "op": "truthy"
+   },
+   "look": "@stuck_look",
+   "id": "HERO_STUCK",
+   "say": "hero didn't move for {stuck_secs:.0f}s and wasn't fighting",
    "severity": "medium"
   },
   {
-   "when": {
-    "all": [
-     {
-      "op": "ge",
-      "v": "$pressure_per_min",
-      "m": "growth"
-     },
-     {
-      "op": "lt",
-      "v": "@growth",
-      "m": "kill_rate"
-     }
-    ]
-   },
-   "id": "ENEMY_PRESSURE",
-   "look": [
-    "src/scenes/main_game_scene.py (enemy_spawn_interval/max_enemies)"
-   ],
-   "say": "enemy count grows +{growth:.1f}/min, kills only {kill_rate:.1f}/min",
    "evidence": [
     [
      "start",
@@ -391,19 +372,28 @@
      "count_end"
     ]
    ],
+   "when": {
+    "all": [
+     {
+      "m": "growth",
+      "op": "ge",
+      "v": "$pressure_per_min"
+     },
+     {
+      "m": "kill_rate",
+      "op": "lt",
+      "v": "@growth"
+     }
+    ]
+   },
+   "look": [
+    "src/scenes/main_game_scene.py (enemy_spawn_interval/max_enemies)"
+   ],
+   "id": "ENEMY_PRESSURE",
+   "say": "enemy count grows +{growth:.1f}/min, kills only {kill_rate:.1f}/min",
    "severity": "low"
   },
   {
-   "when": {
-    "op": "truthy",
-    "m": "blank_frames"
-   },
-   "id": "RENDER_BLANK",
-   "look": [
-    "panda3d.log",
-    "src/scenes/main_game_scene.py:_setup_camera"
-   ],
-   "say": "{blank_frames} blank/solid-color screenshot(s) while game state looked alive",
    "evidence": [
     [
      "blank",
@@ -414,21 +404,31 @@
      "screenshots"
     ]
    ],
+   "when": {
+    "m": "blank_frames",
+    "op": "truthy"
+   },
+   "look": [
+    "panda3d.log",
+    "src/scenes/main_game_scene.py:_setup_camera"
+   ],
+   "id": "RENDER_BLANK",
+   "say": "{blank_frames} blank/solid-color screenshot(s) while game state looked alive",
    "severity": "@blank_sev"
   }
  ],
  "outlook": [
   {
    "when": {
-    "op": "notnone",
-    "m": "death_eta_s"
+    "m": "death_eta_s",
+    "op": "notnone"
    },
    "say": "hero projected to die in ~{death_eta_s:.0f}s ({eta_basis})"
   },
   {
    "when": {
-    "op": "notnone",
-    "m": "hp_slope_per_s"
+    "m": "hp_slope_per_s",
+    "op": "notnone"
    },
    "say": "hero HP stable or recovering at the current pressure"
   }

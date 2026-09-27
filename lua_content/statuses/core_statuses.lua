@@ -82,4 +82,11 @@ return {
   s("infinity", "optional", false, "refresh",
     { { kind = "rule_override", rules = { "block_physics" }, scope = "self" } },
     "Gojo: входящий урон делится на бесконечность (planned rules-хэндлер)"),
+  -- S4 (CC_PORT_SPEC.md 2.3 row 19): guard break. Не тег `cc` -- это не CC-статус, приоритет/сопротивление
+  -- CC к нему не применяются; EffectManager.op_toughness_damage вешает его при toughness<=0 (lua_content/
+  -- toughness.lua, флаг enabled). broken=1 -> damage.lua constants.broken x1.15 (уже применяется, S1/S2).
+  s("broken", 5, true, "replace",
+    { { kind = "mod", target = "enemy", stat = "broken", op = "set", value = { flat = 1 } },
+      { kind = "nullify", target = "enemy", filter = "actions" } },
+    "guard break: весь урон x1.15, способности заблокированы на 5с", { tags = { "break" } }),
 }

@@ -145,7 +145,8 @@ return {
            color = { 0.2, 0.15, 0.2, 1 }, health = 700, damage = 22, defense = 6, speed = 6.0, exp_reward = 520,
            kit = function() return {
              strike("fangs", "Жвалы", 140, 4, { { kind = "deal", target = "enemy", stat = "hp", op = "sub", value = dmg(20),
-               every = 1, duration = { flat = 4 }, flags = { "true_damage" } } }),
+               every = 1, duration = { flat = 4 }, flags = { "true_damage" } },
+               { kind = "apply_status", target = "enemy", buff_id = "blind" } }),
              curse("web", "Паутина", "move_speed", 70, 3, 10), summon("brood", "Выводок", "cave_spider", 3, 15),
              field("venom_pool", "Лужа яда", 35, 3.5, 5, 12), pull("silk", "Шёлковая нить", 90, 11),
              blink("skitter", "Метнуться", 9), heal("feed", "Пир", 15, 20),
@@ -153,7 +154,8 @@ return {
     boss { id = "forge_golem", name = "Голем Горна", role = "boss", shape = "giant", size = 3.2,
            color = { 0.55, 0.35, 0.2, 1 }, health = 2100, damage = 30, defense = 14, speed = 3.0, exp_reward = 1600,
            kit = function() return {
-             strike("hammer", "Молот", 150, 4), slam("anvil", "Наковальня", 220, 3.5, 1.7, 8),
+             strike("hammer", "Молот", 150, 4, { { kind = "apply_status", target = "enemy", buff_id = "stun" } }),
+             slam("anvil", "Наковальня", 220, 3.5, 1.7, 8),
              nova("slag", "Выброс шлака", 120, 5, 1.3, 10), field("molten", "Расплав", 40, 4, 6, 14),
              bolt("rivet", "Раскалённая заклёпка", 110, 10, 5, 25), knock("piston", "Поршень", 140, 9),
              charge("steam", "Паровой рывок", 130, 12), curse("rust", "Ржа", "defense", 45, 6, 13),
@@ -199,7 +201,9 @@ return {
     boss { id = "hel_matron", name = "Хель, Госпожа мёртвых", role = "boss", shape = "humanoid", size = 2.4,
            color = { 0.35, 0.3, 0.4, 1 }, health = 3400, damage = 38, defense = 12, speed = 4.5, exp_reward = 3000,
            kit = function() return {
-             strike("half_touch", "Касание полусмерти", 140, 3), drain("soul_sip", "Глоток души", 130, 6),
+             strike("half_touch", "Касание полусмерти", 140, 3,
+               { { kind = "apply_status", target = "enemy", buff_id = "root" } }),
+             drain("soul_sip", "Глоток души", 130, 6),
              bolt("grave_bolt", "Могильный болт", 120, 10, 4, 25), field("gloom", "Сумрак", 40, 4.5, 6, 12),
              slam("gate", "Врата Хельхейма", 230, 4, 1.8, 10), nova("wail", "Плач", 140, 6, 1.4, 13),
              curse("decay", "Тление", "max_hp", 20, 8, 18), curse("dread", "Ужас", "aspd", 35, 5, 14),
@@ -214,7 +218,9 @@ return {
     boss { id = "minos_judge", name = "Минос, судия", role = "miniboss", shape = "giant", size = 2.6,
            color = { 0.45, 0.2, 0.2, 1 }, health = 1700, damage = 34, defense = 12, speed = 4.0, exp_reward = 1300,
            kit = function() return {
-             strike("verdict", "Приговор", 160, 4), pull("tail_coil", "Хвост судии", 110, 10),
+             strike("verdict", "Приговор", 160, 4,
+               { { kind = "apply_status", target = "enemy", buff_id = "slow" } }),
+             pull("tail_coil", "Хвост судии", 110, 10),
              curse("sentence", "Кара", "defense", 50, 6, 13), slam("judgement", "Суд", 240, 3.5, 1.8, 10),
              summon("souls", "Осуждённые", "lost_soul", 3, 16), shield("gavel", "Непогрешимость", 3, 26),
              nova("tempest", "Буря сладострастных", 140, 5.5, 1.3, 12),

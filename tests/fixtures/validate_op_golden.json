@@ -1,5 +1,5 @@
 {
-"n_lua": 588,
+"n_lua": 616,
 "cases": [
 [
 "\"x\"",
@@ -22,6 +22,10 @@
 []
 ],
 [
+"{\"action\": \"calm\", \"chance\": 40, \"duration\": {\"flat\": 8}, \"kind\": \"dominance\", \"target\": \"enemy\"}",
+[]
+],
+[
 "{\"action\": \"follow\", \"duration\": {\"flat\": 6}, \"kind\": \"temptation\", \"requires\": {\"cmp\": \"lt\", \"stat\": \"max_hp\", \"vs\": 1000}, \"target\": \"enemy\"}",
 []
 ],
@@ -31,6 +35,18 @@
 ],
 [
 "{\"action\": \"grant\", \"amount\": 4, \"kind\": \"pool\", \"pool\": \"lifesteal_hits\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"action\": \"ignore_you\", \"chance\": 30, \"duration\": {\"flat\": 10}, \"kind\": \"command\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"action\": \"obey\", \"duration\": {\"flat\": 10}, \"kind\": \"command\", \"requires\": {\"cmp\": \"eq\", \"stat\": \"moon_phase\", \"vs\": 1.0, \"who\": \"source\"}, \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"action\": \"obey\", \"duration\": {\"flat\": 15}, \"kind\": \"command\", \"requires\": {\"cmp\": \"eq\", \"stat\": \"ancestry\", \"vs\": 1.0, \"who\": \"source\"}, \"target\": \"enemy\"}",
 []
 ],
 [
@@ -47,6 +63,10 @@
 ],
 [
 "{\"affects\": \"enemies\", \"center\": \"self\", \"duration\": {\"flat\": 20}, \"kind\": \"reveal\", \"radius\": 10, \"target\": \"area\"}",
+[]
+],
+[
+"{\"affects\": \"enemies\", \"center\": \"target\", \"kind\": \"deal\", \"op\": \"sub\", \"radius\": 6, \"shape\": \"sphere\", \"stat\": \"hp\", \"target\": \"area\", \"value\": {\"flat\": 28}}",
 []
 ],
 [
@@ -202,6 +222,10 @@
 ]
 ],
 [
+"{\"after\": {\"flat\": 3}, \"kind\": \"delay\", \"ops\": [{\"id\": \"tracer_recall\", \"kind\": \"restore_state\", \"scope\": \"self\", \"target\": \"self\"}], \"target\": \"self\"}",
+[]
+],
+[
 "{\"after\": {\"flat\": 3}, \"kind\": \"delay\", \"ops\": [{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 40}}], \"persist\": true, \"target\": \"enemy\"}",
 []
 ],
@@ -210,11 +234,23 @@
 []
 ],
 [
+"{\"after\": {\"flat\": 3}, \"kind\": \"delay\", \"ops\": [{\"kind\": \"kill\", \"target\": \"enemy\"}], \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"after\": {\"flat\": 3}, \"kind\": \"delay\", \"ops\": [{\"kind\": \"mass_resurrect\", \"pct\": 100, \"radius\": 0, \"target\": \"self\"}], \"target\": \"self\"}",
+[]
+],
+[
 "{\"after\": {\"flat\": 40}, \"effect\": \"heart_attack\", \"id\": \"note\", \"kind\": \"write\", \"target\": \"enemy\"}",
 []
 ],
 [
 "{\"after\": {\"flat\": 5}, \"kind\": \"delay\", \"ops\": [{\"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"flat\": 20}}], \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"after\": {\"flat\": 6}, \"kind\": \"delay\", \"ops\": [{\"kind\": \"teleport\", \"target\": \"enemy\", \"to\": {\"x\": 0, \"y\": 0}}], \"target\": \"enemy\"}",
 []
 ],
 [
@@ -255,6 +291,10 @@
 ],
 [
 "{\"b_ops\": [{\"kind\": \"heal\", \"stat\": \"mana\", \"target\": \"enemy\", \"value\": {\"flat\": 100}}], \"breach\": {\"penalty_ops\": [{\"duration\": {\"flat\": 10}, \"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"enemy\", \"value\": {\"flat\": -5}}]}, \"duration\": {\"flat\": 20}, \"id\": \"loan\", \"interest\": {\"every\": 5, \"rate\": 0.1}, \"kind\": \"contract\", \"principal\": 100, \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"buff_id\": \"blind\", \"kind\": \"apply_status\", \"target\": \"enemy\"}",
 []
 ],
 [
@@ -334,6 +374,10 @@
 []
 ],
 [
+"{\"buff_id\": \"perish_song_countdown\", \"duration\": {\"flat\": 3}, \"kind\": \"buff\", \"target\": \"enemy\"}",
+[]
+],
+[
 "{\"buff_id\": \"rebirth\", \"duration\": {\"flat\": 3}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
 []
 ],
@@ -342,7 +386,19 @@
 []
 ],
 [
+"{\"buff_id\": \"root\", \"kind\": \"apply_status\", \"target\": \"enemy\"}",
+[]
+],
+[
 "{\"buff_id\": \"second_wind\", \"duration\": {\"flat\": 1.5}, \"flags\": [\"iframe\"], \"kind\": \"buff\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"buff_id\": \"slow\", \"kind\": \"apply_status\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"buff_id\": \"stun\", \"kind\": \"apply_status\", \"target\": \"enemy\"}",
 []
 ],
 [
@@ -355,6 +411,10 @@
 ],
 [
 "{\"buff_id\": \"venom_dagger.poison\", \"kind\": \"apply_effect\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"by\": \"banishment\", \"duration\": {\"flat\": 6}, \"kind\": \"untargetable\", \"target\": \"enemy\"}",
 []
 ],
 [
@@ -417,6 +477,10 @@
 ],
 [
 "{\"cost\": [{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"defense\", \"target\": \"self\", \"value\": {\"flat\": -5}}], \"duration\": {\"flat\": 20}, \"gain\": [{\"kind\": \"mod\", \"op\": \"add\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"flat\": 30}}], \"id\": \"cursed_energy\", \"kind\": \"remove_restriction\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"cost\": {\"amount\": 15, \"stat\": \"hp\"}, \"duration\": {\"flat\": 20}, \"id\": \"titan\", \"kind\": \"transform\", \"stats\": [{\"kind\": \"mod\", \"op\": \"mul\", \"stat\": \"attack_damage\", \"target\": \"self\", \"value\": {\"flat\": 3}}], \"target\": \"self\"}",
 []
 ],
 [
@@ -869,6 +933,10 @@
 ],
 [
 "{\"duration\": {\"flat\": 10}, \"kind\": \"perceive\", \"target\": \"enemy\", \"what\": [\"techniques\"]}",
+[]
+],
+[
+"{\"duration\": {\"flat\": 10}, \"kind\": \"unbounded\", \"mult\": 5, \"requires\": {\"cmp\": \"ge\", \"stat\": \"near_death\", \"vs\": 1.0}, \"stat\": \"attack_damage\", \"target\": \"self\"}",
 []
 ],
 [
@@ -1488,6 +1556,10 @@
 []
 ],
 [
+"{\"filter\": \"actions\", \"kind\": \"nullify\", \"target\": \"enemy\"}",
+[]
+],
+[
 "{\"flags\": [\"no_crit\"], \"kind\": \"deal\", \"op\": \"sub\", \"stat\": \"hp\", \"target\": \"enemy\", \"value\": {\"of\": \"last_damage\", \"pct\": 25}}",
 []
 ],
@@ -1532,6 +1604,14 @@
 []
 ],
 [
+"{\"id\": \"tracer_recall\", \"kind\": \"restore_state\", \"scope\": \"self\", \"target\": \"self\"}",
+[]
+],
+[
+"{\"id\": \"tracer_recall\", \"kind\": \"snapshot\", \"scope\": \"self\", \"target\": \"self\"}",
+[]
+],
+[
 "{\"id\": \"wand_strike\", \"kind\": \"confiscate\", \"target\": \"enemy\", \"what\": \"ability\"}",
 []
 ],
@@ -1542,6 +1622,10 @@
 ]
 ],
 [
+"{\"kind\": \"arm_interrupt\", \"match\": {\"tags\": [\"spell\"]}, \"target\": \"self\", \"window\": {\"flat\": 6}}",
+[]
+],
+[
 "{\"kind\": \"break_link\", \"target\": \"enemy\"}",
 []
 ],
@@ -1550,6 +1634,10 @@
 [
 "op: kind=buff requires buff_id"
 ]
+],
+[
+"{\"kind\": \"cancel_technique\", \"requires\": {\"cmp\": \"ge\", \"stat\": \"eye_contact\", \"vs\": 1.0, \"who\": \"source\"}, \"target\": \"enemy\"}",
+[]
 ],
 [
 "{\"kind\": \"cancel_technique\", \"target\": \"enemy\"}",
@@ -2330,6 +2418,10 @@
 []
 ],
 [
+"{\"kind\": \"heal\", \"requires\": {\"cmp\": \"ge\", \"stat\": \"near_water\", \"vs\": 1.0}, \"stat\": \"hp\", \"target\": \"self\", \"value\": {\"flat\": 30}}",
+[]
+],
+[
 "{\"kind\": \"heal\", \"stat\": \"attack\", \"value\": 1}",
 [
 "op: unknown stat 'attack' (use custom:<name> for new stats)",
@@ -2354,6 +2446,14 @@
 ],
 [
 "{\"kind\": \"kill\", \"target\": \"enemy\", \"when\": \"ctx.enemy_hp_pct < 12\"}",
+[]
+],
+[
+"{\"kind\": \"kill\", \"target\": \"enemy\"}",
+[]
+],
+[
+"{\"kind\": \"mass_resurrect\", \"pct\": 100, \"radius\": 0, \"target\": \"self\"}",
 []
 ],
 [
@@ -2516,6 +2616,10 @@
 []
 ],
 [
+"{\"kind\": \"mod\", \"op\": \"set\", \"stat\": \"broken\", \"target\": \"enemy\", \"value\": {\"flat\": 1}}",
+[]
+],
+[
 "{\"kind\": \"mod\", \"op\": \"set\", \"stat\": \"move_speed\", \"target\": \"enemy\", \"value\": {\"flat\": 0}}",
 []
 ],
@@ -2660,6 +2764,14 @@
 ],
 [
 "{\"kind\": \"swap\"}",
+[]
+],
+[
+"{\"kind\": \"teleport\", \"target\": \"enemy\", \"to\": {\"x\": 0, \"y\": 0}}",
+[]
+],
+[
+"{\"kind\": \"teleport\", \"target\": \"enemy\", \"to\": {\"x\": 500, \"y\": 500}}",
 []
 ],
 [

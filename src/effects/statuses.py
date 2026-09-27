@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import copy
 from functools import lru_cache
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
 STATUS_FILE = "statuses/core_statuses.lua"
+COMBO_FILE = "statuses/combos.lua"
 TIMED_KINDS = ("deal", "mod", "nullify", "cancel_technique")
 
 
@@ -21,6 +22,35 @@ def load_statuses() -> dict[str, dict]:
     from ..content import lua_bridge
     rows = lua_bridge.load(lua_bridge.CONTENT / STATUS_FILE, cache=True)
     return {r["id"]: r for r in rows}
+
+
+@lru_cache(maxsize=1)
+def load_combos() -> list[dict]:
+    """S3 (docs/CC_PORT_SPEC.md 2.2): combo reaction rows (read once)."""
+    from ..content import lua_bridge
+    return lua_bridge.load(lua_bridge.CONTENT / COMBO_FILE, cache=True)
+
+
+def active_ids(book: dict, unit_key, now: float) -> set[str]:
+    """Ids of every status (CC or not) currently active on a unit, per the manager's `_status_book`."""
+    return {sid for (uk, sid), (stacks, until) in book.items() if uk == unit_key and now < until and stacks > 0}
+
+
+def find_pair_reaction(applied_id: str, other_active: set[str]) -> Optional[dict]:
+    """A combo row whose pair is (applied_id, X) with X currently active on the target, else None."""
+    for row in load_combos():
+        a, b = row.get("a"), row.get("b")
+        if not (a and b) or applied_id not in (a, b):
+            continue
+        other = b if applied_id == a else a
+        if other in other_active:
+            return row
+    return None
+
+
+def find_same_reaction(applied_id: str) -> Optional[dict]:
+    """A combo row that fires on `applied_id` stacking to its own cap (hemorrhage/overload), else None."""
+    return next((row for row in load_combos() if row.get("same") == applied_id), None)
 
 
 def get_status(status_id: str) -> dict:

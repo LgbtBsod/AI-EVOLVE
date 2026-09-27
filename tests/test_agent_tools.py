@@ -1,7 +1,7 @@
 """Tests for the agent dev tools: tools/probe_kernels.py (Rust/Python parity),
 probe_settings.py (Lua), probe_analysis.py (hypotheses/forecast), probe_db.py
 (SQLite analytics), agent_play.py (script DSL) and - when Panda3D is present -
-windowless fast-forward runs of agent_play.py/dev_probe.py (determinism)."""
+windowless fast-forward runs of agent_play.py/scry.py (determinism)."""
 import importlib.util
 import json
 import math
@@ -252,9 +252,9 @@ class TestRealGame:
         assert proc.returncode == 1
         assert "FAIL expect kills>=99" in proc.stdout and "repro: python tools/agent_play.py" in proc.stdout
 
-    def test_dev_probe_windowless_fast(self, tmp_path):
+    def test_scry_windowless_fast(self, tmp_path):
         out = tmp_path / "dp"
-        proc = _run(["tools/dev_probe.py", "--render", "none", "--fast", "--seed", "2", "--duration", "15",
+        proc = _run(["tools/scry.py", "--render", "none", "--fast", "--seed", "2", "--duration", "15",
                      "--action-at", "1:1", "--out", str(out)], tmp_path)
         assert proc.returncode == 0, proc.stdout + proc.stderr
         assert len(proc.stdout.splitlines()) <= 6, proc.stdout  # без ALSA/Panda3D-мусора
@@ -262,4 +262,4 @@ class TestRealGame:
         assert summary["status"] == "OK" and summary["repro_exact"] is True
         assert "## Hypotheses" in (out / "summary.md").read_text(encoding="utf-8")
         con = probe_db.connect(tmp_path / "probe.sqlite")
-        assert con.execute("SELECT COUNT(*) FROM runs WHERE kind='dev_probe'").fetchone()[0] == 1
+        assert con.execute("SELECT COUNT(*) FROM runs WHERE kind='scry'").fetchone()[0] == 1

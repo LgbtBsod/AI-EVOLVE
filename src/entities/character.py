@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # and CPython can and does hand the same address to a new Character shortly
 # after an old one is destroyed, which would silently alias two different
 # entities under the same entity_id (dev tooling that diffs entity ids between
-# snapshots, e.g. tools/dev_probe.py, would then miss deaths / mislabel units).
+# snapshots, e.g. tools/scry.py, would then miss deaths / mislabel units).
 _character_id_counter = itertools.count(1)
 
 

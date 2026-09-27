@@ -48,14 +48,14 @@ Drill down only when a line fails — first tool that answers the question:
 | Combat/effects/leveling formulas | `python tools/combat_smoke_test.py` (0.3 s) |
 | Does the game boot | `xvfb-run -a python tools/boot_smoke_test.py` (5 s, OpenGL) |
 | **Gameplay behaviour** (play like the player) | `python tools/agent_play.py "spawn enemy x3; until kills>=3 or dead max 90; expect alive"` (<1 s, no GPU) |
-| Long unattended run + anomaly hunt | `python tools/dev_probe.py --render none --fast --seed 1 --duration 120 --action-at 1:1` |
-| Anything visual | `xvfb-run -a python tools/dev_probe.py --headless --fast --seed 1 --screenshot-interval 10`, Read `contact_sheet.jpg` only |
+| Long unattended run + anomaly hunt | `python tools/scry.py --render none --fast --seed 1 --duration 120 --action-at 1:1` |
+| Anything visual | `xvfb-run -a python tools/scry.py --headless --fast --seed 1 --screenshot-interval 10`, Read `contact_sheet.jpg` only |
 | Numbers across runs / "did my fix help" | `python tools/probe_db.py stats` · `why` · `predict` · `compare RUN_A` · `trend kills` · `sql "SELECT ..."` |
 | All tests / tests for my diff / did behaviour change | `qa.py test` (~4 s) · `qa.py test --changed` (new failures only, flaky auto-detected) · `qa.py golden` (`--record` after an intended change) |
 | Why do same-seed runs differ | `qa.py determinism "SCRIPT" --pairs 6` (first divergent frame, hypotheses; `--diff A B`; rules in `qa.lua`) |
 | Bugs / balance / speed | `qa.py fuzz` (minimal repro) · `qa.py sweep "SCRIPT" --seeds 16` (bootstrap CI) · `qa.py perf "SCRIPT"` |
 | Why did the hero AI do that / bosses | `agent_play "...; story"` · `qa.py gauntlet [--campaign --lives 5 --trace]` |
-| Visual regression between runs | `python tools/dev_probe_diff.py --before A --after B --frames` |
+| Visual regression between runs | `python tools/scry_diff.py --before A --after B --frames` |
 | Pathfinding (A*/JPS/flow field) | `python tools/bench_pathfinding.py` · `pytest tests/test_pathfinding.py` (`AI_EVOLVE_PATHFINDING=python` = twin) |
 | Damage (types, resist, armor + pen, block, accuracy) | `docs/DAMAGE_PIPELINE.md` (stage table) · `pytest tests/test_damage_pipeline.py` · `python tools/bench_damage.py` (`AI_EVOLVE_DAMAGE=python` = twin; numbers in `lua_content/damage.lua`) |
 | Code quality: SOLID/DRY/SRP/SSOT | `qa.py quality --worst 10` (top offenders + SRP hint) · `--explain BLE001` (what/fix) · `--update-baseline` (1 s; part of `qa.py check`) |

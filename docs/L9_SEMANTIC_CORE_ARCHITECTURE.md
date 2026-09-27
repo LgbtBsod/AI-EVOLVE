@@ -175,7 +175,7 @@ correlations = correlator.find_correlations()
 ### Интеграционные тесты (Dev Probe + L9):
 
 ```bash
-cd /workspace && python tools/dev_probe.py --with-semantic
+cd /workspace && python tools/scry.py --with-semantic
 # Автоматически применяет L9 компрессию к результатам
 ```
 
@@ -207,7 +207,7 @@ cd /workspace && python tools/dev_probe.py --with-semantic
 2. ~~✅ Создать Python l9_semantic~~
 3. ~~✅ Создать Lua compression_rules~~
 4. ~~✅ Написать тесты (14/14 passing)~~
-5. ⬜ Интегрировать в dev_probe.py
+5. ⬜ Интегрировать в scry.py
 
 ### Краткосрочные:
 - [ ] Добавить benchmark тесты (Rust vs Python)

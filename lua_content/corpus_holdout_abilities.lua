@@ -77,5 +77,61 @@ return {
       ops = { { kind = "contract", target = "enemy", id = "loan", principal = 100, duration = { flat = 20 }, interest = { rate = 0.1, every = 5 },
                 b_ops = { { kind = "heal", target = "enemy", stat = "mana", value = { flat = 100 } } },
                 breach = { penalty_ops = { { kind = "mod", target = "enemy", stat = "defense", op = "add", value = { flat = -5 }, duration = { flat = 10 } } } } } } },
+
+    -- slice G2 (src/effects/gate.py, tests/test_effect_gate_spec.py): generic `requires`/`cost` any op can carry (family "gate").
+    { id = "hold_avatar_state_gated", corpus = 146, family = "gate", tags = { "spell" }, trigger = "cast", cooldown = 60,
+      ops = { { kind = "unbounded", target = "self", stat = "attack_damage", mult = 5, duration = { flat = 10 },
+                requires = { stat = "near_death", cmp = "ge", vs = 1.0 } } } },
+
+    { id = "hold_bloodbending", corpus = 148, family = "gate", tags = { "spell" }, trigger = "cast", range = 30, cooldown = 20, needs_target = true,
+      ops = { { kind = "command", target = "enemy", action = "obey", duration = { flat = 10 },
+                requires = { stat = "moon_phase", who = "source", cmp = "eq", vs = 1.0 } } } },
+
+    { id = "hold_erasure", corpus = 104, family = "gate", tags = { "spell" }, trigger = "cast", range = 30, cooldown = 15, needs_target = true,
+      ops = { { kind = "cancel_technique", target = "enemy",
+                requires = { stat = "eye_contact", who = "source", cmp = "ge", vs = 1.0 } } } },
+
+    { id = "hold_founding_titan", corpus = 107, family = "gate", tags = { "spell" }, trigger = "cast", range = 30, cooldown = 30, needs_target = true,
+      ops = { { kind = "command", target = "enemy", action = "obey", duration = { flat = 15 },
+                requires = { stat = "ancestry", who = "source", cmp = "eq", vs = 1.0 } } } },
+
+    { id = "hold_water_regeneration", corpus = 120, family = "gate", tags = { "spell" }, trigger = "cast", cooldown = 10,
+      ops = { { kind = "heal", target = "self", stat = "hp", value = { flat = 30 },
+                requires = { stat = "near_water", cmp = "ge", vs = 1.0 } } } },
+
+    { id = "hold_attack_titan", corpus = 106, family = "gate", tags = { "spell" }, trigger = "cast", cooldown = 30,
+      ops = { { kind = "transform", target = "self", id = "titan", duration = { flat = 20 },
+                stats = { { kind = "mod", target = "self", stat = "attack_damage", op = "mul", value = { flat = 3 } } },
+                cost = { stat = "hp", amount = 15 } } } },
+
+    { id = "hold_fireball", corpus = 122, family = "gate", tags = { "spell" }, trigger = "cast", range = 30, cooldown = 8, needs_target = true,
+      ops = { { kind = "deal", target = "area", shape = "sphere", radius = 6, center = "target", affects = "enemies",
+                stat = "hp", op = "sub", value = { flat = 28 } } } },
+
+    { id = "hold_counterspell", corpus = 123, family = "gate", tags = { "spell" }, trigger = "cast", cooldown = 6,
+      ops = { { kind = "arm_interrupt", target = "self", window = { flat = 6 }, match = { tags = { "spell" } } } } },
+
+    -- slice G3 (holdout long tail, no shared family): each row extends an EXISTING op cheaply, no new op kind.
+    { id = "hold_soothing_emotions", corpus = 111, family = "tail", tags = { "spell" }, trigger = "cast", range = 30, cooldown = 10, needs_target = true,
+      ops = { { kind = "dominance", target = "enemy", action = "calm", chance = 40, duration = { flat = 8 } } } },
+
+    { id = "hold_jedi_mind_trick", corpus = 129, family = "tail", tags = { "spell" }, trigger = "cast", range = 30, cooldown = 10, needs_target = true,
+      ops = { { kind = "command", target = "enemy", action = "ignore_you", chance = 30, duration = { flat = 10 } } } },
+
+    { id = "hold_resurrect_delayed", corpus = 135, family = "tail", tags = { "spell" }, trigger = "cast", cooldown = 30,
+      ops = { { kind = "delay", target = "self", after = { flat = 3 }, ops = { { kind = "mass_resurrect", target = "self", radius = 0, pct = 100 } } } } },
+
+    { id = "hold_recall", corpus = 136, family = "tail", tags = { "spell" }, trigger = "cast", cooldown = 15,
+      ops = { { kind = "snapshot", target = "self", scope = "self", id = "tracer_recall" },
+              { kind = "delay", target = "self", after = { flat = 3 }, ops = { { kind = "restore_state", target = "self", scope = "self", id = "tracer_recall" } } } } },
+
+    { id = "hold_perish_song", corpus = 137, family = "tail", tags = { "spell" }, trigger = "cast", range = 30, cooldown = 20, needs_target = true,
+      ops = { { kind = "buff", target = "enemy", buff_id = "perish_song_countdown", duration = { flat = 3 } },
+              { kind = "delay", target = "enemy", after = { flat = 3 }, ops = { { kind = "kill", target = "enemy" } } } } },
+
+    { id = "hold_banishment", corpus = 126, family = "tail", tags = { "spell" }, trigger = "cast", range = 30, cooldown = 25, needs_target = true,
+      ops = { { kind = "teleport", target = "enemy", to = { x = 500, y = 500 } },
+              { kind = "untargetable", target = "enemy", by = "banishment", duration = { flat = 6 } },
+              { kind = "delay", target = "enemy", after = { flat = 6 }, ops = { { kind = "teleport", target = "enemy", to = { x = 0, y = 0 } } } } } },
   },
 }

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Аналитика прогонов на уровне БД: расчёты в SQLite вместо чтения JSONL.
 
-Каждый прогон dev_probe.py / agent_play.py сам складывается сюда
+Каждый прогон scry.py / agent_play.py сам складывается сюда
 (dev_probe_output/probe.sqlite, путь - lua_content/dev_tools.lua: db.path):
 сэмплы героя и врагов, боевые события, убийства. Дальше вопросы вида
 "какой тип врага наносит больше всего урона", "стал ли герой умирать чаще
@@ -137,7 +137,7 @@ def ingest_dir(con, run_dir):
     samples = _read_jsonl(run_dir / "state.jsonl")
     events = _read_jsonl(run_dir / "combat.jsonl")
     kills = [tuple(k) for k in summary.get("kills_list", [])]
-    meta = {"kind": summary.get("kind", "dev_probe"), "dir": str(run_dir), "status": summary.get("status"),
+    meta = {"kind": summary.get("kind", "scry"), "dir": str(run_dir), "status": summary.get("status"),
             "seed": summary.get("seed"), "duration": summary.get("elapsed"), "fast": summary.get("fast"),
             "render": summary.get("render"), "errors": summary.get("error_count", 0),
             "warnings": summary.get("warning_count", 0), "created": run_dir.stat().st_mtime}
@@ -155,7 +155,7 @@ def resolve_run(con, ref="last"):
             raise SystemExit(f"ambiguous run prefix {ref!r}: {', '.join(r[0] for r in rows[:5])}")
         row = next((r for r in rows if r[0] == ref), rows[0] if rows else None)
     if row is None:
-        raise SystemExit("no runs in the probe DB yet (run tools/agent_play.py or tools/dev_probe.py first)")
+        raise SystemExit("no runs in the probe DB yet (run tools/agent_play.py or tools/scry.py first)")
     return row[0]
 
 
@@ -354,7 +354,7 @@ def main(argv=None):
     p = sub.add_parser("trend")
     p.add_argument("metric")
     p.add_argument("--last", type=int, default=10)
-    p.add_argument("--kind", choices=["dev_probe", "agent_play"], default=None)
+    p.add_argument("--kind", choices=["scry", "agent_play"], default=None)
     p = sub.add_parser("sql")
     p.add_argument("query")
     p.add_argument("--max-rows", type=int, default=40)

@@ -464,7 +464,7 @@ pytest tests/ -v --tb=short
 │   └── probe_config.lua            # 🔧 Настройки Probe
 │
 ├── tools/
-│   ├── dev_probe.py                # 🔬 Главный инструмент
+│   ├── scry.py                # 🔬 Главный инструмент
 │   ├── training_room.py            # 🏋️ Тренировочная комната
 │   ├── cas_training_demo.py        # 🔮 CAS демо
 │   └── plugins/                    # 🔌 Плагины

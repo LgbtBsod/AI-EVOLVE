@@ -31,7 +31,7 @@ return {
       evidence = { { "min_distance", "min_near", "r1" }, { "duration", "duration", "r1" } },
       look = { "src/scenes/main_game_scene.py:_spawn_enemies (spawns at map edges)",
                "src/entities/enemy.py:update_ai (detection_range)" },
-      next = "spawn an enemy next to the hero: agent_play 'spawn enemy' or dev_probe --action-at 1:1" },
+      next = "spawn an enemy next to the hero: agent_play 'spawn enemy' or scry --action-at 1:1" },
 
     { id = "CLOSE_BUT_NO_ATTACKS", severity = "high",
       when = { all = { c("attacks", "eq", 0), c("duration", "ge", 5), c("min_near", "le", "$close_range") } },

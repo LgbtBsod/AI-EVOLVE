@@ -28,6 +28,15 @@ DOTS = {  # id: (duration, base, per stack, cap)
 HP = 1e6
 
 
+@pytest.fixture(autouse=True)
+def _toughness_off(monkeypatch):
+    """This spec is about statuses, not toughness (S4): keep `EffectManager._damage`'s automatic
+    toughness hook inert here so a target breaking mid-test (`broken` = x1.15 dmg taken) doesn't
+    contaminate a weaken/vulnerable/DoT assertion; toughness has its own spec, test_toughness_break_spec.py."""
+    from src.effects import toughness
+    monkeypatch.setattr(toughness, "config", lambda: {"enabled": False})
+
+
 class RuntimeHost:
     name = "runtime"
 
@@ -111,13 +120,18 @@ def test_bleed_three_applications(host):
     assert host.lost() == pytest.approx(8 * (5 + 2 * 3))          # spec row 1: 5 + 2*3 per second for 8 s
 
 
+DETONATE = {"bleed": 30, "shock": 20}   # S3 (CC_PORT_SPEC.md 2.2): hemorrhage/overload fire on the manager
+                                         # host every time an apply_status call lands the stacks on the cap.
+
+
 @pytest.mark.parametrize("sid", sorted(DOTS))
 def test_stack_cap(host, sid):
     dur, base, per, cap = DOTS[sid]
-    assert host.apply(sid, stacks=cap + 5) == cap
-    assert host.apply(sid) == cap
+    detonate = DETONATE.get(sid, 0) if host.name == "manager" else 0   # runtime host has no combo reactions
+    assert host.apply(sid, stacks=cap + 5) == cap          # 1st call: already at cap -> detonates once
+    assert host.apply(sid) == cap                           # 2nd call: still at cap -> detonates again
     host.advance(1)
-    assert host.lost() == pytest.approx(base + per * cap)
+    assert host.lost() == pytest.approx(base + per * cap + 2 * detonate)
 
 
 def test_reapply_restarts_timer_without_double_dot(host):

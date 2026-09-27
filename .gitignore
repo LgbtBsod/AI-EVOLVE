@@ -27,7 +27,7 @@ saves/*.db
 saves/tactics_memory.json
 saves/hero_mind.json
 dev_probe_output/
-tools/dev_probe_baseline.json
+tools/scry_baseline.json
 *.bak
 
 # Qwen Code / assistant scratch

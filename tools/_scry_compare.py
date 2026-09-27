@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Shared before/after comparison logic for dev_probe.py's summary.json.
+"""Shared before/after comparison logic for scry.py's summary.json.
 
-Used both by dev_probe.py itself (auto-compares against dev_probe_baseline.json
+Used both by scry.py itself (auto-compares against scry_baseline.json
 when one exists, so a run's own tail already answers "did this help or hurt")
-and by dev_probe_diff.py (explicit --before/--after runs). Kept as pure
+and by scry_diff.py (explicit --before/--after runs). Kept as pure
 functions over plain dicts, no file I/O, so both callers share the exact same
 delta logic instead of two copies that could drift apart.
 
@@ -11,7 +11,7 @@ Comparing summary.json fields (plain numbers/dicts) instead of summary.md text
 means "did anything change" is a lookup, not an LLM-reasoning task over two
 prose documents - and comparing event *categories* + *counts* instead of raw
 timestamped timeline lines means run-to-run timing jitter (dt depends on
-wall-clock frame time - see dev_probe.py's own --seed docstring) doesn't make
+wall-clock frame time - see scry.py's own --seed docstring) doesn't make
 every line look "changed" just because timestamps drifted a few tenths of a
 second.
 """

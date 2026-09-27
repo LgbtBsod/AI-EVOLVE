@@ -221,6 +221,8 @@ def primitive_effects() -> list[dict]:
             {"kind": "block", "target": "enemy", "stat": "cursed_technique", "duration": dur(2)},
             {"kind": "absorb_damage", "target": "self", "value": {"pct": 50, "of": "last_damage"}, "window": dur(1)},
             {"kind": "untargetable", "target": "self", "by": ["six_eyes", "divination"], "duration": dur(1)},
+            {"kind": "toughness_damage", "target": "enemy", "value": {"flat": 10}, "type": "physical"},
+            {"kind": "apply_status", "target": "enemy", "buff_id": "slow"},
         ], "combat"),
         # метка и её взрыв (метка ставится на attack_hit, взрывается на crit / kill)
         ev("prim.mark", "attack_hit", [
@@ -333,6 +335,10 @@ def primitive_effects() -> list[dict]:
             {"kind": "fuel_consume", "target": "self", "pool": "nothing", "amount": 1},
             {"kind": "pool", "target": "self", "pool": "nothing", "action": "grant", "amount": 1},
         ], "social"),
+        # G2 (src/effects/gate.py): bounded reaction/interrupt window (requires/cost ride on the classic kinds, no primitive of their own)
+        ev("prim.gate", "use", [
+            {"kind": "arm_interrupt", "target": "self", "window": dur(1), "match": {"tags": ["spell"]}},
+        ], "gate"),
         # кража и применение техники
         ev("prim.learn", "use", [
             {"kind": "learn", "target": "self", "ability_id": "forge_technique"},

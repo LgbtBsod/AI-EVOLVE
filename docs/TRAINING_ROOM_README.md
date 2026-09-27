@@ -239,7 +239,7 @@ TestRecommendations::test_low_crit_recommendation   PASSED
 
 ## 🎯 Интеграция с Dev Probe
 
-Training Room может использоваться внутри `dev_probe.py` для:
+Training Room может использоваться внутри `scry.py` для:
 
 1. **Автоматического тестирования предметов** после изменений в коде
 2. **Генерации отчётов для агента** при обнаружении багов
@@ -247,7 +247,7 @@ Training Room может использоваться внутри `dev_probe.py
 4. **Валидации баланса** новых предметов
 
 ```python
-# В dev_probe.py плагине
+# В scry.py плагине
 def on_item_change_detected(item_id):
     room = TrainingRoom()
     room.create_mannequin("dummy", MannequinType.DUMMY)

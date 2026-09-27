@@ -222,6 +222,12 @@ class EntityState:
         self.absorbed_kinetic: float = 0.0          # поглощённый кинетический урон (Playful Cloud)
         self.absorbed_until: float = 0.0            # до какого момента окно поглощения
         self.weapon_ability: Optional[str] = None  # удар надетого оружия (item.attack)
+        # S4 (CC_PORT_SPEC.md 2.3): toughness/break bar, lazy (None until the first toughness_damage op;
+        # lua_content/toughness.lua `enabled` gate keeps this untouched while the feature is off).
+        self.toughness: Optional[float] = None
+        self.toughness_max: Optional[float] = None
+        self.toughness_growth_pct: float = 0.0     # cumulative break growth, capped at break_growth_cap_pct
+        self.toughness_break_until: float = 0.0    # > now while broken; refill fires once this passes
         self.runtime = EffectRuntime(self.unit, [], enemy=Unit("nobody"))
         if not hasattr(entity, "lifesteal"):
             entity.lifesteal = 0.0
@@ -555,6 +561,7 @@ class EffectManager:
                 del st.vision_vs[k]
             for bid in [b for b, d in st.unit.buffs.items() if d.get("until", 1e18) <= now]:
                 st.unit.buffs.pop(bid)
+            self._toughness_refill(st, now)
             self._run_periodic(st)
             last_tick = st.fired_at.get("#tick", -1.0)
             if st.event_effects and now - last_tick >= 1.0:
@@ -589,18 +596,94 @@ class EffectManager:
         tgt_st, src_st = self.state(target), self.state(source if source is not None else target)
         if tgt_st is None or src_st is None:
             return 0
-        if statuses.resisted(tgt_st.unit, row["id"], self.rng.random):
+        mult = self._status_gate(tgt_st, row)
+        if mult is None:
             return 0
-        mult = statuses.duration_mult(tgt_st.unit, row)
-        if mult <= 0.0:
-            return 0                                   # cc_duration_mult <= 0: immune to CC
         pl = statuses.plan(self._status_book, (id(target), row["id"]), row, self.now, statuses.Apply(stacks, mult))
         src = f"status:{row['id']}"
         tgt_st.periodic = [p for p in tgt_st.periodic if p["ability"] != src]
         for bid in statuses.nullify_buffs(pl.ops):
             tgt_st.unit.buffs.pop(bid, None)
         self._run_ops(src_st, pl.ops, target, src, (row["damage_type"],) if row.get("damage_type") else ())
+        self._combo_react(tgt_st, src_st, row, pl.stacks)
         return pl.stacks
+
+    def _toughness_refill(self, st: EntityState, now: float) -> None:
+        """Row 19: full refill the moment `broken` ends; game clock only, never a thread (owner decision 4)."""
+        if st.toughness_break_until and now >= st.toughness_break_until:
+            st.toughness = st.toughness_max
+            st.toughness_break_until = 0.0
+
+    def _status_gate(self, tgt_st: EntityState, row: dict) -> Optional[float]:
+        """None to skip apply_status entirely: row 25 (new CC ignored while broken), a resist roll, or
+        cc_duration_mult <= 0 (immune). Otherwise the duration multiplier to use."""
+        from . import statuses
+        if self._cc_blocked_by_break(tgt_st, row):
+            return None
+        if statuses.resisted(tgt_st.unit, row["id"], self.rng.random):
+            return None
+        mult = statuses.duration_mult(tgt_st.unit, row)
+        return mult if mult > 0.0 else None
+
+    def _cc_blocked_by_break(self, tgt_st: EntityState, row: dict) -> bool:
+        """Row 25: a target under `broken` ignores every new CC (the break itself is not tagged `cc`)."""
+        return bool(row.get("cc")) and row["id"] != "broken" and self.now < tgt_st.toughness_break_until
+
+    def _combo_react(self, tgt_st: EntityState, src_st: EntityState, row: dict, stacks: int) -> None:
+        """S3 (docs/CC_PORT_SPEC.md 2.2): combo reactions, existing ops only, guarded by MAX_EVENT_DEPTH like
+        `emit` (a reaction kill can cascade into another apply_status/reaction; this bounds that chain too).
+        Pair reaction: the OTHER status of a `combos.lua` row is active on the target -> purge it + true damage.
+        Same-type reaction (hemorrhage/overload, owner KEEP): the applied status just hit its own stack cap ->
+        detonate those stacks (op_detonate) for a flat true damage, not blocked by the legacy A!=B rule."""
+        if self._depth >= MAX_EVENT_DEPTH:
+            return
+        from . import statuses
+        applied_id = row["id"]
+        combo = statuses.find_pair_reaction(applied_id, statuses.active_ids(self._status_book, id(tgt_st.entity), self.now) - {applied_id})
+        same = None if combo else statuses.find_same_reaction(applied_id)
+        if same and stacks >= int((row.get("stack") or {}).get("max", 1)):
+            combo = same
+        if not combo:
+            return
+        self._depth += 1
+        try:
+            if combo is same:
+                self._detonate_combo(tgt_st, src_st, combo, stacks)
+            else:
+                self._purge_status(tgt_st, combo["purge"])
+                self._deal_combo(tgt_st, src_st, combo)
+        finally:
+            self._depth -= 1
+
+    def _purge_status(self, tgt_st: EntityState, status_id: str) -> None:
+        """Remove `status_id` from the book (future stacking/CC checks see it gone), any timed mod layer
+        `apply_status` gave it (external key = (source, "status:<id>", op index)), and the shared `nullify`
+        block (buffs["nullified"], op_nullify's bid: one bid for every nullify source, same limitation as the
+        existing `purge` op with filter=debuff, ops.py:645) if the row used it."""
+        key = (id(tgt_st.entity), status_id)
+        if key not in self._status_book:
+            return
+        self._status_book[key] = (0, self.now)
+        src = f"status:{status_id}"
+        for k in [k for k in tgt_st.external if isinstance(k, tuple) and len(k) == 3 and k[1] == src]:
+            del tgt_st.external[k]
+        from . import statuses
+        if any(o.get("kind") == "nullify" for o in statuses.get_status(status_id).get("ops") or []):
+            tgt_st.unit.buffs.pop("nullified", None)
+        tgt_st.refresh(self.now)
+
+    def _deal_combo(self, tgt_st: EntityState, src_st: EntityState, combo: dict) -> None:
+        o = {"kind": "deal", "target": "enemy", "stat": "hp", "op": "sub",
+             "flags": ["true_damage", "no_crit"], "value": {"flat": float(combo["damage"])}}
+        if combo.get("radius"):
+            o.update(target="area", affects="enemies", radius=float(combo["radius"]), center="target")
+        self._run_ops(src_st, [o], tgt_st.entity, f"combo:{combo['id']}", ())
+
+    def _detonate_combo(self, tgt_st: EntityState, src_st: EntityState, combo: dict, stacks: int) -> None:
+        mid = f"combo:{combo['id']}"
+        tgt_st.marks[mid] = {"stacks": float(stacks), "until": self.now + 1e-6}
+        o = {"kind": "detonate", "mark_id": mid, "target": "enemy", "value": {"flat": float(combo["damage"]) / stacks}}
+        self._run_ops(src_st, [o], tgt_st.entity, f"combo:{combo['id']}", ())
 
     def active_cc(self, target) -> Optional[dict]:
         """The winning CC status row on `target` (strongest cc_priority), None when it has none."""
@@ -881,7 +964,8 @@ class EffectManager:
         """target=area: все живые в круге (френдли фаер: заклинатель тоже), суженные affects / arc и невыбираемостью."""
         r = self._area_radius(st, o, radius)
         cx, cy = self._area_center(st, o, primary, center)
-        arc = float(o.get("arc", 0.0) or 0.0)       # конус к цели (взмах меча), 0 - полный круг
+        # `shape` (G2, target.sphere_area): "sphere" = the default disc (Fireball); "cone" defaults `arc` when the row omits it.
+        arc = float(o.get("arc", 60.0 if o.get("shape") == "cone" else 0.0) or 0.0)
         affects, by = o.get("affects", "all"), str(o.get("by", "all"))     # affects: френдли фаер по умолчанию (все в круге)
         return [s.entity for s in self.states.values()
                 if is_alive(s.entity) and not math.dist((cx, cy), position(s.entity)) > r
@@ -965,6 +1049,47 @@ class EffectManager:
         hit = self._damage(cx.source, tgt, amount, self._flags(o, cx.tags), cx.src, cx.tags)
         if hit:
             cx.hits.append(hit)
+
+    def op_toughness_damage(self, cx: OpCall, tgt: EntityState, o: dict, amount: float) -> None:
+        """S4 (CC_PORT_SPEC.md 2.3 row 17): explicit-op entry point, e.g. a status/zone effect that wants
+        to hit toughness directly. `_damage` calls `_toughness_hit` itself for the automatic per-landed-hit
+        reduction (row 17 "damage per hit subtracts") -- both paths share the same core logic."""
+        self._toughness_hit(cx.source.entity, tgt, amount, o.get("type"))
+
+    def _toughness_hit(self, source_entity, tgt: EntityState, amount: float, dmg_type: Optional[str]) -> None:
+        """Core toughness subtract (row 17/21): no-op while lua_content/toughness.lua `enabled` is false
+        (the default) -- traces of existing content are unchanged. Otherwise subtracts `amount *
+        type_factor`, clamps at 0 and breaks (`_toughness_break`) the first time it reaches 0."""
+        from . import toughness
+        if not toughness.enabled():
+            return
+        if tgt.toughness is None:
+            tgt.toughness = tgt.toughness_max = toughness.base_for(toughness.toughness_class(tgt.entity, tgt.faction))
+        dmg = amount * toughness.type_factor(dmg_type)
+        tgt.toughness = max(0.0, tgt.toughness - dmg)
+        if tgt.toughness <= 0.0 and self.now >= tgt.toughness_break_until:
+            self._toughness_break(source_entity, tgt)
+
+    def op_apply_status(self, cx: OpCall, tgt: EntityState, status_id: str, stacks: float) -> int:
+        """kind=status op (S1/S2): wraps EffectManager.apply_status so content abilities land a real CC/DoT
+        row from lua_content/statuses by id, with gate/resist/stacking/cc_priority (docs/CC_PORT_SPEC.md)."""
+        src = cx.source.entity if cx.source is not None else None
+        return self.apply_status(tgt.entity, status_id, src, max(1, int(stacks)))
+
+    def _toughness_break(self, source_entity, tgt: EntityState) -> None:
+        """Row 19/22/25: grow toughness_max (capped), purge every active CC, then the `broken` status
+        (mod broken=1 x1.15 dmg-taken, nullify actions, both 5s) -- new CC is ignored while it is up
+        (see `apply_status`). Recovery is the game clock (`update`), never a thread (owner decision 4)."""
+        from . import statuses, toughness
+        step = toughness.growth_step(tgt.toughness_growth_pct)
+        if step > 0:
+            tgt.toughness_growth_pct += step
+            tgt.toughness_max = toughness.base_for(toughness.toughness_class(tgt.entity, tgt.faction)) + \
+                tgt.toughness_growth_pct / 100.0 * float(getattr(tgt.entity, "max_health", 0.0))
+        tgt.toughness_break_until = self.now + toughness.break_duration()
+        for cc_id in statuses.cc_ids(self._status_book, id(tgt.entity), self.now):
+            self._purge_status(tgt, cc_id)
+        self.apply_status(tgt.entity, "broken", source_entity)
 
     def op_spend(self, _cx: OpCall, tgt: EntityState, res: str, amount: float, lethal: bool) -> None:
         self._spend(tgt, res, amount, lethal=lethal)
@@ -1454,6 +1579,8 @@ class EffectManager:
         self._set_health(tgt_st, tgt_st.resource("hp") - amount)
         info.damage = amount
         info.killed = not is_alive(tgt)
+        if flags.isdisjoint(damage.CERTAIN_FLAGS):    # row 17: skip true_damage/unavoidable/periodic (DoT) ticks
+            self._toughness_hit(src, tgt_st, amount, kind)
         self._notify(info)
         self._after_hit(st, tgt_st, info, flags, tags)
         return info
