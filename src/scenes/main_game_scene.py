@@ -462,6 +462,7 @@ class EnhancedGameScene:
         """Призыв (операция summon): враг на стороне призвавшего."""
         from src.gameplay.world import make_enemy
         creature = make_enemy(self.game, kind, max(1, int(level)), x, y, self._plan())
+        creature.wander_config = self._population()
         if getattr(self.game, "render", None) is not None:
             creature.create_enemy()
         creature.summoned_by = owner
@@ -553,6 +554,7 @@ class EnhancedGameScene:
         """Враг из бестиария (или босс) с уровнем по правилам прогрессии."""
         from src.gameplay.world import make_enemy
         enemy = make_enemy(self.game, enemy_type, self.enemy_level(), x, y, self._plan())
+        enemy.wander_config = self._population()  # растущий радиус блуждания со временем жизни
         if getattr(self.game, "render", None) is not None:
             enemy.create_enemy()
         self._register_enemy(enemy)
@@ -572,6 +574,17 @@ class EnhancedGameScene:
         cycle = f" (цикл {self.cycle + 1})" if self.cycle else ""
         self.log_message(f"Уровень {self.current_level}: {info.name}{cycle}")
         if self.boss_queue:
+            self._fill_active_bosses()
+
+    def _population(self) -> dict:
+        from src.gameplay.progression import population
+        return population()
+
+    def _fill_active_bosses(self):
+        """До max_active_bosses боссов очереди активны одновременно (within the
+        level, не по одному - population.max_active_bosses в world.lua)."""
+        max_active = max(1, int(self._population().get("max_active_bosses", 1)))
+        while self.boss_queue and len(self.active_bosses) < max_active:
             self._spawn_next_boss()
 
     def _spawn_next_boss(self):
@@ -579,14 +592,48 @@ class EnhancedGameScene:
             return None
         boss_type = self.boss_queue.pop(0)
         ex, ey, _ez = self.exit_beacon_position or (0.0, 0.0, 0.0)
-        # страж выхода; Люцифер вмёрз прямо в озеро у выхода
-        offset = 0.0 if boss_type == "lucifer" else 4.0
+        # страж выхода; Люцифер вмёрз прямо в озеро у выхода; несколько активных
+        # боссов не должны спавниться друг на друге - расходятся по индексу очереди
+        spread = 4.0 * (1 + len(self.active_bosses))
+        offset = 0.0 if boss_type == "lucifer" else spread
         boss = self._spawn_enemy(boss_type, ex + offset, ey + offset)
         boss.is_boss = True
+        boss.next_summon_at = self.game_time + float(self._population()["boss_summon_interval_minutes"]) * 60.0
         self.active_bosses.append(boss)
         line = (getattr(boss, "dialog", {}) or {}).get("spawn")
         self.log_message(f"{getattr(boss, 'display_name', boss_type)}" + (f": «{line}»" if line else " появляется"))
         return boss
+
+    def _update_boss_summons(self):
+        """Каждый активный босс призывает свиту раз в population.boss_summon_interval_minutes
+        игровых минут (self.game_time - виртуальный час игры, НЕ time.time())."""
+        if not self.active_bosses:
+            return
+        pop = self._population()
+        batch = pop.get("boss_summon_batch", {}) or {}
+        lo, hi = int(batch.get("min", 1)), int(batch.get("max", 1))
+        interval = float(pop.get("boss_summon_interval_minutes", 10.0)) * 60.0
+        for boss in list(self.active_bosses):
+            if not boss.is_alive():
+                continue
+            next_at = getattr(boss, "next_summon_at", None)
+            if next_at is None:
+                boss.next_summon_at = self.game_time + interval
+                continue
+            if self.game_time < next_at:
+                continue
+            boss.next_summon_at = self.game_time + interval
+            if len(self.enemies) >= self.max_enemies:
+                continue
+            n = self.rng.randint(lo, hi) if hi > lo else lo
+            bx, by = boss.x, boss.y
+            for _ in range(n):
+                ang = self.rng.uniform(0.0, 2 * math.pi)
+                dist = self.rng.uniform(2.0, 6.0)
+                x, y = self.clamp_position(bx + dist * math.cos(ang), by + dist * math.sin(ang))
+                kind = self._plan().pick_enemy(self.current_level, self.rng,
+                                                elite_chance=self._plan().elite_chance(self.enemy_level()))
+                self.spawn_summon(kind, x, y, "enemy", self.enemy_level(), boss)
 
     def _on_boss_death(self, boss):
         from src.gameplay.progression import xp_for
@@ -596,9 +643,8 @@ class EnhancedGameScene:
         self._award("boss_kill", "Босс повержен")
         if boss in self.active_bosses:
             self.active_bosses.remove(boss)
-        if self.boss_queue:
-            self._spawn_next_boss()
-        elif not self.active_bosses:
+        self._fill_active_bosses()
+        if not self.active_bosses and not self.boss_queue:
             if self.level_info is not None and self.level_info.is_final:
                 self._complete_cycle()
             else:
@@ -859,6 +905,7 @@ class EnhancedGameScene:
                 
         # Спавним новых врагов
         self._spawn_enemies(dt)
+        self._update_boss_summons()
 
         # Обрабатываем подсказки по картам и NPC (координаты выхода)
         if self.player:
@@ -1413,6 +1460,7 @@ class EnhancedGameScene:
         boss_type = act.get("boss") if self.rng.random() < 0.5 else act.get("miniboss")
         boss = self._spawn_enemy(boss_type or act.get("boss"), x, y, player_created=True)
         boss.is_boss = True
+        boss.next_summon_at = self.game_time + float(self._population()["boss_summon_interval_minutes"]) * 60.0
         self.active_bosses.append(boss)
         self.log_message(f"{getattr(boss, 'display_name', boss_type)} призван режиссёром")
     

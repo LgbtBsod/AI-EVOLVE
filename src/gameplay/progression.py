@@ -29,6 +29,12 @@ DEFAULT_PROGRESSION = {
     "xp": {"chest": 50, "trap_disarm": 15, "hint": 10, "exit": 120, "boss_kill": 300, "trick_dodge": 25,
            "trick_multikill": 30, "trick_clutch": 40, "trick_overkill": 10, "quest": 150, "craft": 12, "caravan": 80},
 }
+DEFAULT_POPULATION = {
+    "max_active_bosses": 3, "boss_summon_interval_minutes": 10,
+    "boss_summon_batch": {"min": 2, "max": 4},
+    "wander_base_radius": 5.0, "wander_grow_after_minutes": 10,
+    "wander_grow_radius_per_minute": 1.5, "wander_max_radius": 25.0,
+}
 HERO_WEIGHTS = {
     "warrior": {"strength": 0.4, "vitality": 0.35, "endurance": 0.25},
     "mage": {"intelligence": 0.45, "wisdom": 0.25, "vitality": 0.3},
@@ -55,6 +61,25 @@ def progression() -> dict:
         logger.warning("progression: world.lua not loaded: %s", exc)
         data = {}
     for k, v in list(data.items()) + list(_OVERRIDES.items()):
+        if isinstance(v, dict) and isinstance(rules.get(k), dict):
+            rules[k].update(v)
+        else:
+            rules[k] = v
+    return rules
+
+
+@lru_cache(maxsize=1)
+def population() -> dict:
+    """Заселение уровня: боссы активны одновременно, интервал призыва свиты,
+    рост радиуса блуждания призванных врагов (world.lua -> population)."""
+    from ..content import lua_bridge
+    rules = copy.deepcopy(DEFAULT_POPULATION)
+    try:
+        data = lua_bridge.load(lua_bridge.CONTENT / "world.lua", cache=True).get("population") or {}
+    except Exception as exc:  # noqa: BLE001 - same fallback contract as progression() above
+        logger.warning("population: world.lua not loaded: %s", exc)
+        data = {}
+    for k, v in data.items():
         if isinstance(v, dict) and isinstance(rules.get(k), dict):
             rules[k].update(v)
         else:

@@ -35,6 +35,22 @@ return {
            quest = 150, craft = 12, caravan = 80 },
   },
 
+  -- Заселение уровня (within the current level, not multiple biomes at once):
+  -- сколько боссов финальной последовательности активны одновременно, как часто
+  -- каждый активный босс призывает свиту (виртуальные игровые минуты, НЕ
+  -- wall-clock), и насколько дальше блуждают уже призванные враги со временем -
+  -- заселённый радиус вокруг боссов растёт, чем дольше они живы.
+  -- Числа не с баланс-прогона (изобретены для этой задачи) - смотри qa.py sweep.
+  population = {
+    max_active_bosses = 3,
+    boss_summon_interval_minutes = 10,
+    boss_summon_batch = { min = 2, max = 4 },
+    wander_base_radius = 5.0,
+    wander_grow_after_minutes = 10,
+    wander_grow_radius_per_minute = 1.5,
+    wander_max_radius = 25.0,
+  },
+
   acts = {
     { id = "midgard", name = "Мидгард: Опушка", levels = { 1, 10 }, biome = "forest",
       enemies = { "slime", "goblin", "wolf" }, elites = { "goblin_chief" },

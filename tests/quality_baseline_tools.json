@@ -32,7 +32,6 @@
    "tools/boot_smoke_test.py",
    "tools/boss_gauntlet.py",
    "tools/combat_smoke_test.py",
-   "tools/scry.py",
    "tools/guard_hook.py",
    "tools/probe_runtime.py",
    "tools/probe_settings.py",
@@ -41,6 +40,7 @@
    "tools/qa_report.py",
    "tools/quality_metrics.py",
    "tools/repo_hygiene.py",
+   "tools/scry.py",
    "tools/trace_compare.py",
    "tools/web_builder/app.py",
    "tools/web_builder/headless.py"
@@ -87,22 +87,6 @@
    "PLW0603": 1,
    "RET504": 1,
    "dup_defs": 1
-  },
-  "tools/scry.py": {
-   "B007": 2,
-   "B904": 1,
-   "BLE001": 13,
-   "C901": 4,
-   "PLR0912": 3,
-   "PLR0915": 3,
-   "PLW2901": 4,
-   "dup_defs": 1,
-   "vulture": 3
-  },
-  "tools/scry_diff.py": {
-   "B007": 1,
-   "C901": 1,
-   "PLR0912": 1
   },
   "tools/effect_schema/digest.py": {
    "PERF401": 1
@@ -236,6 +220,22 @@
    "PERF401": 1,
    "dup_defs": 2
   },
+  "tools/scry.py": {
+   "B007": 2,
+   "B904": 1,
+   "BLE001": 13,
+   "C901": 4,
+   "PLR0912": 3,
+   "PLR0915": 3,
+   "PLW2901": 4,
+   "dup_defs": 1,
+   "vulture": 3
+  },
+  "tools/scry_diff.py": {
+   "B007": 1,
+   "C901": 1,
+   "PLR0912": 1
+  },
   "tools/trace_compare.py": {
    "B905": 1,
    "PLW1510": 1,
@@ -280,11 +280,6 @@
   "tools/boss_gauntlet.py::Session._battle": 20,
   "tools/boss_gauntlet.py::campaign": 14,
   "tools/boss_gauntlet.py::run": 18,
-  "tools/scry.py::_cluster_similar_frames": 11,
-  "tools/scry.py::_detect_ui_changes": 19,
-  "tools/scry.py::_track_entities_across_frames": 12,
-  "tools/scry.py::analyze_screenshot": 22,
-  "tools/scry_diff.py::compare_frames": 22,
   "tools/effect_schema/digest.py::diff": 12,
   "tools/effect_schema/digest.py::op_brief": 15,
   "tools/effect_schema/forge.py::PredGen.num": 14,
@@ -364,6 +359,11 @@
   "tools/quality_metrics.py::update_baseline": 11,
   "tools/repo_hygiene.py::evaluate": 20,
   "tools/repo_hygiene.py::scan": 18,
+  "tools/scry.py::_cluster_similar_frames": 11,
+  "tools/scry.py::_detect_ui_changes": 19,
+  "tools/scry.py::_track_entities_across_frames": 12,
+  "tools/scry.py::analyze_screenshot": 22,
+  "tools/scry_diff.py::compare_frames": 22,
   "tools/training_room.py::TrainingRoom.run_dps_test": 20,
   "tools/web_builder/app.py::EffectEditor.load": 16,
   "tools/web_builder/app.py::EffectEditor.load#2": 16,

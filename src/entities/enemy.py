@@ -32,6 +32,15 @@ logger = logging.getLogger(__name__)
 # Monotonic, never reused - see the matching comment in entities/character.py.
 _enemy_id_counter = itertools.count(1)
 
+# Fallback wander-radius-growth numbers (mirrors DEFAULT_POPULATION in
+# src/gameplay/progression.py) used only if a scene never set wander_config -
+# entities must not import gameplay (see .importlinter layers), so the scene
+# passes lua_content/world.lua's population table down via the attribute.
+_WANDER_DEFAULTS = {
+    "wander_base_radius": 5.0, "wander_grow_after_minutes": 10.0,
+    "wander_grow_radius_per_minute": 1.5, "wander_max_radius": 25.0,
+}
+
 class EnhancedEnemy:
     """Улучшенный класс врага с правильным рендерингом"""
 
@@ -85,6 +94,13 @@ class EnhancedEnemy:
         # Точка спавна используется как центр области блуждания
         self.spawn_x = self.x
         self.spawn_y = self.y
+
+        # Виртуальное время жизни (сек, копится через dt в update_ai - НЕ
+        # time.time()): область блуждания растёт, чем дольше враг прожил
+        # (lua_content/world.lua -> population.wander_*, задаётся сценой при
+        # спавне через wander_config - entities не импортирует gameplay).
+        self.age = 0.0
+        self.wander_config: dict | None = None
         
         # Компонент здоровья для интеграции с новой боевой системой
         self._health_component = HealthComponent(
@@ -404,6 +420,7 @@ class EnhancedEnemy:
         """Обновление ИИ врага"""
         if not self.is_alive():
             return
+        self.age += dt
         if self.brain is not None:          # тактики, навыки на дистанции, телеграфы
             self.brain.update(player, dt)
             return
@@ -436,9 +453,19 @@ class EnhancedEnemy:
             self._wander(dt)
 
     def _wander(self, dt):
-        """Простое блуждание врага в пределах 10×10 вокруг точки спавна."""
+        """Блуждание врага вокруг точки спавна; область растёт, если враг прожил
+        в мире дольше wander_grow_after_minutes (world.lua -> population, задаётся
+        сценой через wander_config) - призванные боссом мобы со временем
+        расходятся дальше от места призыва."""
         import random
-        max_offset = 5.0  # от спавна по каждой оси
+
+        pop = self.wander_config or _WANDER_DEFAULTS
+        base = float(pop.get("wander_base_radius", 5.0))
+        grow_after_s = float(pop.get("wander_grow_after_minutes", 10.0)) * 60.0
+        per_minute = float(pop.get("wander_grow_radius_per_minute", 0.0))
+        max_radius = float(pop.get("wander_max_radius", base))
+        extra_minutes = max(0.0, (self.age - grow_after_s) / 60.0)
+        max_offset = min(max_radius, base + extra_minutes * per_minute)  # от спавна по каждой оси
 
         # Не каждый кадр меняем направление, чтобы движение было плавным
         if random.random() < 0.1:
