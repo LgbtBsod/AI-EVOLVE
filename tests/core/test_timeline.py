@@ -204,3 +204,32 @@ class TestEventSystemIntegration:
         tl.attach_event_system(es, kinds=["heal"])
         es.emit("damage", {"source": "a", "target": "b"})   # не подписаны
         assert tl.events == []
+
+
+class TestEffectManagerIntegration:
+    def test_attach_records_landed_hits(self):
+        from src.effects.manager import HitInfo
+
+        class FakeEffectManager:
+            def __init__(self):
+                self._handlers = []
+
+            def register_event_handler(self, handler):
+                self._handlers.append(handler)
+
+            def notify(self, info):
+                for h in self._handlers:
+                    h(info)
+
+        em = FakeEffectManager()
+        tl = Timeline()
+        tl.attach_effect_manager(em)
+
+        em.notify(HitInfo(source="hero", target="golem", damage=12.0))
+        em.notify(HitInfo(source="hero", target="golem", damage=5.0, killed=True))
+
+        assert [e.kind for e in tl.events] == ["hit.damage", "hit.kill"]
+        assert tl.events[0].source == "hero" and tl.events[0].target == "golem"
+        assert tl.events[1].data["killed"] is True
+        # журнал по-прежнему сериализуем
+        assert Timeline.from_json(tl.to_json()).events[1].to_dict() == tl.events[1].to_dict()

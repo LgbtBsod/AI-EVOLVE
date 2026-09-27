@@ -118,6 +118,10 @@ class EnhancedGameScene:
         self.effects = EffectManager(world=self, abilities=load_abilities())
         self.game.effect_manager = self.effects
         self.effects.register_event_handler(self._on_hit)
+        from src.core.timeline import Timeline
+        self.effects_timeline = Timeline(name="combat")
+        self.effects_timeline.attach_effect_manager(self.effects)
+        self.game.timeline = self.effects_timeline
         from src.gameplay.tactics import TacticsMemory, memory_path
         self.tactics = TacticsMemory(memory_path())
         from src.gameplay.enemy_ai import AttackSlots

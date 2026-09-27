@@ -413,6 +413,26 @@ class Timeline:
             event_system.on(et, make_hook(et), subscriber_id=f"timeline:{self.name}")
         return len(kinds)
 
+    def attach_effect_manager(self, effect_manager, kind_prefix: str = "hit.") -> None:
+        """Автозапись попаданий src.effects.manager.EffectManager в журнал.
+
+        Подписывается через effect_manager.register_event_handler (список
+        колбэков, не blinker-сигнал): один commit() на приземлившийся удар,
+        без снапшотов (capture_snapshot — отдельная, более тяжёлая фича).
+
+        kind = kind_prefix + ("kill" если info.killed иначе "damage");
+        source/target/data берутся из HitInfo (JSON-safe dataclass).
+        """
+        def hook(info) -> None:
+            self.commit(Event(
+                source=str(info.source),
+                target=str(info.target),
+                kind=kind_prefix + ("kill" if info.killed else "damage"),
+                data=asdict(info),
+            ))
+
+        effect_manager.register_event_handler(hook)
+
     def subscribe_local(self, callback: Callable[[Event], None]) -> None:
         """Подписка на новые события этого журнала (реактивный слой/триггеры)."""
         self._subs.append(callback)
