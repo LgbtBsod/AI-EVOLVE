@@ -36,6 +36,8 @@ from .ops import (_ALLOWED_CTX, OpCall, Periodic, Tracked, _hp_missing_below_40,
 
 # ---------------------------------------------------------------- stat rules
 
+_ROOM_DEFAULT_DURATION_SECONDS = 5.0  # то же значение, что EffectManager.DEFAULT_DEBUFF_SECONDS
+
 # Те же значения, что lua_content/effect_rules.lua (действуют без Lua-бэкенда)
 DEFAULT_RULES: dict[str, dict] = {
     "defaults": {"max_hp": 1000.0, "max_mana": 100.0, "max_stamina": 100.0,
@@ -908,7 +910,7 @@ class EffectRuntime:
         return self._prefix(tgt)
 
     def op_periodic_ok(self, o: dict) -> bool:
-        return o.get("duration") is not None
+        return bool(o.get("duration"))
 
     def op_duration(self, d, ctx: dict) -> float:
         return self._duration(d, ctx)
@@ -932,8 +934,12 @@ class EffectRuntime:
         tgt.heal(amount, res)
 
     def op_set_resource(self, cx: OpCall, tgt: Unit, stat: Optional[str], amount: float) -> None:
+        stat = stat or "hp"
         if stat in tgt.resources:
             tgt.set_resource(stat, amount)
+            self.op_note(cx, "set", tgt, stat)
+        elif stat in tgt.base:
+            tgt.base[stat] = max(0.0, amount)
             self.op_note(cx, "set", tgt, stat)
 
     def op_mod(self, cx: OpCall, tgt: Unit, o: dict) -> None:
@@ -1153,7 +1159,7 @@ class EffectRuntime:
 
     def _duration(self, d, ctx) -> float:
         if d is None:
-            return 10.0
+            return _ROOM_DEFAULT_DURATION_SECONDS
         if isinstance(d, (int, float)):
             return float(d)
         if "base" in d or "flat" in d or "pct" in d:
