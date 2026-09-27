@@ -707,11 +707,27 @@ class Character(BaseEntity):
 
     def _engage(self, target, dt) -> None:
         """Бой с целью: оружие в радиусе - бьём; иначе скилл дальнего боя, как у
-        enemy_ai (бьёт не приближаясь); иначе идём на сближение."""
+        enemy_ai (бьёт не приближаясь); иначе - физическое движение, которое
+        выбрал бандит героя (roll/jump/sprint/dash), иначе идём на сближение пешком."""
         if self.get_distance_to(target) <= self._weapon_reach():
             self.attack(target)
-        elif not self._ranged_skill_attack(target):
+        elif not self._ranged_skill_attack(target) and not self._use_move_ability(target):
             self._move_towards_enemy(target, dt)
+
+    def _use_move_ability(self, target) -> bool:
+        """Пробуем физическое движение (roll/jump/sprint/dash), которое бандит
+        героя (src/gameplay/hero_mind.py: preferred_move для текущей стойки,
+        self.mind.move) выбрал для текущего эпизода, вместо обычной ходьбы на
+        сближение - так у его выбора движения есть реальный игровой эффект
+        (стамина, кулдаун, дистанция), измеримый наградой бандита."""
+        mind = getattr(self, "mind", None)
+        move = getattr(mind, "move", None) if mind is not None else None
+        if not move:
+            return False
+        manager = getattr(self.game, "effect_manager", None)
+        if manager is None or manager.state(self) is None:
+            return False
+        return manager.cast(self, move, target).ok
 
     def _ranged_skill_attack(self, target) -> bool:
         """Враг вне дальности оружия - пробуем скилл класса с большей дальностью

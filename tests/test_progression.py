@@ -148,6 +148,40 @@ def test_hero_falls_back_to_ranged_skill_when_out_of_weapon_reach():
     assert hero.x == pytest.approx(x0)                        # не пошёл на сближение
 
 
+def test_hero_uses_learned_move_ability_when_repositioning():
+    """Бандит героя (hero_mind.py) выбирает физическое движение (roll/jump/
+    sprint/dash) на эпизод; когда враг вне дальности оружия и скиллов класса,
+    _engage должен попробовать это движение через manager.cast() - иначе выбор
+    бандита ни на что не влияет и его награда ничего не измеряет."""
+    from src.entities.character import Character
+
+    class Game:
+        render = None
+
+    class FakeMind:
+        move = "dash"
+
+    game = Game()
+    hero = Character("hero_warrior", game, 0, 0, 0.5, "warrior", is_player=True)
+    mgr = EffectManager(abilities=load_abilities(), rng=FakeRng(0.99))
+    game.effect_manager = mgr
+    mgr.register(hero, "hero")
+    hero.mind = FakeMind()
+    hero.stamina = hero.max_stamina = 100.0
+
+    enemy = Fighter(x=30.0, hp=200.0)
+    mgr.register(enemy, "monsters")
+    assert hero.get_distance_to(enemy) > hero._weapon_reach()
+
+    stamina_before = hero.stamina
+    x0 = hero.x
+    used = hero._use_move_ability(enemy)
+
+    assert used                                               # dash сработал через manager.cast
+    assert hero.stamina < stamina_before                      # стоил выносливость (gate.py cost)
+    assert hero.x != x0                                       # реально переместил героя
+
+
 def test_conditions_see_hp_pct_of_the_real_max_hp():
     # раньше hp_pct считался от max_hp без вклада характеристик: на 35% настоящего HP
     # условие «hp_pct < 40» видело 60% и «Потерять себя» не включался
