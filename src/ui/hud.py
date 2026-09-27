@@ -13,7 +13,8 @@
 
 import logging
 
-from direct.gui.DirectGui import DirectWaitBar
+from direct.gui import DirectGuiGlobals as DGG
+from direct.gui.DirectGui import DirectFrame, DirectWaitBar
 from direct.gui.OnscreenText import OnscreenText
 from panda3d.core import TextNode
 
@@ -95,6 +96,8 @@ class EnhancedHUD:
         self.hint_text = None
         self.bars = []
         self.bar_labels = []
+        self.bars_panel = None
+        self.boss_panel = None
         self.boss_bar = None
         self.panels_visible = False
         self.inventory_text = None
@@ -109,9 +112,16 @@ class EnhancedHUD:
     def create_hud(self):
         self.font = _font(self.game)
         y = 0.93
+        # Панель-подложка с рамкой позади HP/MP/ST баров, чтобы это читалось как
+        # единая HUD-панель, а не голые полосы поверх сцены.
+        self.bars_panel = DirectFrame(
+            frameColor=(0.05, 0.05, 0.08, 0.6), relief=DGG.RIDGE, borderWidth=(0.01, 0.01),
+            frameSize=(-1.11, -0.52, 0.795, 0.965), pos=(0, 0, 0),
+        )
         for _cur, _cap, color in BARS:
             bar = DirectWaitBar(range=100, value=100, pos=(-1.05, 0, y), scale=(0.28, 1, 0.3),
-                                barColor=color, frameColor=(0.1, 0.1, 0.1, 0.8))
+                                barColor=color, frameColor=(0.1, 0.1, 0.1, 0.8),
+                                relief=DGG.SUNKEN, borderWidth=(0.006, 0.006))
             self.bars.append(bar)
             self.bar_labels.append(self._text((-0.74, y - 0.012), 0.034))
             y -= 0.045
@@ -119,8 +129,14 @@ class EnhancedHUD:
         self.mood_text = self._text((-1.32, 0.73), 0.042, fg=(1, 0.9, 0.6, 1))
         self.feed_text = self._text((1.3, 0.92), 0.036, fg=(0.85, 0.95, 1, 1), align=TextNode.ARight)
         self.boss_text = self._text((0, -0.78), 0.045, fg=(1, 0.6, 0.5, 1), align=TextNode.ACenter)
+        self.boss_panel = DirectFrame(
+            frameColor=(0.05, 0.05, 0.08, 0.6), relief=DGG.RIDGE, borderWidth=(0.012, 0.012),
+            frameSize=(-0.34, 0.34, -0.92, -0.765), pos=(0, 0, 0),
+        )
         self.boss_bar = DirectWaitBar(range=100, value=100, pos=(0, 0, -0.84), scale=(0.6, 1, 0.5),
-                                      barColor=(0.75, 0.1, 0.1, 1), frameColor=(0.1, 0.1, 0.1, 0.8))
+                                      barColor=(0.75, 0.1, 0.1, 1), frameColor=(0.1, 0.1, 0.1, 0.8),
+                                      relief=DGG.SUNKEN, borderWidth=(0.006, 0.006))
+        self.boss_panel.hide()
         self.boss_bar.hide()
         help_text = KEYS_HELP if self.font is not None else "F1-F6 mood, arrows/C/X/N/Z hints, 1-4 spawn, I panels"
         self.hint_text = self._text((0, -0.95), 0.036, fg=(1, 1, 0.6, 1), align=TextNode.ACenter, text=help_text)
@@ -187,10 +203,12 @@ class EnhancedHUD:
         bosses = [b for b in (getattr(scene, "active_bosses", None) or []) if b.is_alive()] if scene else []
         if not bosses:
             self.boss_bar.hide()
+            self.boss_panel.hide()
             self.boss_text.setText("")
             return
         b = bosses[0]
         self.boss_bar.show()
+        self.boss_panel.show()
         self.boss_bar["value"] = 100.0 * b.health / max(1.0, b.max_health)
         name = getattr(b, "display_name", b.enemy_type) if self.font is not None else b.enemy_type
         self.boss_text.setText(f"{name}   {b.health:.0f}/{b.max_health:.0f}")
@@ -214,11 +232,13 @@ class EnhancedHUD:
 
     def destroy(self):
         for w in [self.status_text, self.mood_text, self.feed_text, self.boss_text, self.hint_text,
-                  self.boss_bar, self.inventory_text, self.skills_text, self.stats_text,
-                  *self.bars, *self.bar_labels]:
+                  self.boss_bar, self.boss_panel, self.bars_panel, self.inventory_text,
+                  self.skills_text, self.stats_text, *self.bars, *self.bar_labels]:
             if w is not None:
                 w.destroy()
         self.bars, self.bar_labels = [], []
         self.status_text = self.mood_text = self.feed_text = self.boss_text = self.hint_text = None
         self.boss_bar = None
+        self.boss_panel = None
+        self.bars_panel = None
         self.inventory_text = self.skills_text = self.stats_text = None

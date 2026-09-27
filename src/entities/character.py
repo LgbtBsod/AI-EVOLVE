@@ -41,6 +41,11 @@ logger = logging.getLogger(__name__)
 # snapshots, e.g. tools/scry.py, would then miss deaths / mislabel units).
 _character_id_counter = itertools.count(1)
 
+# Кожа (голова/кисти) не зависит от цвета брони/одежды (self.color) - иначе персонаж
+# выглядит как монохромный кристалл одного оттенка целиком.
+SKIN_COLOR = (0.85, 0.67, 0.54, 1)
+METAL_COLOR = (0.72, 0.73, 0.76, 1)
+
 
 class Character(BaseEntity):
     """Класс персонажа с улучшенной графикой - наследуется от BaseEntity"""
@@ -320,11 +325,12 @@ class Character(BaseEntity):
     def _create_detailed_body(self, parent):
         """Создание детализированного тела"""
         body_size = self.size
-        
+        body_depth = body_size * 0.65  # торс площе, чем широкий куб - иначе выглядит как блок
+
         # Основное тело
         self.body = self._create_advanced_cube(
-            parent, "body", 0, 0, body_size/2, 
-            body_size, body_size, body_size, 
+            parent, "body", 0, 0, body_size/2,
+            body_size, body_size, body_depth,
             self.color, "body_texture"
         )
         
@@ -344,12 +350,8 @@ class Character(BaseEntity):
     def _create_detailed_head(self, parent):
         """Создание детализированной головы"""
         head_size = self.size * 0.6
-        head_color = (
-            self.color[0] * 0.8,
-            self.color[1] * 0.8,
-            self.color[2] * 0.8,
-            self.color[3]
-        )
+        # Кожа лица - собственный тон, а не затемнённая версия цвета брони/одежды.
+        head_color = (SKIN_COLOR[0], SKIN_COLOR[1], SKIN_COLOR[2], self.color[3])
         
         # Голова
         self.head = self._create_advanced_cube(
@@ -393,32 +395,35 @@ class Character(BaseEntity):
             self.color[2] * 0.7,
             self.color[3]
         )
-        
-        # Левая рука
+        hand_color = (SKIN_COLOR[0], SKIN_COLOR[1], SKIN_COLOR[2], self.color[3])
+
+        # Левая рука. _create_advanced_cube(width, height, depth): height - это
+        # вертикальная (Z) протяжённость, depth - толщина вперёд/назад (Y). Рука
+        # должна свисать вниз (высокая по Z, тонкая по Y), а не торчать вперёд-назад.
         self.left_arm = self._create_advanced_cube(
-            parent, "left_arm", -self.size/2 - arm_size/2, 0, self.size/2, 
-            arm_size, arm_size, self.size, 
+            parent, "left_arm", -self.size/2 - arm_size/2, 0, self.size/2,
+            arm_size, self.size, arm_size,
             arm_color, "arm_texture"
         )
-        
+
         # Правая рука
         self.right_arm = self._create_advanced_cube(
-            parent, "right_arm", self.size/2 + arm_size/2, 0, self.size/2, 
-            arm_size, arm_size, self.size, 
+            parent, "right_arm", self.size/2 + arm_size/2, 0, self.size/2,
+            arm_size, self.size, arm_size,
             arm_color, "arm_texture"
         )
-        
-        # Кисти
+
+        # Кисти - кожа, не рукав
         hand_size = arm_size * 0.6
         self.left_hand = self._create_advanced_cube(
-            parent, "left_hand", -self.size/2 - arm_size/2, 0, 0, 
-            hand_size, hand_size, hand_size, 
-            arm_color, "hand_texture"
+            parent, "left_hand", -self.size/2 - arm_size/2, 0, 0,
+            hand_size, hand_size, hand_size,
+            hand_color, "hand_texture"
         )
         self.right_hand = self._create_advanced_cube(
-            parent, "right_hand", self.size/2 + arm_size/2, 0, 0, 
-            hand_size, hand_size, hand_size, 
-            arm_color, "hand_texture"
+            parent, "right_hand", self.size/2 + arm_size/2, 0, 0,
+            hand_size, hand_size, hand_size,
+            hand_color, "hand_texture"
         )
         
     def _create_detailed_legs(self, parent):
@@ -431,30 +436,35 @@ class Character(BaseEntity):
             self.color[3]
         )
         
-        # Левая нога
+        leg_length = self.size / 2
+
+        # Левая нога. Как и руки: высота (Z) - длина ноги, depth (Y) - толщина
+        # вперёд/назад. Нога свисает от низа торса (z=0) вниз.
         self.left_leg = self._create_advanced_cube(
-            parent, "left_leg", -self.size/3, 0, 0, 
-            leg_size, leg_size, self.size/2, 
+            parent, "left_leg", -self.size/3, 0, -leg_length/2,
+            leg_size, leg_length, leg_size,
             leg_color, "leg_texture"
         )
-        
+
         # Правая нога
         self.right_leg = self._create_advanced_cube(
-            parent, "right_leg", self.size/3, 0, 0, 
-            leg_size, leg_size, self.size/2, 
+            parent, "right_leg", self.size/3, 0, -leg_length/2,
+            leg_size, leg_length, leg_size,
             leg_color, "leg_texture"
         )
-        
-        # Ступни
+
+        # Ступни - ниже ног, чуть вытянуты вперёд (Y), а не вверх
         foot_size = leg_size * 0.8
+        foot_height = foot_size * 0.6
+        foot_z = -leg_length - foot_height/2
         self.left_foot = self._create_advanced_cube(
-            parent, "left_foot", -self.size/3, 0, -self.size/4, 
-            foot_size, foot_size * 1.5, foot_size, 
+            parent, "left_foot", -self.size/3, foot_size * 0.25, foot_z,
+            foot_size, foot_height, foot_size * 1.4,
             leg_color, "foot_texture"
         )
         self.right_foot = self._create_advanced_cube(
-            parent, "right_foot", self.size/3, 0, -self.size/4, 
-            foot_size, foot_size * 1.5, foot_size, 
+            parent, "right_foot", self.size/3, foot_size * 0.25, foot_z,
+            foot_size, foot_height, foot_size * 1.4,
             leg_color, "foot_texture"
         )
         
@@ -462,7 +472,7 @@ class Character(BaseEntity):
         """Создание экипировки"""
         if self.character_class == "warrior":
             # Меч
-            sword_color = (0.7, 0.7, 0.7, 1)
+            sword_color = METAL_COLOR
             self.sword = self._create_advanced_cube(
                 parent, "sword", self.size/2 + 0.3, 0, self.size/2, 
                 0.1, 0.1, 0.8, 
@@ -488,7 +498,7 @@ class Character(BaseEntity):
             
         elif self.character_class == "rogue":
             # Кинжалы
-            dagger_color = (0.5, 0.5, 0.5, 1)
+            dagger_color = (METAL_COLOR[0] * 0.8, METAL_COLOR[1] * 0.8, METAL_COLOR[2] * 0.8, 1)
             self.left_dagger = self._create_advanced_cube(
                 parent, "left_dagger", -self.size/2 - 0.2, 0, self.size/2, 
                 0.05, 0.05, 0.4, 
