@@ -219,6 +219,11 @@ def parse_args():
                               "fatal errors too, 2 = every event (screenshots, kills, HP crossings). "
                               "summary.md's Timeline always has everything regardless of this flag - this "
                               "only controls what's echoed live to the console you're reading right now")
+    parser.add_argument("--zoom", type=float, default=1.0,
+                         help="scale the scene's own camera distance by this factor before capturing screenshots "
+                              "(e.g. 0.35 = much closer). 1.0 (default) = the game's normal camera, unchanged -- "
+                              "for anomaly-hunting, keep the default so frame-to-frame comparisons stay consistent; "
+                              "use a smaller value only for a one-off appearance/model-detail inspection run")
     parser.add_argument("--save-baseline", action="store_true",
                          help="also save this run's summary.json as tools/scry_baseline.json. Every "
                               "later run auto-compares against it (see '## vs baseline' in summary.md) - "
@@ -237,6 +242,8 @@ def parse_args():
                       "otherwise the run ends before a single sample is taken")
     if args.screenshot_interval < 0:
         parser.error("--screenshot-interval must be >= 0 (0 disables periodic screenshots)")
+    if args.zoom <= 0:
+        parser.error("--zoom must be > 0 (1.0 = unchanged, smaller = closer)")
     if args.game_kwargs is not None and not isinstance(args.game_kwargs, dict):
         parser.error(f"--game-kwargs must be a JSON object, got {type(args.game_kwargs).__name__}")
     return args
@@ -952,6 +959,22 @@ def main():
     game_cls = type(game)
     clock = rt.now  # секунды игры: виртуальные при --fast, настенные иначе
     can_screenshot = rt.can_screenshot()
+
+    if args.zoom != 1.0:
+        # main_game_scene.py's own "camera_follow" task re-sets cam pos to player_pos + a fixed offset
+        # EVERY frame, so a one-time override gets clobbered immediately. Add our own task, sorted to run
+        # after it in the same frame: read the offset it just applied (cam_pos - player_pos) and rescale
+        # it, instead of hardcoding a copy of main_game_scene.py's own offset constants here.
+        def _rescale_camera(task):
+            cam = getattr(game, "cam", None)
+            player = next((e for e, is_player in runtime.get_entities(game) if is_player), None)
+            if cam is not None and player is not None:
+                px, py, pz = getattr(player, "x", 0.0), getattr(player, "y", 0.0), getattr(player, "z", 0.0)
+                cx, cy, cz = cam.getPos()
+                cam.setPos(px + (cx - px) * args.zoom, py + (cy - py) * args.zoom, pz + (cz - pz) * args.zoom)
+            return task.cont
+
+        game.showbase.taskMgr.add(_rescale_camera, "scry_zoom_rescale", sort=50)
 
     def simulate_key(key, pressed):
         set_key = getattr(game, "_set_key", None)

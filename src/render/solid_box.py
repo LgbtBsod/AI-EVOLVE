@@ -52,8 +52,12 @@ def _build_unit_box_geom_node() -> GeomNode:
             vertex.addData3(*corner)
             normal.addData3(*n)
             color.addData4(1, 1, 1, 1)
-        tris.addVertices(base, base + 1, base + 2)
-        tris.addVertices(base, base + 2, base + 3)
+        # Reversed order (base, base+2, base+1 / base, base+3, base+2): the
+        # corners above are listed CCW as seen from *outside* the box, but
+        # Panda3D's default back-face cull keeps clockwise-wound triangles;
+        # winding them the other way was culling every face from outside.
+        tris.addVertices(base, base + 2, base + 1)
+        tris.addVertices(base, base + 3, base + 2)
 
     geom = Geom(vdata)
     geom.addPrimitive(tris)
@@ -78,8 +82,14 @@ def make_solid_box(parent, name, position, size, color) -> NodePath:
     x, y, z = position
     width, height, depth = size
     box = parent.attachNewNode(name)
-    mesh = box.attachNewNode(_unit_box_geom_node())
-    mesh.setScale(width, depth, height)
-    mesh.setColor(*color)
+    # The unit-box GeomNode is one shared singleton instanced everywhere (by
+    # design, see module docstring): a PandaNode's transform/color lives on
+    # the node itself, not per parent-arc, so setScale/setColor MUST go on
+    # `box` (a fresh, non-shared node created above) and never on the child
+    # that directly wraps the shared geometry -- setting them there would
+    # overwrite every other instance's size/color game-wide.
+    box.attachNewNode(_unit_box_geom_node())
+    box.setScale(width, depth, height)
+    box.setColor(*color)
     box.setPos(x, y, z)
     return box
