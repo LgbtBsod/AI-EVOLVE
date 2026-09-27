@@ -26,6 +26,7 @@ dist/
 saves/*.db
 saves/tactics_memory.json
 saves/hero_mind.json
+saves/hero_movement.json
 dev_probe_output/
 tools/scry_baseline.json
 *.bak
