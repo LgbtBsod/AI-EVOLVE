@@ -202,7 +202,8 @@ class TestBloodPriceAttackRoom(unittest.TestCase):
         self.assertEqual(steps, 3)
         self.assertAlmostEqual(hero.buffs["last_will"]["until"], 5.0, delta=TOL)
         self.assertIn("iframe", hero.buffs["last_will"]["flags"])
-        self.assertAlmostEqual(hero.buffs["last_will"]["cooldown"], 30.0, delta=TOL)
+        # Кулдаун выдачи живёт у заклинателя (rt._buff_granted_at), не в записи баффа (диалект игры).
+        self.assertAlmostEqual(rt._buff_granted_at["last_will"], 0.0, delta=TOL)
         # deal-оп идёт ПОСЛЕ fail-ветки: hp уже 1, но deal бьёт по врагу
         dmg = (1.5 + 1.5 * 3) / 100.0 * 1000.0
         self.assertAlmostEqual(dummy.current_hp, 5000.0 - dmg, delta=TOL)

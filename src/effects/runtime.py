@@ -946,6 +946,10 @@ class EffectRuntime:
         # Событийная mod-операция задаёт СВОЙ текущий вклад: прошлый вклад этой же операции снимается,
         # новый записывается в _op_contrib. Дельта меряется вокруг одной операции: вложенные события
         # и пересборка пассивного слоя в неё не попадают.
+        # НЕ выровнено с игрой (docs/EFFECT_SCHEMA.md, "Op handlers" п.5): _event_layers()/refresh_passives
+        # суммируют именно contribs[key] (общий код обоих хозяев) - `replace_contribution_game` пишет
+        # amount - old вместо amount, что ломает "текущее значение" из п.3 уточнений (Vampire's Fang:
+        # 5 + kills). Игра этот путь контентом не проходит (см. docs), комната - да: оставлено как есть.
         key = cx.key if cx.key is not None else (cx.src, id(o))
         replace_contribution(self._op_contrib, key, tgt, o.get("stat"), lambda: self._apply_mod(o, cx.ctx, tgt))
         tgt.clamp_resources()  # мод max_hp вниз: текущее HP не выше нового максимума
@@ -956,24 +960,18 @@ class EffectRuntime:
     def op_granted(self, _cx: OpCall) -> dict:
         return self._buff_granted_at
 
-    def op_buff_record(self, cx: OpCall, o: dict, until: float, cd: Optional[float]) -> dict:
-        return {"until": until, "extend": o.get("extend"), "cooldown": cd, "last_cd": cx.t,
-                "flags": list(o.get("flags") or [])}
+    def op_buff_record(self, _cx: OpCall, o: dict, until: float, _cd: Optional[float]) -> dict:
+        # Кулдаун выдачи живёт у заклинателя (_buff_granted_at через op_granted), не в записи баффа
+        # (диалект игры - manager.py op_buff_record).
+        return {"until": until, "extend": o.get("extend"), "flags": list(o.get("flags") or [])}
 
-    def op_after_buff(self, cx: OpCall, tgt: Unit, bid, o: dict) -> None:
-        # декларация extend внутри ops-buff: срабатывает при событии ext["on"]
-        ext = o.get("extend") or {}
-        if ext and cx.event and cx.event == ext.get("on"):
-            self._extend_buff(tgt, bid, ext, cx.ctx, cx.t, cx.src)
+    def op_after_buff(self, _cx: OpCall, tgt: Unit, _bid, _o: dict) -> None:
+        tgt.touch()  # пересчёт статов после выдачи баффа (диалект игры - EntityState.refresh)
 
     def op_extend(self, cx: OpCall, bid, ext: dict, buff: dict) -> None:
-        ev = cx.event
-        if ev is None and "#" in cx.src:
-            # fallback: событие зашито в src вида "effect#event(.fail)"
-            ev = cx.src.rsplit("#", 1)[-1].split(".", 1)[0]
-        # фильтр по событию: extend срабатывает только на ext["on"]
-        if ext.get("on") and ev != ext.get("on"):
-            self.op_note(cx, "extend_skip", bid, ext, ev)
+        # фильтр по src (диалект игры - manager.py op_extend): "effect#event", не по cx.event
+        if ext.get("on") and not cx.src.endswith("#" + ext["on"]):
+            self.op_note(cx, "extend_skip", bid, ext, cx.src)
             return
         self._extend_buff(None, bid, ext, cx.ctx, cx.t, cx.src, buff_obj=buff)
 
@@ -1127,13 +1125,13 @@ class EffectRuntime:
 
 
     # helpers -----------------------------------------------------------------
-    def _extend_buff(self, target, bid: str, ext: dict, ctx: dict,
+    def _extend_buff(self, target, bid: str, ext: dict, _ctx: dict,
                      t: float, src: str, buff_obj=None):
-        """Продлить бафф `bid` по extend-правилу {on, flat|pct}."""
+        """Продлить бафф `bid` по extend-правилу {on, flat} (диалект игры - manager.py emit/op_extend: только flat)."""
         b = buff_obj if buff_obj is not None else target.buffs.get(bid)
         if b is None:
             return
-        add = extend_amount(ext, ctx)
+        add = float(ext.get("flat", 0.0))
         b["until"] += add
         self.log.append(f"t={t:.1f} {src} extend {bid} +{add:.1f}s")
 
