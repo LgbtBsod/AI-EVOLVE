@@ -2,7 +2,7 @@
 name = "rust_core"
 version = "0.1.0"
 edition = "2021"
-description = "Rust core layer for AI Evolve: simulation, world generation, storage, probe analytics"
+description = "Rust core layer for AI Evolve: pathfinding, damage/tactics kernels, storage, probe analytics, Lua content bridge"
 authors = ["AI Evolve Team"]
 
 [lib]

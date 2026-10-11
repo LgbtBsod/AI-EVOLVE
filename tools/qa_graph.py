@@ -15,7 +15,7 @@
 Обход графа (достижимость) - rust_core.QaKernels.reach по CSR-буферам
 (array('Q')), Python-двойник в probe_kernels. Разрешение имён повторяет
 sys.path-хаки проекта: корень, каталог файла,
-tools/, src/, python_layer/, src/core/. Кэш - dev_probe_output/.qa_cache.
+tools/, src/, src/core/. Кэш - dev_probe_output/.qa_cache.
 """
 import ast
 import json
@@ -28,7 +28,7 @@ import probe_kernels as kernels
 ROOT = Path(__file__).resolve().parent.parent
 SKIP_DIRS = {".git", "target", "dev_probe_output", "__pycache__", ".venv", "venv", "build", "dist",
              "node_modules", ".pytest_cache"}
-SEARCH_ROOTS = [ROOT, ROOT / "tools", ROOT / "src", ROOT / "python_layer", ROOT / "src" / "core"]
+SEARCH_ROOTS = [ROOT, ROOT / "tools", ROOT / "src", ROOT / "src" / "core"]
 CACHE = ROOT / "dev_probe_output" / ".qa_cache" / "graph.json"
 # Импорты, которых нет в ast: игра поднимается через importlib.import_module(entry_module),
 # qa.py находит плагины сам (pkgutil). Значения - пути или glob относительно ROOT.

@@ -59,7 +59,6 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `bench_pathfinding` | `python tools/bench_pathfinding.py` | A*/JPS/flow-field benchmark: rust_core vs the Python twin | timing pathfinding ad hoc | time per backend | medium |
 | `bisect` | `python tools/qa.py bisect` | coordinator-only: does the working-tree diff explain a scenario's behaviour change, and if so which dirty... | - | - | - |
 | `boss_gauntlet` | `python tools/boss_gauntlet.py` | boss test bench: the real hero against world bosses without a window (engine of qa.py gauntlet) | playing bosses by hand | one line per boss | high |
-| `cas_training_demo` | `python tools/cas_training_demo.py` | demo run of the CAS engine 2.0 (conditional effect system) [demo] | - | prose | - |
 | `coverage` | `python tools/qa.py coverage` | share of the 60-ability corpus the canon effect system can express (floor ratchet) | - | - | - |
 | `ctxwatch` | `python tools/qa.py ctxwatch` | session context-bloat watch: snapshot enabled account plugins/skills (fed by the calling agent) +... | - | - | - |
 | `dead` | `python tools/qa.py dead` | modules nobody imports (dead code) with LOC; --list names them | reading modules to see if they are still used | summary line + list | low |
@@ -109,10 +108,8 @@ Before writing any tool or script, run `python tools/qa.py tools --find "words"`
 | `rust:ProbeAnalyzer` | `rust_core.ProbeAnalyzer` | Screenshot analysis for dev probes: `analyze_frame(png)` (hash, brightness, motion vs the previous frame,... | - | - | low |
 | `rust:QaKernels` | `rust_core.QaKernels` | Graph reachability (CSR buffers), bootstrap statistics, line fingerprints. | Python graph walks and bootstrap loops | - | low |
 | `rust:RunAnalytics` | `rust_core.RunAnalytics` | Stateless number-crunching kernels for tools/probe_analysis.py. | Python loops of probe_kernels | - | low |
-| `rust:SimulationEnv` | `rust_core.SimulationEnv` | Seeded grid simulation environment (`SimulationEnv(seed)`); `step`/`step_batch` are stubs that do not call... | - | - | low |
 | `rust:StateDiffCalculator` | `rust_core.StateDiffCalculator` | State diff: `StateDiffCalculator.calculate_diff(old, new)` -> dict of what changed between two state dicts. | - | - | low |
 | `rust:TacticsBandit` | `rust_core.TacticsBandit` | Discounted UCB1 bandit: contexts (enemy archetypes) x arms (tactics). | the Python bandit of enemy_ai | - | low |
-| `rust:WorldGenerator` | `rust_core.WorldGenerator` | World generator: `WorldGenerator(seed, version).generate(bricks_json)` -> dict summary (seed, map_id,... | - | - | low |
 | `rust:find_path` | `rust_core.find_path` | Optimal path [(x, y), ...] over a row-major cost grid (0 = wall, 1..255 = cost of entering). | the Python pathfinder (twin) | - | low |
 | `rust:flow_field` | `rust_core.flow_field` | Dijkstra flow field toward `target`: `.distance(x, y)`, `.direction(x, y)`, `.directions()`. | the Python flow field (twin) | - | low |
 | `rust:resolve_hit` | `rust_core.resolve_hit` | One hit through the damage kernel (rust_core/src/combat). | the Python damage pipeline (twin) | - | low |

@@ -4,8 +4,6 @@
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
 use pyo3::buffer::{Element, PyUntypedBuffer};
-use crate::simulation::SimulationEnv;
-use crate::generator::WorldGenerator;
 use crate::probe::{ProbeConfig, analyze_frame, compute_ssim};
 use crate::semantic_core::{LogCompressor as RustLogCompressor, StateDiffCalculator as RustStateDiffCalculator, EventCorrelator as RustEventCorrelator};
 use crate::analytics;
@@ -19,8 +17,6 @@ use image::DynamicImage;
 /// Python module for rust_core
 #[pymodule]
 fn rust_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<PySimulationEnv>()?;
-    m.add_class::<PyWorldGenerator>()?;
     m.add_class::<PyProbeAnalyzer>()?;
     m.add_class::<PyLogCompressor>()?;
     m.add_class::<PyStateDiffCalculator>()?;
@@ -35,8 +31,6 @@ fn rust_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_resolve_hit, m)?)?;
     m.add_function(wrap_pyfunction!(py_resolve_hits, m)?)?;
     // Aliases for cleaner Python API
-    m.add("WorldGenerator", m.getattr("PyWorldGenerator")?)?;
-    m.add("SimulationEnv", m.getattr("PySimulationEnv")?)?;
     m.add("ProbeAnalyzer", m.getattr("PyProbeAnalyzer")?)?;
     m.add("LogCompressor", m.getattr("PyLogCompressor")?)?;
     m.add("StateDiffCalculator", m.getattr("PyStateDiffCalculator")?)?;
@@ -48,69 +42,6 @@ fn rust_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("FlowField", m.getattr("PyFlowField")?)?;
     m.add("VERSION", env!("CARGO_PKG_VERSION"))?;
     Ok(())
-}
-
-/// Seeded grid simulation environment (`SimulationEnv(seed)`); `step`/`step_batch` are stubs that do not call into it yet.
-#[pyclass]
-struct PySimulationEnv {
-    // Not wired yet: step()/step_batch() below are stubs that do not call into it.
-    #[allow(dead_code)]
-    inner: SimulationEnv,
-}
-
-#[pymethods]
-impl PySimulationEnv {
-    #[new]
-    fn new(seed: u64) -> Self {
-        Self {
-            inner: SimulationEnv::new(seed),
-        }
-    }
-
-    #[allow(clippy::type_complexity)]
-    fn step(&mut self, py: Python<'_>, _actions: Vec<Py<PyAny>>) -> PyResult<(Vec<Py<PyAny>>, Vec<f32>, Vec<bool>, Py<PyAny>)> {
-        // Convert Python actions to Rust actions
-        // Call inner.step()
-        // Convert results back to Python
-        Ok((vec![], vec![0.0], vec![false], py.None()))
-    }
-
-    #[allow(clippy::type_complexity)]
-    fn step_batch(&mut self, py: Python<'_>, _actions: Vec<Vec<Py<PyAny>>>) -> PyResult<(Vec<Vec<Py<PyAny>>>, Vec<Vec<f32>>, Vec<Vec<bool>>, Vec<Py<PyAny>>)> {
-        Ok((vec![], vec![], vec![], vec![py.None()]))
-    }
-}
-
-/// World generator: `WorldGenerator(seed, version).generate(bricks_json)` -> dict summary (seed, map_id, entity_count, grid size).
-#[pyclass]
-struct PyWorldGenerator {
-    inner: WorldGenerator,
-}
-
-#[pymethods]
-impl PyWorldGenerator {
-    #[new]
-    fn new(seed: u64, version: &str) -> Self {
-        Self {
-            inner: WorldGenerator::new(seed, version),
-        }
-    }
-
-    fn generate(&self, py: Python<'_>, bricks_config: &str) -> PyResult<Py<PyAny>> {
-        match self.inner.generate(bricks_config) {
-            Ok(world) => {
-                // Convert World to Python dict
-                let dict = PyDict::new(py);
-                dict.set_item("seed", world.seed)?;
-                dict.set_item("map_id", world.map_id)?;
-                dict.set_item("entity_count", world.entities.len())?;
-                dict.set_item("grid_width", world.grid.width)?;
-                dict.set_item("grid_height", world.grid.height)?;
-                Ok(dict.into_any().unbind())
-            }
-            Err(e) => Err(pyo3::exceptions::PyRuntimeError::new_err(e)),
-        }
-    }
 }
 
 /// Screenshot analysis for dev probes: `analyze_frame(png)` (hash, brightness, motion vs the previous frame, blank/edge/complexity), `compare_frames(a, b)`.
